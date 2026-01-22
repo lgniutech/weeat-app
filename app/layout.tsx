@@ -1,8 +1,37 @@
 import React from "react"
 import type { Metadata, Viewport } from 'next'
 import { Analytics } from '@vercel/analytics/next'
+import { Poppins } from 'next/font/google'
+import localFont from 'next/font/local'
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider"
+
+// Configuração da fonte Poppins (Google Fonts - Mais limpo e otimizado)
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
+  style: ['normal', 'italic'],
+  variable: '--font-poppins',
+  display: 'swap',
+})
+
+// Configuração da fonte Gate (Local)
+const gate = localFont({
+  src: [
+    {
+      path: '../public/fonts/Gate-Regular.ttf',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../public/fonts/Gate-Italic.ttf',
+      weight: '400',
+      style: 'italic',
+    },
+  ],
+  variable: '--font-gate',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'DeliveryPro - Painel Administrativo',
@@ -40,7 +69,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className="font-sans antialiased">
+      <body className={`${gate.variable} ${poppins.variable} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
