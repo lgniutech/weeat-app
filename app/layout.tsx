@@ -2,21 +2,18 @@ import React from "react"
 import type { Metadata, Viewport } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import { Poppins } from 'next/font/google'
-// localFont removido para evitar erro de build "Module not found: Can't resolve 'next/font/local/target.css'"
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider"
 
 // Configuração da fonte Poppins (Google Fonts)
+// Renomeamos a variável para evitar conflito com a chave do tema do Tailwind
 const poppins = Poppins({
   subsets: ['latin'],
   weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
   style: ['normal', 'italic'],
-  variable: '--font-poppins',
+  variable: '--font-poppins-raw',
   display: 'swap',
 })
-
-// A fonte Gate agora é carregada via CSS em app/globals.css
-// Isso evita problemas de compatibilidade com o Turbopack no Next.js 16
 
 export const metadata: Metadata = {
   title: 'DeliveryPro - Painel Administrativo',
@@ -54,7 +51,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      {/* Removemos gate.variable. A fonte Gate é aplicada via CSS global na variável --font-sans */}
       <body className={`${poppins.variable} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"

@@ -20,21 +20,20 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* O Tailwind v4 detecta automaticamente as variáveis CSS definidas no layout */
-
 @theme inline {
-  /* Mapeia a fonte Gate como a principal (sans) */
-  --font-sans: var(--font-gate), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  /* Mapeia a fonte Gate diretamente como a principal (sans) */
+  /* A string 'Gate' deve corresponder exatamente ao font-family definido no @font-face acima */
+  --font-sans: "Gate", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   
-  /* Mapeia a fonte Poppins */
-  --font-poppins: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  /* Mapeia a fonte Poppins usando a variável renomeada vinda do layout */
+  --font-poppins: var(--font-poppins-raw), ui-sans-serif, system-ui, sans-serif;
   
   --font-mono: 'Geist Mono', 'Geist Mono Fallback', ui-monospace, SFMono-Regular, monospace;
 
   /* Paleta definida: 02B5FF, FEFEFE, 8CDCFF, 00B4FF */
   
   --color-background: #FEFEFE;
-  --color-foreground: #0F172A; /* Escuro para texto (Slate-900) para contraste com fundo branco */
+  --color-foreground: #0F172A;
   
   --color-card: #FFFFFF;
   --color-card-foreground: #0F172A;
@@ -47,7 +46,7 @@
   --color-primary-foreground: #FFFFFF;
   
   /* Azul Claro (#8CDCFF) */
-  --color-secondary: #F0F9FF; /* Um azul bem clarinho para fundos secundários */
+  --color-secondary: #F0F9FF;
   --color-secondary-foreground: #02B5FF;
   
   --color-muted: #F1F5F9;
@@ -55,7 +54,7 @@
   
   /* Azul Acento (#00B4FF / #8CDCFF) */
   --color-accent: #8CDCFF;
-  --color-accent-foreground: #00364D; /* Texto escuro para contraste no azul claro */
+  --color-accent-foreground: #00364D;
   
   --color-destructive: #EF4444;
   --color-destructive-foreground: #FFFFFF;
@@ -69,7 +68,6 @@
   --radius-lg: 0.625rem;
   --radius-xl: calc(0.625rem + 4px);
   
-  /* Cores de Gráficos e Sidebar mantendo harmonia */
   --color-chart-1: #02B5FF;
   --color-chart-2: #8CDCFF;
   --color-chart-3: #00B4FF;
@@ -86,11 +84,8 @@
   --color-sidebar-ring: #02B5FF;
 }
 
-/* Definições de variáveis CSS nativas para fallback ou uso fora do Tailwind */
+/* Fallbacks para variáveis nativas (caso necessário fora do Tailwind) */
 :root {
-  /* Variável da fonte Gate definida manualmente para uso no @theme */
-  --font-gate: 'Gate';
-  
   --background: #FEFEFE;
   --foreground: #0F172A;
   --card: #FFFFFF;
@@ -127,7 +122,6 @@
 }
 
 .dark {
-  /* Trocado de Azul Profundo (#020817) para Cinza Neutro Escuro (#121212) */
   --background: #121212; 
   --foreground: #FAFAFA;
   --card: #1E1E1E;
