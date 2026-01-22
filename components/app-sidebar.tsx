@@ -40,9 +40,8 @@ import {
 } from "@/components/ui/collapsible"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { logoutAction } from "@/app/actions/auth" // Importando a ação de logout
+import { logoutAction } from "@/app/actions/auth"
 
-// Dados da navegação
 const navigationItems = [
   {
     title: "Dashboard",
@@ -138,7 +137,8 @@ export function AppSidebar({
             <Store className="h-5 w-5" />
           </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold text-foreground">WeEat App</span>
+            {/* NOME CORRIGIDO AQUI */}
+            <span className="text-sm font-semibold text-foreground">weeat</span>
             <span className="text-xs text-muted-foreground truncate max-w-[150px]" title={storeName}>
               {storeName}
             </span>

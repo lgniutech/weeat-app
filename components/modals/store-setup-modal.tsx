@@ -31,6 +31,7 @@ export function StoreSetupModal() {
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
             <Building2 className="w-6 h-6 text-primary" />
           </div>
+          {/* NOME CORRIGIDO AQUI */}
           <DialogTitle className="text-center">Boas-vindas ao weeat!</DialogTitle>
           <DialogDescription className="text-center">
             Finalize seu cadastro definindo sua senha e os dados da loja.
@@ -52,7 +53,6 @@ export function StoreSetupModal() {
             />
           </div>
 
-          {/* Campo Novo: Definição de Senha */}
           <div className="grid gap-2">
             <Label htmlFor="password" className="flex items-center gap-2">
               <Lock className="w-4 h-4 text-muted-foreground" />
