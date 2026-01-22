@@ -1,18 +1,128 @@
 import React from "react"
 import type { Metadata, Viewport } from 'next'
+import localFont from 'next/font/local'
 import { Analytics } from '@vercel/analytics/next'
-import { Poppins } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider"
 
-// Configuração da fonte Poppins (Google Fonts)
-// Renomeamos a variável para evitar conflito com a chave do tema do Tailwind
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
-  style: ['normal', 'italic'],
-  variable: '--font-poppins-raw',
+// Configuração da fonte Gate (Principal - Local)
+// IMPORTANTE: Certifique-se de que a pasta 'fonts' foi movida para DENTRO de 'app'
+const gate = localFont({
+  src: [
+    {
+      path: './fonts/Gate-Regular.ttf',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Gate-Italic.ttf',
+      weight: '400',
+      style: 'italic',
+    },
+  ],
+  variable: '--font-gate',
   display: 'swap',
+  // Fallback para garantir que o texto apareça mesmo se a fonte falhar
+  fallback: ['sans-serif'], 
+})
+
+// Configuração da fonte Poppins (Secundária - Local)
+const poppins = localFont({
+  src: [
+    {
+      path: './fonts/Poppins-Thin.ttf',
+      weight: '100',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Poppins-ThinItalic.ttf',
+      weight: '100',
+      style: 'italic',
+    },
+    {
+      path: './fonts/Poppins-ExtraLight.ttf',
+      weight: '200',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Poppins-ExtraLightItalic.ttf',
+      weight: '200',
+      style: 'italic',
+    },
+    {
+      path: './fonts/Poppins-Light.ttf',
+      weight: '300',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Poppins-LightItalic.ttf',
+      weight: '300',
+      style: 'italic',
+    },
+    {
+      path: './fonts/Poppins-Regular.ttf',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Poppins-Italic.ttf',
+      weight: '400',
+      style: 'italic',
+    },
+    {
+      path: './fonts/Poppins-Medium.ttf',
+      weight: '500',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Poppins-MediumItalic.ttf',
+      weight: '500',
+      style: 'italic',
+    },
+    {
+      path: './fonts/Poppins-SemiBold.ttf',
+      weight: '600',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Poppins-SemiBoldItalic.ttf',
+      weight: '600',
+      style: 'italic',
+    },
+    {
+      path: './fonts/Poppins-Bold.ttf',
+      weight: '700',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Poppins-BoldItalic.ttf',
+      weight: '700',
+      style: 'italic',
+    },
+    {
+      path: './fonts/Poppins-ExtraBold.ttf',
+      weight: '800',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Poppins-ExtraBoldItalic.ttf',
+      weight: '800',
+      style: 'italic',
+    },
+    {
+      path: './fonts/Poppins-Black.ttf',
+      weight: '900',
+      style: 'normal',
+    },
+    {
+      path: './fonts/Poppins-BlackItalic.ttf',
+      weight: '900',
+      style: 'italic',
+    },
+  ],
+  variable: '--font-poppins',
+  display: 'swap',
+  fallback: ['sans-serif'],
 })
 
 export const metadata: Metadata = {
@@ -51,7 +161,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className={`${poppins.variable} font-sans antialiased`}>
+      <body className={`${gate.variable} ${poppins.variable} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

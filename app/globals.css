@@ -1,116 +1,51 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* DEFINIÇÃO MANUAL DAS FONTES PARA CORRIGIR ERRO DE BUILD NO NEXT.JS 16/TURBOPACK */
-@font-face {
-  font-family: 'Gate';
-  src: url('/fonts/Gate-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Gate';
-  src: url('/fonts/Gate-Italic.ttf') format('truetype');
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
-  /* Mapeia a fonte Gate diretamente como a principal (sans) */
-  /* A string 'Gate' deve corresponder exatamente ao font-family definido no @font-face acima */
-  --font-sans: "Gate", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  
-  /* Mapeia a fonte Poppins usando a variável renomeada vinda do layout */
-  --font-poppins: var(--font-poppins-raw), ui-sans-serif, system-ui, sans-serif;
-  
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback', ui-monospace, SFMono-Regular, monospace;
-
+:root {
   /* Paleta definida: 02B5FF, FEFEFE, 8CDCFF, 00B4FF */
   
-  --color-background: #FEFEFE;
-  --color-foreground: #0F172A;
-  
-  --color-card: #FFFFFF;
-  --color-card-foreground: #0F172A;
-  
-  --color-popover: #FFFFFF;
-  --color-popover-foreground: #0F172A;
-  
-  /* Azul Principal (#02B5FF) */
-  --color-primary: #02B5FF;
-  --color-primary-foreground: #FFFFFF;
-  
-  /* Azul Claro (#8CDCFF) */
-  --color-secondary: #F0F9FF;
-  --color-secondary-foreground: #02B5FF;
-  
-  --color-muted: #F1F5F9;
-  --color-muted-foreground: #64748B;
-  
-  /* Azul Acento (#00B4FF / #8CDCFF) */
-  --color-accent: #8CDCFF;
-  --color-accent-foreground: #00364D;
-  
-  --color-destructive: #EF4444;
-  --color-destructive-foreground: #FFFFFF;
-  
-  --color-border: #E2E8F0;
-  --color-input: #E2E8F0;
-  --color-ring: #02B5FF;
-  
-  --radius-sm: calc(0.625rem - 4px);
-  --radius-md: calc(0.625rem - 2px);
-  --radius-lg: 0.625rem;
-  --radius-xl: calc(0.625rem + 4px);
-  
-  --color-chart-1: #02B5FF;
-  --color-chart-2: #8CDCFF;
-  --color-chart-3: #00B4FF;
-  --color-chart-4: #38BDF8;
-  --color-chart-5: #7DD3FC;
-  
-  --color-sidebar: #FEFEFE;
-  --color-sidebar-foreground: #0F172A;
-  --color-sidebar-primary: #02B5FF;
-  --color-sidebar-primary-foreground: #FFFFFF;
-  --color-sidebar-accent: #F0F9FF;
-  --color-sidebar-accent-foreground: #02B5FF;
-  --color-sidebar-border: #E2E8F0;
-  --color-sidebar-ring: #02B5FF;
-}
-
-/* Fallbacks para variáveis nativas (caso necessário fora do Tailwind) */
-:root {
   --background: #FEFEFE;
-  --foreground: #0F172A;
+  --foreground: #0F172A; /* Escuro para texto (Slate-900) para contraste com fundo branco */
+  
   --card: #FFFFFF;
   --card-foreground: #0F172A;
+  
   --popover: #FFFFFF;
   --popover-foreground: #0F172A;
+  
+  /* Azul Principal (#02B5FF) */
   --primary: #02B5FF;
   --primary-foreground: #FFFFFF;
-  --secondary: #F0F9FF;
+  
+  /* Azul Claro (#8CDCFF) */
+  --secondary: #F0F9FF; /* Um azul bem clarinho para fundos secundários */
   --secondary-foreground: #02B5FF;
+  
   --muted: #F1F5F9;
   --muted-foreground: #64748B;
+  
+  /* Azul Acento (#00B4FF / #8CDCFF) */
   --accent: #8CDCFF;
-  --accent-foreground: #00364D;
+  --accent-foreground: #00364D; /* Texto escuro para contraste no azul claro */
+  
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
+  
   --border: #E2E8F0;
   --input: #E2E8F0;
   --ring: #02B5FF;
+  
   --radius: 0.625rem;
+  
+  /* Cores de Gráficos e Sidebar mantendo harmonia */
   --chart-1: #02B5FF;
   --chart-2: #8CDCFF;
   --chart-3: #00B4FF;
   --chart-4: #38BDF8;
   --chart-5: #7DD3FC;
+  
   --sidebar: #FEFEFE;
   --sidebar-foreground: #0F172A;
   --sidebar-primary: #02B5FF;
@@ -122,30 +57,41 @@
 }
 
 .dark {
+  /* Trocado de Azul Profundo (#020817) para Cinza Neutro Escuro (#121212) */
   --background: #121212; 
   --foreground: #FAFAFA;
-  --card: #1E1E1E;
+  
+  --card: #1E1E1E; /* Cinza levemente mais claro para destacar cartões */
   --card-foreground: #FAFAFA;
+  
   --popover: #1E1E1E;
   --popover-foreground: #FAFAFA;
+  
   --primary: #02B5FF;
   --primary-foreground: #FFFFFF;
-  --secondary: #27272A;
+  
+  --secondary: #27272A; /* Zinco escuro para elementos secundários */
   --secondary-foreground: #FAFAFA;
+  
   --muted: #27272A;
   --muted-foreground: #A1A1AA;
+  
   --accent: #27272A;
   --accent-foreground: #FAFAFA;
+  
   --destructive: #7F1D1D;
   --destructive-foreground: #FEFEFE;
-  --border: #333333;
+  
+  --border: #333333; /* Borda cinza neutra */
   --input: #333333;
   --ring: #00B4FF;
+  
   --chart-1: #02B5FF;
   --chart-2: #00B4FF;
   --chart-3: #8CDCFF;
   --chart-4: #38BDF8;
   --chart-5: #7DD3FC;
+  
   --sidebar: #121212;
   --sidebar-foreground: #FAFAFA;
   --sidebar-primary: #02B5FF;
@@ -154,6 +100,51 @@
   --sidebar-accent-foreground: #FAFAFA;
   --sidebar-border: #333333;
   --sidebar-ring: #00B4FF;
+}
+
+@theme inline {
+  --font-sans: var(--font-gate), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-poppins: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 }
 
 @layer base {
