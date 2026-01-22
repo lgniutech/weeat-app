@@ -1,6 +1,23 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* DEFINIÇÃO MANUAL DAS FONTES PARA CORRIGIR ERRO DE BUILD NO NEXT.JS 16/TURBOPACK */
+@font-face {
+  font-family: 'Gate';
+  src: url('/fonts/Gate-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gate';
+  src: url('/fonts/Gate-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* O Tailwind v4 detecta automaticamente as variáveis CSS definidas no layout */
@@ -71,6 +88,9 @@
 
 /* Definições de variáveis CSS nativas para fallback ou uso fora do Tailwind */
 :root {
+  /* Variável da fonte Gate definida manualmente para uso no @theme */
+  --font-gate: 'Gate';
+  
   --background: #FEFEFE;
   --foreground: #0F172A;
   --card: #FFFFFF;

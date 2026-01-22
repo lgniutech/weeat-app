@@ -2,7 +2,7 @@ import React from "react"
 import type { Metadata, Viewport } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import { Poppins } from 'next/font/google'
-import localFont from 'next/font/local'
+// localFont removido para evitar erro de build "Module not found: Can't resolve 'next/font/local/target.css'"
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider"
 
@@ -15,24 +15,8 @@ const poppins = Poppins({
   display: 'swap',
 })
 
-// Configuração da fonte Gate (Local)
-// Agora buscando de ./fonts/ (dentro de app/fonts/) para compatibilidade com Turbopack
-const gate = localFont({
-  src: [
-    {
-      path: './fonts/Gate-Regular.ttf',
-      weight: '400',
-      style: 'normal',
-    },
-    {
-      path: './fonts/Gate-Italic.ttf',
-      weight: '400',
-      style: 'italic',
-    },
-  ],
-  variable: '--font-gate',
-  display: 'swap',
-})
+// A fonte Gate agora é carregada via CSS em app/globals.css
+// Isso evita problemas de compatibilidade com o Turbopack no Next.js 16
 
 export const metadata: Metadata = {
   title: 'DeliveryPro - Painel Administrativo',
@@ -70,7 +54,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className={`${gate.variable} ${poppins.variable} font-sans antialiased`}>
+      {/* Removemos gate.variable. A fonte Gate é aplicada via CSS global na variável --font-sans */}
+      <body className={`${poppins.variable} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
