@@ -6,7 +6,7 @@ import localFont from 'next/font/local'
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider"
 
-// Configuração da fonte Poppins (Google Fonts - Mais limpo e otimizado)
+// Configuração da fonte Poppins (Google Fonts)
 const poppins = Poppins({
   subsets: ['latin'],
   weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
@@ -16,15 +16,16 @@ const poppins = Poppins({
 })
 
 // Configuração da fonte Gate (Local)
+// O erro acontece aqui se os arquivos não estiverem em app/fonts/
 const gate = localFont({
   src: [
     {
-      path: '../public/fonts/Gate-Regular.ttf',
+      path: './fonts/Gate-Regular.ttf',
       weight: '400',
       style: 'normal',
     },
     {
-      path: '../public/fonts/Gate-Italic.ttf',
+      path: './fonts/Gate-Italic.ttf',
       weight: '400',
       style: 'italic',
     },
