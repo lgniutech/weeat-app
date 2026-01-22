@@ -16,16 +16,16 @@ const poppins = Poppins({
 })
 
 // Configuração da fonte Gate (Local)
-// O erro acontece aqui se os arquivos não estiverem em app/fonts/
+// Ajustado o caminho para '../fonts/' pois a pasta fonts está na raiz do projeto
 const gate = localFont({
   src: [
     {
-      path: './fonts/Gate-Regular.ttf',
+      path: '../fonts/Gate-Regular.ttf',
       weight: '400',
       style: 'normal',
     },
     {
-      path: './fonts/Gate-Italic.ttf',
+      path: '../fonts/Gate-Italic.ttf',
       weight: '400',
       style: 'italic',
     },
