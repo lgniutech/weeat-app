@@ -37,7 +37,7 @@ const gate = localFont({
 export const metadata: Metadata = {
   title: 'DeliveryPro - Painel Administrativo',
   description: 'Gerencie seu restaurante com a melhor plataforma de delivery do mercado',
-  generator: 'v0.dev',
+  generator: '2',
   icons: {
     icon: [
       {
