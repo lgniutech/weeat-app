@@ -6,23 +6,22 @@ import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider"
 
 // Configuração da fonte Gate (Principal - Local)
-// IMPORTANTE: Certifique-se de que a pasta 'fonts' foi movida para DENTRO de 'app'
+// AJUSTE: Mudei para '../fonts' pois a pasta está na raiz, fora de 'app'
 const gate = localFont({
   src: [
     {
-      path: './fonts/Gate-Regular.ttf',
+      path: '../fonts/Gate-Regular.ttf',
       weight: '400',
       style: 'normal',
     },
     {
-      path: './fonts/Gate-Italic.ttf',
+      path: '../fonts/Gate-Italic.ttf',
       weight: '400',
       style: 'italic',
     },
   ],
   variable: '--font-gate',
   display: 'swap',
-  // Fallback para garantir que o texto apareça mesmo se a fonte falhar
   fallback: ['sans-serif'], 
 })
 
@@ -30,92 +29,92 @@ const gate = localFont({
 const poppins = localFont({
   src: [
     {
-      path: './fonts/Poppins-Thin.ttf',
+      path: '../fonts/Poppins-Thin.ttf',
       weight: '100',
       style: 'normal',
     },
     {
-      path: './fonts/Poppins-ThinItalic.ttf',
+      path: '../fonts/Poppins-ThinItalic.ttf',
       weight: '100',
       style: 'italic',
     },
     {
-      path: './fonts/Poppins-ExtraLight.ttf',
+      path: '../fonts/Poppins-ExtraLight.ttf',
       weight: '200',
       style: 'normal',
     },
     {
-      path: './fonts/Poppins-ExtraLightItalic.ttf',
+      path: '../fonts/Poppins-ExtraLightItalic.ttf',
       weight: '200',
       style: 'italic',
     },
     {
-      path: './fonts/Poppins-Light.ttf',
+      path: '../fonts/Poppins-Light.ttf',
       weight: '300',
       style: 'normal',
     },
     {
-      path: './fonts/Poppins-LightItalic.ttf',
+      path: '../fonts/Poppins-LightItalic.ttf',
       weight: '300',
       style: 'italic',
     },
     {
-      path: './fonts/Poppins-Regular.ttf',
+      path: '../fonts/Poppins-Regular.ttf',
       weight: '400',
       style: 'normal',
     },
     {
-      path: './fonts/Poppins-Italic.ttf',
+      path: '../fonts/Poppins-Italic.ttf',
       weight: '400',
       style: 'italic',
     },
     {
-      path: './fonts/Poppins-Medium.ttf',
+      path: '../fonts/Poppins-Medium.ttf',
       weight: '500',
       style: 'normal',
     },
     {
-      path: './fonts/Poppins-MediumItalic.ttf',
+      path: '../fonts/Poppins-MediumItalic.ttf',
       weight: '500',
       style: 'italic',
     },
     {
-      path: './fonts/Poppins-SemiBold.ttf',
+      path: '../fonts/Poppins-SemiBold.ttf',
       weight: '600',
       style: 'normal',
     },
     {
-      path: './fonts/Poppins-SemiBoldItalic.ttf',
+      path: '../fonts/Poppins-SemiBoldItalic.ttf',
       weight: '600',
       style: 'italic',
     },
     {
-      path: './fonts/Poppins-Bold.ttf',
+      path: '../fonts/Poppins-Bold.ttf',
       weight: '700',
       style: 'normal',
     },
     {
-      path: './fonts/Poppins-BoldItalic.ttf',
+      path: '../fonts/Poppins-BoldItalic.ttf',
       weight: '700',
       style: 'italic',
     },
     {
-      path: './fonts/Poppins-ExtraBold.ttf',
+      path: '../fonts/Poppins-ExtraBold.ttf',
       weight: '800',
       style: 'normal',
     },
     {
-      path: './fonts/Poppins-ExtraBoldItalic.ttf',
+      path: '../fonts/Poppins-ExtraBoldItalic.ttf',
       weight: '800',
       style: 'italic',
     },
     {
-      path: './fonts/Poppins-Black.ttf',
+      path: '../fonts/Poppins-Black.ttf',
       weight: '900',
       style: 'normal',
     },
     {
-      path: './fonts/Poppins-BlackItalic.ttf',
+      path: '../fonts/Poppins-BlackItalic.ttf',
       weight: '900',
       style: 'italic',
     },
@@ -126,9 +125,9 @@ const poppins = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'DeliveryPro - Painel Administrativo',
+  title: 'weeat', // Corrigido para a marca atual
   description: 'Gerencie seu restaurante com a melhor plataforma de delivery do mercado',
-  generator: 'v0.dev',
+  // generator: 'v0.dev', // Removido para limpar
   icons: {
     icon: [
       {
@@ -146,6 +145,7 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
+    generator: 'v0.app'
 }
 
 export const viewport: Viewport = {
