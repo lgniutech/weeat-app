@@ -35,22 +35,25 @@ export async function updateSession(request: NextRequest) {
 
   // --- LÓGICA DE PROTEÇÃO DE ROTAS ---
   
-  // Removi '/signup' da lista. Agora só Login e Auth (callback) são públicos.
-  const publicRoutes = ['/login', '/auth']
+  // ADICIONADO: /forgot-password e /update-password agora são públicas
+  const publicRoutes = ['/login', '/auth', '/forgot-password', '/update-password']
   
   const isPublicRoute = publicRoutes.some(route => 
     request.nextUrl.pathname.startsWith(route)
   )
 
-  // 1. Se NÃO estiver logado e tentar acessar rota privada (agora inclui /signup) -> Login
+  // 1. Se NÃO estiver logado e tentar acessar rota privada -> Login
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // 2. Se JÁ estiver logado e tentar acessar Login -> Dashboard
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  // 2. Se JÁ estiver logado e tentar acessar Login/Recuperação -> Dashboard
+  if (user && (
+    request.nextUrl.pathname.startsWith('/login') || 
+    request.nextUrl.pathname.startsWith('/forgot-password')
+  )) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
