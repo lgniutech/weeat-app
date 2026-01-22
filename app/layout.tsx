@@ -16,16 +16,16 @@ const poppins = Poppins({
 })
 
 // Configuração da fonte Gate (Local)
-// Ajustado o caminho para '../fonts/' pois a pasta fonts está na raiz do projeto
+// Agora buscando de ./fonts/ (dentro de app/fonts/) para compatibilidade com Turbopack
 const gate = localFont({
   src: [
     {
-      path: '../fonts/Gate-Regular.ttf',
+      path: './fonts/Gate-Regular.ttf',
       weight: '400',
       style: 'normal',
     },
     {
-      path: '../fonts/Gate-Italic.ttf',
+      path: './fonts/Gate-Italic.ttf',
       weight: '400',
       style: 'italic',
     },
@@ -37,7 +37,7 @@ const gate = localFont({
 export const metadata: Metadata = {
   title: 'DeliveryPro - Painel Administrativo',
   description: 'Gerencie seu restaurante com a melhor plataforma de delivery do mercado',
-  generator: '2',
+  generator: 'v0.dev',
   icons: {
     icon: [
       {
