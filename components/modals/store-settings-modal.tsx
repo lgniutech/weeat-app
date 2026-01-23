@@ -22,32 +22,33 @@ interface StoreSettingsModalProps {
   onOpenChange: (open: boolean) => void
 }
 
+const DEFAULT_HOURS = [
+  { day: "Segunda", open: "08:00", close: "18:00", active: true },
+  { day: "Terça", open: "08:00", close: "18:00", active: true },
+  { day: "Quarta", open: "08:00", close: "18:00", active: true },
+  { day: "Quinta", open: "08:00", close: "18:00", active: true },
+  { day: "Sexta", open: "08:00", close: "18:00", active: true },
+  { day: "Sábado", open: "09:00", close: "14:00", active: true },
+  { day: "Domingo", open: "00:00", close: "00:00", active: false },
+]
+
 export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSettingsModalProps) {
   const [state, action, isPending] = useActionState(updateStoreAction, null)
   
-  // States locais
-  const [cnpj, setCnpj] = useState("")
-  const [phone, setPhone] = useState("")
-  const [hours, setHours] = useState<any[]>([])
+  // Inicialização segura dos estados (Lazy initialization)
+  // Isso garante que os dados já existam na primeira renderização
+  const [cnpj, setCnpj] = useState(() => store?.cnpj || "")
+  const [phone, setPhone] = useState(() => store?.whatsapp || "")
+  const [hours, setHours] = useState<any[]>(() => store?.settings?.business_hours || DEFAULT_HOURS)
 
-  // Sincroniza dados quando o modal abre ou a store muda
+  // Reseta os dados apenas se o modal abrir novamente ou a store mudar
   useEffect(() => {
-    if (store) {
+    if (isOpen && store) {
       setCnpj(store.cnpj || "")
       setPhone(store.whatsapp || "")
-      
-      const defaultHours = [
-        { day: "Segunda", open: "08:00", close: "18:00", active: true },
-        { day: "Terça", open: "08:00", close: "18:00", active: true },
-        { day: "Quarta", open: "08:00", close: "18:00", active: true },
-        { day: "Quinta", open: "08:00", close: "18:00", active: true },
-        { day: "Sexta", open: "08:00", close: "18:00", active: true },
-        { day: "Sábado", open: "09:00", close: "14:00", active: true },
-        { day: "Domingo", open: "00:00", close: "00:00", active: false },
-      ]
-      setHours(store.settings?.business_hours || defaultHours)
+      setHours(store.settings?.business_hours || DEFAULT_HOURS)
     }
-  }, [store, isOpen])
+  }, [isOpen, store])
 
   // Máscaras
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,22 +71,29 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
 
   const toggleDay = (index: number) => {
     const newHours = [...hours]
-    newHours[index].active = !newHours[index].active
-    setHours(newHours)
+    if (newHours[index]) {
+      newHours[index].active = !newHours[index].active
+      setHours(newHours)
+    }
   }
 
   const updateTime = (index: number, field: string, value: string) => {
     const newHours = [...hours]
-    newHours[index][field] = value
-    setHours(newHours)
+    if (newHours[index]) {
+      newHours[index][field] = value
+      setHours(newHours)
+    }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent 
+        className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto"
+        aria-describedby="store-settings-description"
+      >
         <DialogHeader>
           <DialogTitle>Dados da Loja</DialogTitle>
-          <DialogDescription>
+          <DialogDescription id="store-settings-description">
             Atualize as informações do seu estabelecimento.
           </DialogDescription>
         </DialogHeader>
@@ -100,7 +108,7 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
 
             <div className="space-y-2">
               <Label htmlFor="name">Nome da Loja</Label>
-              <Input id="name" name="name" defaultValue={store?.name} required />
+              <Input id="name" name="name" defaultValue={store?.name || ""} required />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -147,14 +155,14 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
             
             <div className="bg-muted/30 border rounded-lg p-3 space-y-2">
               {hours.map((day, index) => (
-                <div key={index} className="flex items-center justify-between gap-2 text-sm">
+                <div key={day.day || index} className="flex items-center justify-between gap-2 text-sm">
                   <div className="flex items-center gap-3 w-32">
                     <Switch 
-                      checked={day.active} 
+                      checked={!!day.active} // O !! garante que seja booleano
                       onCheckedChange={() => toggleDay(index)} 
                       className="scale-75"
                     />
-                    <span className={day.active ? "font-medium" : "text-muted-foreground"}>
+                    <span className={!!day.active ? "font-medium" : "text-muted-foreground"}>
                       {day.day}
                     </span>
                   </div>
@@ -163,14 +171,14 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
                     <div className="flex items-center gap-2 flex-1 justify-end">
                       <Input 
                         type="time" 
-                        value={day.open}
+                        value={day.open ?? ""} // Garante que não seja undefined
                         onChange={(e) => updateTime(index, 'open', e.target.value)}
                         className="w-20 h-7 text-xs bg-background p-1"
                       />
                       <span className="text-muted-foreground text-xs">-</span>
                       <Input 
                         type="time" 
-                        value={day.close}
+                        value={day.close ?? ""} // Garante que não seja undefined
                         onChange={(e) => updateTime(index, 'close', e.target.value)}
                         className="w-20 h-7 text-xs bg-background p-1"
                       />
