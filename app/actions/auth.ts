@@ -21,26 +21,28 @@ export async function loginAction(prevState: any, formData: FormData) {
   return redirect("/");
 }
 
-// MUDANÇA: Agora envia um link de LOGIN MÁGICO (Magic Link)
 export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const email = formData.get("email") as string;
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  // signInWithOtp envia um link que loga o usuário direto
+  // signInWithOtp com TRAVA DE SEGURANÇA
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      // Redireciona para o callback, que vai mandar para a Home '/'
-      emailRedirectTo: `${origin}/auth/callback`, 
+      emailRedirectTo: `${origin}/auth/callback`,
+      shouldCreateUser: false, // <--- AQUI ESTÁ A MÁGICA: Bloqueia criação de novas contas
     },
   });
 
   if (error) {
-    return { error: "Erro ao enviar link: " + error.message };
+    // Dica: Por segurança, o Supabase pode não retornar erro se o usuário não existir
+    // (para evitar que hackers descubram quais emails existem).
+    // Mas o importante é que a conta NÃO será criada.
+    return { error: "Erro ao processar: " + error.message };
   }
 
-  return { success: "Link de acesso mágico enviado para seu e-mail!" };
+  return { success: "Se o e-mail estiver cadastrado, você receberá o link de acesso!" };
 }
 
 export async function logoutAction() {
@@ -48,4 +50,3 @@ export async function logoutAction() {
   await supabase.auth.signOut();
   return redirect("/login");
 }
-// Removemos a updatePasswordAction pois faremos isso na loja agora
