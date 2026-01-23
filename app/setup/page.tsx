@@ -7,13 +7,44 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Store, Clock, Check } from "lucide-react";
+import { Loader2, Store, Check, FileText, Phone } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 export default function SetupPage() {
   const [state, action, isPending] = useActionState(createStoreAction, null);
   
-  // Estado local para gerenciar os horários visualmente
+  // Estados locais para controlar o valor dos inputs
+  const [cnpj, setCnpj] = useState("");
+  const [phone, setPhone] = useState("");
+
+  // Lógica de Máscara CNPJ: 00.000.000/0000-00
+  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, ""); // Remove tudo que não é número
+    
+    if (value.length > 14) value = value.slice(0, 14); // Limita a 14 dígitos
+
+    // Aplica a formatação progressiva
+    value = value.replace(/^(\d{2})(\d)/, "$1.$2");
+    value = value.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
+    value = value.replace(/\.(\d{3})(\d)/, ".$1/$2");
+    value = value.replace(/(\d{4})(\d)/, "$1-$2");
+
+    setCnpj(value);
+  };
+
+  // Lógica de Máscara Telefone: (00) 00000-0000
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, "");
+    
+    if (value.length > 11) value = value.slice(0, 11);
+
+    value = value.replace(/^(\d{2})(\d)/g, "($1) $2");
+    value = value.replace(/(\d)(\d{4})$/, "$1-$2");
+
+    setPhone(value);
+  };
+
+  // Estado dos horários
   const [hours, setHours] = useState([
     { day: "Segunda", open: "08:00", close: "18:00", active: true },
     { day: "Terça", open: "08:00", close: "18:00", active: true },
@@ -46,7 +77,7 @@ export default function SetupPage() {
             </div>
             <CardTitle className="text-3xl font-bold">Configurar Loja</CardTitle>
             <CardDescription>
-              Vamos deixar tudo pronto para você começar a vender.
+              Preencha os dados oficiais para começar a vender.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -56,23 +87,52 @@ export default function SetupPage() {
               <div className="space-y-4">
                 <h3 className="font-semibold text-lg flex items-center gap-2">
                   <span className="bg-primary text-primary-foreground w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>
-                  Dados do Negócio
+                  Dados Oficiais
                 </h3>
                 
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nome da Loja <span className="text-red-500">*</span></Label>
+                  <Input id="name" name="name" placeholder="Ex: Hamburgueria do Dev" required />
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Nome Fantasia</Label>
-                    <Input id="name" name="name" placeholder="Ex: Hamburgueria do Dev" required />
+                    <Label htmlFor="cnpj">CNPJ <span className="text-red-500">*</span></Label>
+                    <div className="relative">
+                      <FileText className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        id="cnpj" 
+                        name="cnpj" 
+                        value={cnpj}
+                        onChange={handleCnpjChange}
+                        placeholder="00.000.000/0000-00" 
+                        className="pl-9"
+                        required 
+                        maxLength={18}
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="cnpj">CNPJ</Label>
-                    <Input id="cnpj" name="cnpj" placeholder="00.000.000/0000-00" required />
+                    <Label htmlFor="whatsapp">WhatsApp <span className="text-red-500">*</span></Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        id="whatsapp" 
+                        name="whatsapp"
+                        value={phone}
+                        onChange={handlePhoneChange}
+                        placeholder="(11) 99999-9999" 
+                        className="pl-9"
+                        required
+                        maxLength={15}
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="slug">Link da Loja (Slug)</Label>
+                  <Label htmlFor="slug">Link da Loja <span className="text-red-500">*</span></Label>
                   <div className="flex items-center">
                     <span className="bg-muted px-3 py-2 border border-r-0 rounded-l-md text-sm text-muted-foreground whitespace-nowrap">
                       weeat.app/
@@ -96,7 +156,7 @@ export default function SetupPage() {
                   Horário de Funcionamento
                 </h3>
                 
-                {/* Input escondido para enviar o JSON dos horários via FormData */}
+                {/* Input Oculto para enviar o JSON dos horários */}
                 <input type="hidden" name="businessHours" value={JSON.stringify(hours)} />
 
                 <div className="bg-slate-50 border rounded-lg p-4 space-y-3">
@@ -144,7 +204,7 @@ export default function SetupPage() {
 
               <Button type="submit" className="w-full h-12 text-lg" disabled={isPending}>
                 {isPending ? (
-                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Criando Loja...</>
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Salvando...</>
                 ) : (
                   <><Check className="mr-2 h-5 w-5" /> Salvar Tudo e Entrar</>
                 )}
