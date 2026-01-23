@@ -5,19 +5,19 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   
-  // Se for recuperação de senha, o Supabase envia para /update-password depois
-  const next = searchParams.get("next") ?? "/";
+  // MUDANÇA: Se não houver um destino definido, mandamos para /update-password
+  // Assim, quem vem de convite ou magic link cai na tela de definir senha primeiro.
+  const next = searchParams.get("next") ?? "/update-password";
 
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (!error) {
-      // Se deu certo, vai para a página definida (home ou troca de senha)
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
 
-  // Se o link falhar (ex: expirado), volta pro login com erro amigável
-  return NextResponse.redirect(`${origin}/login?error=link-invalido`);
+  // Se der erro, volta para login
+  return NextResponse.redirect(`${origin}/login?error=auth-code-error`);
 }
