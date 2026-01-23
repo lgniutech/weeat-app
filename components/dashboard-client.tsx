@@ -10,7 +10,7 @@ import { StoreSetupModal } from "@/components/modals/store-setup-modal"
 import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
 
 interface DashboardClientProps {
-  store: any // Agora aceita o objeto completo
+  store: any
   userName: string
   userEmail: string
 }
@@ -23,15 +23,12 @@ export default function DashboardClient({
   const [activeModule, setActiveModule] = useState("dashboard")
   const [isStoreOpen, setIsStoreOpen] = useState(true)
   
-  // Estado para controlar o Modal de Configurações
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
 
-  // Efeito: Se o usuário clicar em "Dados da Loja" (store-settings), abre o modal
-  // e mantém o módulo visual anterior (ou dashboard) para não ficar tela branca
   useEffect(() => {
     if (activeModule === 'store-settings') {
       setIsSettingsModalOpen(true)
-      setActiveModule('dashboard') // Volta o foco visual para o dashboard
+      setActiveModule('dashboard')
     }
   }, [activeModule])
 
@@ -39,12 +36,14 @@ export default function DashboardClient({
 
   return (
     <SidebarProvider>
-      {/* Modais */}
+      {/* Setup Inicial */}
       {!hasStore && <StoreSetupModal />}
       
+      {/* Edição (Pop-up) - Agora recebe userName */}
       {hasStore && (
         <StoreSettingsModal 
           store={store} 
+          userName={userName} // Passando o nome atual
           isOpen={isSettingsModalOpen} 
           onOpenChange={setIsSettingsModalOpen} 
         />

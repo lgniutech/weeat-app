@@ -14,15 +14,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Save, Store, Phone, FileText, Clock } from "lucide-react"
+import { Loader2, Save, Store, Phone, FileText, Clock, User } from "lucide-react"
 
 interface StoreSettingsModalProps {
   store: any
+  userName: string // Nova prop
   isOpen: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSettingsModalProps) {
+export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: StoreSettingsModalProps) {
   const [state, action, isPending] = useActionState(updateStoreAction, null)
   
   // States locais
@@ -30,7 +31,7 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
   const [phone, setPhone] = useState("")
   const [hours, setHours] = useState<any[]>([])
 
-  // Sincroniza dados quando o modal abre ou a store muda
+  // Sincroniza dados
   useEffect(() => {
     if (store) {
       setCnpj(store.cnpj || "")
@@ -49,14 +50,7 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
     }
   }, [store, isOpen])
 
-  // Fecha o modal se salvar com sucesso
-  useEffect(() => {
-    if (state?.success) {
-      // Opcional: onOpenChange(false) // Se quiser fechar automático
-    }
-  }, [state])
-
-  // Máscaras
+  // Máscaras (Manter as funções auxiliares iguais)
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "")
     if (value.length > 14) value = value.slice(0, 14)
@@ -94,23 +88,36 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
             <Store className="w-6 h-6 text-primary" />
           </div>
-          <DialogTitle className="text-center">Dados da Loja</DialogTitle>
+          <DialogTitle className="text-center">Dados da Loja & Perfil</DialogTitle>
           <DialogDescription className="text-center">
-            Gerencie as informações principais do seu estabelecimento.
+            Atualize suas informações pessoais e do estabelecimento.
           </DialogDescription>
         </DialogHeader>
 
         <form action={action} className="space-y-6 mt-2">
           
+          {/* SEÇÃO 1: PESSOAL */}
+          <div className="space-y-4">
+             <div className="flex items-center gap-2 pb-2 border-b">
+              <User className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Dados Pessoais</h3>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Seu Nome Completo</Label>
+              <Input id="fullName" name="fullName" defaultValue={userName} required />
+            </div>
+          </div>
+
+          {/* SEÇÃO 2: LOJA */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
               <Store className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Informações Básicas</h3>
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Informações da Loja</h3>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="name">Nome da Loja</Label>
-              <Input id="name" name="name" defaultValue={store?.name} required placeholder="Ex: Hamburgueria do Zé" />
+              <Input id="name" name="name" defaultValue={store?.name} required />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -124,7 +131,7 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
                     value={cnpj} 
                     onChange={handleCnpjChange}
                     className="pl-9"
-                    disabled // CNPJ geralmente não muda
+                    disabled
                   />
                 </div>
               </div>
@@ -151,6 +158,7 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
             </div>
           </div>
 
+          {/* SEÇÃO 3: HORÁRIOS */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 pb-2 border-b">
               <Clock className="w-4 h-4 text-primary" />

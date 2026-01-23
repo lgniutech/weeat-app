@@ -14,18 +14,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
-import { Loader2, Store, FileText, Phone, Check, Lock } from "lucide-react"
+import { Loader2, Store, FileText, Phone, Check, User } from "lucide-react"
 
 export function StoreSetupModal() {
-  // O modal sempre começa aberto se for renderizado (controlado pelo pai ou condicional)
   const [isOpen, setIsOpen] = useState(true)
   const [state, action, isPending] = useActionState(createStoreAction, null)
   
-  // Estados para máscaras
   const [cnpj, setCnpj] = useState("")
   const [phone, setPhone] = useState("")
-
   const [hours, setHours] = useState([
     { day: "Segunda", open: "08:00", close: "18:00", active: true },
     { day: "Terça", open: "08:00", close: "18:00", active: true },
@@ -36,7 +32,7 @@ export function StoreSetupModal() {
     { day: "Domingo", open: "00:00", close: "00:00", active: false },
   ])
 
-  // Máscaras
+  // Máscaras (CNPJ e Phone) permanecem iguais...
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "")
     if (value.length > 14) value = value.slice(0, 14)
@@ -80,23 +76,28 @@ export function StoreSetupModal() {
           </div>
           <DialogTitle className="text-2xl text-center font-bold">Bem-vindo ao WeEat!</DialogTitle>
           <DialogDescription className="text-center">
-            Vamos configurar sua loja e definir sua senha de acesso.
+            Vamos configurar sua conta e sua loja.
           </DialogDescription>
         </DialogHeader>
 
         <form action={action} className="space-y-6 mt-2">
           
-          {/* SEÇÃO 1: SEGURANÇA */}
+          {/* SEÇÃO 1: DADOS DO RESPONSÁVEL */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 pb-2 border-b">
-              <Lock className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Acesso & Segurança</h3>
+              <User className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Seus Dados</h3>
             </div>
             
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Nome Completo <span className="text-destructive">*</span></Label>
+              <Input id="fullName" name="fullName" placeholder="Como você quer ser chamado?" required />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Nova Senha</Label>
-                <Input id="password" name="password" type="password" placeholder="Min. 6 caracteres" />
+                <Label htmlFor="password">Criar Senha</Label>
+                <Input id="password" name="password" type="password" placeholder="Mín. 6 caracteres" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirmar Senha</Label>
@@ -153,7 +154,7 @@ export function StoreSetupModal() {
             
             <div className="space-y-2">
               <Label htmlFor="logo">Logotipo</Label>
-              <Input id="logo" name="logo" type="file" accept="image/*" className="cursor-pointer text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
+              <Input id="logo" name="logo" type="file" accept="image/*" className="cursor-pointer text-sm" />
             </div>
           </div>
 
@@ -212,9 +213,9 @@ export function StoreSetupModal() {
 
           <Button type="submit" className="w-full h-12 text-md font-bold" disabled={isPending}>
             {isPending ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Configurando Tudo...</>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Configurando...</>
             ) : (
-              <><Check className="mr-2 h-5 w-5" /> Salvar Loja e Acessar</>
+              <><Check className="mr-2 h-5 w-5" /> Salvar Tudo e Acessar</>
             )}
           </Button>
         </form>

@@ -4,38 +4,46 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-// ACTION DE CRIAÇÃO (Agora com Senha)
+// ACTION DE CRIAÇÃO (Setup Inicial)
 export async function createStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
+  // Dados do Responsável
+  const fullName = formData.get("fullName") as string;
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+
+  // Dados da Loja
   const name = formData.get("name") as string;
   const cnpj = formData.get("cnpj") as string;
   const whatsapp = formData.get("whatsapp") as string;
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
   
-  // Campos de Senha (Opcionais, pois o usuário pode já ter senha)
-  const password = formData.get("password") as string;
-  const confirmPassword = formData.get("confirmPassword") as string;
-
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Sessão expirada." };
 
-    if (!name || !cnpj || !whatsapp) {
-      return { error: "Preencha Nome, CNPJ e WhatsApp." };
+    // Validações Básicas
+    if (!name || !cnpj || !whatsapp || !fullName) {
+      return { error: "Preencha todos os campos obrigatórios." };
     }
 
-    // 1. Atualizar Senha (Se fornecida)
+    // 1. Atualizar Dados do Usuário (Nome e Senha)
+    const userUpdates: any = {
+      data: { full_name: fullName } // Salva o nome nos metadados
+    };
+
     if (password) {
       if (password.length < 6) return { error: "A senha deve ter no mínimo 6 caracteres." };
       if (password !== confirmPassword) return { error: "As senhas não coincidem." };
-
-      const { error: passwordError } = await supabase.auth.updateUser({ password });
-      if (passwordError) throw new Error("Erro ao salvar senha: " + passwordError.message);
+      userUpdates.password = password;
     }
 
-    // 2. Gerar Slug
+    const { error: userError } = await supabase.auth.updateUser(userUpdates);
+    if (userError) throw new Error("Erro ao atualizar usuário: " + userError.message);
+
+    // 2. Gerar Slug da Loja
     const randomSuffix = Math.floor(Math.random() * 10000);
     const generatedSlug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + `-${randomSuffix}`;
 
@@ -52,7 +60,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       }
     }
 
-    // 4. Criar Loja
+    // 4. Criar Loja no Banco
     const { error } = await supabase.from("stores").insert({
       owner_id: user.id,
       name,
@@ -73,10 +81,11 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   redirect("/");
 }
 
-// ACTION DE ATUALIZAÇÃO (Mantida para edição)
+// ACTION DE ATUALIZAÇÃO (Edição)
 export async function updateStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
+  const fullName = formData.get("fullName") as string;
   const name = formData.get("name") as string;
   const whatsapp = formData.get("whatsapp") as string;
   const logoFile = formData.get("logo") as File;
@@ -86,6 +95,15 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Sessão expirada." };
 
+    // 1. Atualizar Nome do Usuário (se alterado)
+    if (fullName) {
+      const { error: userError } = await supabase.auth.updateUser({
+        data: { full_name: fullName }
+      });
+      if (userError) console.error("Erro ao atualizar nome:", userError);
+    }
+
+    // 2. Preparar update da Loja
     let updateData: any = {
       name,
       whatsapp: whatsapp.replace(/\D/g, ''),
@@ -115,5 +133,5 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   }
 
   revalidatePath("/");
-  return { success: "Loja atualizada com sucesso!" };
+  return { success: "Dados atualizados com sucesso!" };
 }
