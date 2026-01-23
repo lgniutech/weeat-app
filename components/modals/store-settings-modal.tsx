@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock } from "lucide-react"
+// CORREÇÃO: Adicionado 'Settings' na lista de imports abaixo
+import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings } from "lucide-react"
 
 interface StoreSettingsModalProps {
   store: any
@@ -57,7 +58,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     }
   }, [state])
 
-  // Máscaras... (manter iguais)
+  // Máscaras
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "")
     if (value.length > 14) value = value.slice(0, 14)
