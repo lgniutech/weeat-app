@@ -129,9 +129,7 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon">
-      {/* HEADER: Adicionado 'group-data-[collapsible=icon]:p-2' para reduzir padding quando fechado
-         e 'justify-center' para centralizar o logo.
-      */}
+      {/* HEADER: Ajustado para p-2 no modo collapsed para centralizar (48px width - 16px padding = 32px content) */}
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2">
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           {storeLogo ? (
@@ -157,7 +155,12 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-4 group-data-[collapsible=icon]:px-1">
+      {/* CONTENT: A MÁGICA ESTÁ AQUI
+         Removemos o padding do container (p-0) quando fechado.
+         Como o SidebarGroup já tem p-2 por padrão, isso resulta em exatamente 8px de margem,
+         centralizando perfeitamente os ícones.
+      */}
+      <SidebarContent className="px-2 py-4 group-data-[collapsible=icon]:p-0">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -230,9 +233,7 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
 
-      {/* FOOTER: Ajustado padding e layout para o modo collapsed.
-         Agora o container se ajusta para centralizar o avatar quando fechado.
-      */}
+      {/* FOOTER: Mesma lógica do header. p-2 quando fechado. */}
       <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2">
         <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-all hover:bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
           <Avatar className="h-9 w-9 border-2 border-background shadow-sm transition-all group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
