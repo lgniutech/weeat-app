@@ -10,34 +10,52 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Mail, Lock, ChefHat } from "lucide-react"
+import { Loader2, Mail, Lock, ChefHat, AlertCircle } from "lucide-react"
 
-// 1. Componente Interno (Contém a lógica que usa useSearchParams)
+// 1. Componente Interno
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [state, action, isPending] = useActionState(loginAction, null)
+  
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [inviteMessage, setInviteMessage] = useState("")
+  const [urlError, setUrlError] = useState<string | null>(null)
 
-  // Detecta se a URL tem um hash de convite/recuperação e processa automaticamente
   useEffect(() => {
     const supabase = createClient()
     
-    // Verifica se estamos num fluxo de convite (type=invite na URL)
+    // 1. Verifica erros na HASH da URL (comum no Supabase: #error=...)
+    // O Next.js useSearchParams não pega o hash, então usamos window.location
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash
+      if (hash && hash.includes("error_code=otp_expired")) {
+        setUrlError("O link de recuperação expirou ou já foi utilizado. Por favor, solicite uma nova senha.")
+      } else if (hash && hash.includes("error")) {
+         // Tenta extrair a descrição do erro de forma genérica
+         const params = new URLSearchParams(hash.substring(1)) // remove o #
+         const description = params.get("error_description")?.replace(/\+/g, " ")
+         if (description) setUrlError(description)
+      }
+    }
+
+    // 2. Verifica se estamos num fluxo de convite (type=invite na URL)
     const type = searchParams.get("type")
     if (type === "invite") {
       setInviteMessage("Validando seu convite...")
       setIsRedirecting(true)
     }
 
-    // Ouve mudanças na autenticação (acontece quando o Supabase processa o hash #access_token)
+    // 3. Ouve mudanças na autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") {
+        
+        // Se cairmos aqui com erro na URL, não redireciona, deixa o usuário ver o erro
+        if (window.location.hash.includes("error")) return
+
         setIsRedirecting(true)
         setInviteMessage("Login confirmado! Entrando...")
         
-        // Pequeno delay para garantir que o cookie foi setado localmente antes do refresh
         setTimeout(() => {
             router.push("/")
             router.refresh()
@@ -63,6 +81,21 @@ function LoginForm() {
       </CardHeader>
       <CardContent>
         
+        {/* Feedback de Erro de Link (Hash URL) */}
+        {urlError && (
+            <Alert variant="destructive" className="mb-6">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="flex flex-col gap-2">
+                    <span>{urlError}</span>
+                    <Link href="/forgot-password">
+                        <Button variant="outline" size="sm" className="w-full mt-2 border-destructive/50 hover:bg-destructive/10">
+                            Solicitar novamente
+                        </Button>
+                    </Link>
+                </AlertDescription>
+            </Alert>
+        )}
+
         {/* Feedback Visual de Redirecionamento */}
         {isRedirecting ? (
           <div className="flex flex-col items-center justify-center py-8 space-y-4 animate-in fade-in">
@@ -140,7 +173,7 @@ function LoginForm() {
   )
 }
 
-// 2. Componente Principal (Envolve o form em Suspense para evitar o erro de build)
+// 2. Componente Principal
 export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
