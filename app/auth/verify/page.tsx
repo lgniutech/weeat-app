@@ -1,20 +1,20 @@
 "use client"
 
-import { useSearchParams, useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Suspense, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { ShieldCheck, Loader2, ArrowRight, CheckCircle2, XCircle, KeyRound, Wand2 } from "lucide-react"
+import { ShieldCheck, Loader2, ArrowRight, CheckCircle2, XCircle, Wand2 } from "lucide-react"
 
 function VerifyContent() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   
-  // O Link Mágico envia 'token_hash' e 'type=magiclink' (ou email)
+  // Captura os parâmetros
   const token_hash = searchParams.get("token_hash")
   const type = searchParams.get("type")
-  const code = searchParams.get("code") // Fallback
+  const code = searchParams.get("code")
+  const errorDesc = searchParams.get("error_description")
   
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState("")
@@ -26,7 +26,15 @@ function VerifyContent() {
     try {
       let error = null
 
-      // PRIORIDADE: Verificar via Hash (Funciona Cross-Device)
+      // Tenta recuperar sessão existente primeiro
+      const { data: { session: existingSession } } = await supabase.auth.getSession()
+      if (existingSession) {
+         // Já está logado, só redireciona
+         window.location.href = "/?reset_password=true"
+         return
+      }
+
+      // ESTRATÉGIA 1: Hash (Link Mágico / Recuperação)
       if (token_hash && type) {
         const result = await supabase.auth.verifyOtp({
           token_hash,
@@ -34,29 +42,47 @@ function VerifyContent() {
         })
         error = result.error
       } 
-      // FALLBACK: Verificar via Code (Apenas mesmo navegador)
+      // ESTRATÉGIA 2: Code (OAuth / Legado)
       else if (code) {
         const result = await supabase.auth.exchangeCodeForSession(code)
         error = result.error
       } else {
-        throw new Error("Link incompleto (sem hash ou código).")
+        throw new Error("Link incompleto.")
       }
 
       if (error) throw error
 
       setStatus('success')
       
-      // Redireciona para Home e abre modal de senha
+      // MUDANÇA CRUCIAL: Força o reload completo da página
+      // Isso garante que o Middleware veja o cookie novo
       setTimeout(() => {
-        router.push("/?reset_password=true") 
-        router.refresh()
-      }, 1000)
+        window.location.href = "/?reset_password=true"
+      }, 500)
 
     } catch (err: any) {
-      console.error("Erro na verificação:", err)
+      console.error("Erro auth:", err)
       setStatus('error')
-      setErrorMessage("Link expirado ou inválido. Solicite um novo.")
+      setErrorMessage(err.message || "Link expirado ou inválido.")
     }
+  }
+
+  // Se já vier com erro na URL
+  if (errorDesc) {
+      return (
+        <div className="flex flex-col items-center gap-4 text-center">
+            <div className="bg-destructive/10 p-3 rounded-full text-destructive">
+                <XCircle className="w-8 h-8" />
+            </div>
+            <div>
+                <h3 className="text-lg font-semibold">Erro no Link</h3>
+                <p className="text-sm text-muted-foreground">{errorDesc.replace(/\+/g, " ")}</p>
+            </div>
+            <Button asChild variant="outline">
+                <a href="/login">Voltar</a>
+            </Button>
+        </div>
+      )
   }
 
   // Validação Visual
@@ -70,7 +96,7 @@ function VerifyContent() {
         </div>
         <div>
             <h3 className="text-lg font-semibold">Link Inválido</h3>
-            <p className="text-sm text-muted-foreground">Não foi possível identificar o código de segurança.</p>
+            <p className="text-sm text-muted-foreground">O link não possui o código de segurança.</p>
         </div>
         <Button asChild variant="outline">
             <a href="/login">Voltar ao Login</a>
