@@ -26,20 +26,26 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  // AQUI ESTÁ O SEGREDO:
-  // redirectTo aponta para o callback, enviando o 'next' como parâmetro.
-  // Assim, o link do email será: .../callback?code=123&next=/auth/reset-password
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
+  // ESTRATÉGIA BLINDADA: Login Mágico (Magic Link)
+  // Em vez de "Recuperar Senha" (que tem regras chatas de segurança),
+  // nós apenas logamos o usuário via e-mail e mandamos ele para a tela de trocar a senha.
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      // O 'next' aqui garante que após o clique, ele caia na tela de Nova Senha
+      emailRedirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
+      shouldCreateUser: false, // Só funciona se o usuário já existir
+    },
   });
 
   if (error) {
     let msg = error.message;
     if (msg.includes("Rate limit")) msg = "Muitas tentativas. Aguarde 60 segundos.";
+    if (msg.includes("Signups not allowed")) msg = "Não encontramos uma conta com este e-mail.";
     return { error: msg };
   }
 
-  return { success: "Link de redefinição enviado! Verifique seu e-mail." };
+  return { success: "Link de acesso enviado! Verifique seu e-mail." };
 }
 
 export async function updatePasswordAction(prevState: any, formData: FormData) {
@@ -55,14 +61,14 @@ export async function updatePasswordAction(prevState: any, formData: FormData) {
     return { error: "A senha deve ter no mínimo 6 caracteres." };
   }
 
-  // O usuário já chega aqui LOGADO pelo link do e-mail.
-  // Então só precisamos atualizar o usuário da sessão atual.
+  // Aqui o usuário JÁ ESTÁ LOGADO (pelo Magic Link).
+  // Então o supabase sabe quem é e permite trocar a senha.
   const { error } = await supabase.auth.updateUser({ 
     password: password 
   });
 
   if (error) {
-    return { error: "Erro ao atualizar: " + error.message };
+    return { error: "Erro ao atualizar senha: " + error.message };
   }
 
   return redirect("/");

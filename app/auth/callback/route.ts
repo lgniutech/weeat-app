@@ -1,44 +1,43 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // Se houver um "next" na URL (ex: /auth/reset-password), usamos ele
   const next = searchParams.get("next") ?? "/";
 
   if (code) {
-    const cookieStore = new Map(); // Armazém temporário
-
+    const cookieStore = await cookies();
+    
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll() {
-            // Lê os cookies da requisição original
-            const all: any[] = [];
-            request.headers.get("cookie")?.split("; ").forEach((c) => {
-               const [name, value] = c.split("=");
-               if (name && value) all.push({ name, value });
-            });
-            return all;
+            return cookieStore.getAll();
           },
           setAll(cookiesToSet) {
-            // Guarda os cookies que o Supabase quer criar
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, { value, options });
-            });
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              );
+            } catch {
+              // Ignora erro se for chamado de componente server-side (não é o caso aqui)
+            }
           },
         },
       }
     );
 
-    // TROCA O CÓDIGO PELA SESSÃO (Aqui acontece a mágica do login)
+    // Tenta trocar o código pela sessão
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (!error) {
-      // Prepara o redirecionamento
+      // Sucesso! A sessão foi gravada nos cookies automaticamente pelo setAll acima.
+      // Agora redirecionamos para a página certa (reset-password).
+      
       const forwardedHost = request.headers.get('x-forwarded-host');
       const isLocalEnv = process.env.NODE_ENV === 'development';
       
@@ -47,17 +46,10 @@ export async function GET(request: Request) {
         redirectUrl = `https://${forwardedHost}${next}`;
       }
 
-      const response = NextResponse.redirect(redirectUrl);
-
-      // Aplica os cookies de sessão na resposta final
-      cookieStore.forEach((cookie, name) => {
-        response.cookies.set(name, cookie.value, cookie.options);
-      });
-
-      return response;
+      return NextResponse.redirect(redirectUrl);
     }
   }
 
-  // Se der erro no código, volta pro login com erro
+  // Se falhar, redireciona para o login com o erro visível
   return NextResponse.redirect(`${origin}/login?error=auth_code_error`);
 }
