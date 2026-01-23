@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-// Action para CRIAR a loja (Mantida igual, apenas para contexto)
+// ACTION DE CRIAÇÃO (Agora com Senha)
 export async function createStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
@@ -13,27 +13,46 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   const whatsapp = formData.get("whatsapp") as string;
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
+  
+  // Campos de Senha (Opcionais, pois o usuário pode já ter senha)
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Sessão expirada." };
 
-    if (!name || !cnpj || !whatsapp) return { error: "Preencha Nome, CNPJ e WhatsApp." };
+    if (!name || !cnpj || !whatsapp) {
+      return { error: "Preencha Nome, CNPJ e WhatsApp." };
+    }
 
+    // 1. Atualizar Senha (Se fornecida)
+    if (password) {
+      if (password.length < 6) return { error: "A senha deve ter no mínimo 6 caracteres." };
+      if (password !== confirmPassword) return { error: "As senhas não coincidem." };
+
+      const { error: passwordError } = await supabase.auth.updateUser({ password });
+      if (passwordError) throw new Error("Erro ao salvar senha: " + passwordError.message);
+    }
+
+    // 2. Gerar Slug
     const randomSuffix = Math.floor(Math.random() * 10000);
     const generatedSlug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + `-${randomSuffix}`;
 
+    // 3. Upload da Logo
     let logoUrl = "";
-
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('store-assets').upload(fileName, logoFile);
-      if (uploadError) throw new Error("Erro no upload da logo. Verifique o bucket.");
-      const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
-      logoUrl = data.publicUrl;
+      
+      if (!uploadError) {
+        const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
+        logoUrl = data.publicUrl;
+      }
     }
 
+    // 4. Criar Loja
     const { error } = await supabase.from("stores").insert({
       owner_id: user.id,
       name,
@@ -54,7 +73,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   redirect("/");
 }
 
-// NOVA ACTION: Para ATUALIZAR a loja
+// ACTION DE ATUALIZAÇÃO (Mantida para edição)
 export async function updateStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
@@ -73,22 +92,15 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       settings: { business_hours: JSON.parse(businessHours) }
     };
 
-    // Só faz upload se o usuário enviou uma nova imagem
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from('store-assets').upload(fileName, logoFile, { upsert: true });
       
-      const { error: uploadError } = await supabase.storage
-        .from('store-assets')
-        .upload(fileName, logoFile, { upsert: true });
-
-      if (uploadError) throw new Error("Erro ao atualizar logo.");
-
-      const { data } = supabase.storage
-        .from('store-assets')
-        .getPublicUrl(fileName);
-      
-      updateData.logo_url = data.publicUrl;
+      if (!uploadError) {
+        const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
+        updateData.logo_url = data.publicUrl;
+      }
     }
 
     const { error } = await supabase

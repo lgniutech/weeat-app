@@ -7,44 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Store, Check, FileText, Phone } from "lucide-react";
+import { Loader2, Store, FileText, Phone, Check, Lock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 export default function SetupPage() {
   const [state, action, isPending] = useActionState(createStoreAction, null);
   
-  // Estados locais para controlar o valor dos inputs
   const [cnpj, setCnpj] = useState("");
   const [phone, setPhone] = useState("");
-
-  // Lógica de Máscara CNPJ: 00.000.000/0000-00
-  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, ""); // Remove tudo que não é número
-    
-    if (value.length > 14) value = value.slice(0, 14); // Limita a 14 dígitos
-
-    // Aplica a formatação progressiva
-    value = value.replace(/^(\d{2})(\d)/, "$1.$2");
-    value = value.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
-    value = value.replace(/\.(\d{3})(\d)/, ".$1/$2");
-    value = value.replace(/(\d{4})(\d)/, "$1-$2");
-
-    setCnpj(value);
-  };
-
-  // Lógica de Máscara Telefone: (00) 00000-0000
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, "");
-    
-    if (value.length > 11) value = value.slice(0, 11);
-
-    value = value.replace(/^(\d{2})(\d)/g, "($1) $2");
-    value = value.replace(/(\d)(\d{4})$/, "$1-$2");
-
-    setPhone(value);
-  };
-
-  // Estado dos horários
   const [hours, setHours] = useState([
     { day: "Segunda", open: "08:00", close: "18:00", active: true },
     { day: "Terça", open: "08:00", close: "18:00", active: true },
@@ -54,6 +24,25 @@ export default function SetupPage() {
     { day: "Sábado", open: "09:00", close: "14:00", active: true },
     { day: "Domingo", open: "00:00", close: "00:00", active: false },
   ]);
+
+  // Máscaras
+  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, "");
+    if (value.length > 14) value = value.slice(0, 14);
+    value = value.replace(/^(\d{2})(\d)/, "$1.$2");
+    value = value.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
+    value = value.replace(/\.(\d{3})(\d)/, ".$1/$2");
+    value = value.replace(/(\d{4})(\d)/, "$1-$2");
+    setCnpj(value);
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, "");
+    if (value.length > 11) value = value.slice(0, 11);
+    value = value.replace(/^(\d{2})(\d)/g, "($1) $2");
+    value = value.replace(/(\d)(\d{4})$/, "$1-$2");
+    setPhone(value);
+  };
 
   const toggleDay = (index: number) => {
     const newHours = [...hours];
@@ -70,34 +59,51 @@ export default function SetupPage() {
   return (
     <div className="min-h-screen bg-slate-50 py-10 px-4 flex items-center justify-center">
       <div className="w-full max-w-2xl">
-        <Card className="shadow-xl border-0">
-          <CardHeader className="text-center pb-8">
-            <div className="mx-auto bg-primary/10 p-4 rounded-full w-fit mb-4">
-              <Store className="w-10 h-10 text-primary" />
-            </div>
-            <CardTitle className="text-3xl font-bold">Configurar Loja</CardTitle>
-            <CardDescription>
-              Preencha os dados oficiais para começar a vender.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={action} className="space-y-8">
-              
-              {/* Seção 1: Dados Básicos */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <span className="bg-primary text-primary-foreground w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>
-                  Dados Oficiais
-                </h3>
-                
+        <form action={action}>
+          <div className="space-y-6">
+            
+            {/* CARD 1: SEGURANÇA (Novo) */}
+            <Card className="shadow-lg border-0 border-l-4 border-l-primary">
+              <CardHeader>
+                <div className="flex items-center gap-2 mb-1">
+                  <Lock className="w-5 h-5 text-primary" />
+                  <span className="text-sm font-bold text-primary uppercase tracking-wide">Acesso</span>
+                </div>
+                <CardTitle>Sua Senha</CardTitle>
+                <CardDescription>Defina a senha que você usará para entrar no WeEat.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Nova Senha</Label>
+                    <Input id="password" name="password" type="password" placeholder="Mínimo 6 caracteres" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                    <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="Repita a senha" required />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* CARD 2: DADOS DA LOJA */}
+            <Card className="shadow-lg border-0">
+              <CardHeader>
+                 <div className="flex items-center gap-2 mb-1">
+                  <Store className="w-5 h-5 text-primary" />
+                  <span className="text-sm font-bold text-primary uppercase tracking-wide">Dados da Loja</span>
+                </div>
+                <CardTitle>Configurar Negócio</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nome da Loja <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="name">Nome Fantasia</Label>
                   <Input id="name" name="name" placeholder="Ex: Hamburgueria do Dev" required />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="cnpj">CNPJ <span className="text-red-500">*</span></Label>
+                    <Label htmlFor="cnpj">CNPJ</Label>
                     <div className="relative">
                       <FileText className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input 
@@ -108,13 +114,12 @@ export default function SetupPage() {
                         placeholder="00.000.000/0000-00" 
                         className="pl-9"
                         required 
-                        maxLength={18}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="whatsapp">WhatsApp <span className="text-red-500">*</span></Label>
+                    <Label htmlFor="whatsapp">WhatsApp</Label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input 
@@ -125,40 +130,25 @@ export default function SetupPage() {
                         placeholder="(11) 99999-9999" 
                         className="pl-9"
                         required
-                        maxLength={15}
                       />
                     </div>
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="slug">Link da Loja <span className="text-red-500">*</span></Label>
-                  <div className="flex items-center">
-                    <span className="bg-muted px-3 py-2 border border-r-0 rounded-l-md text-sm text-muted-foreground whitespace-nowrap">
-                      weeat.app/
-                    </span>
-                    <Input id="slug" name="slug" placeholder="minha-loja" className="rounded-l-none" required />
-                  </div>
-                </div>
-
+                
                 <div className="space-y-2">
                   <Label htmlFor="logo">Logotipo</Label>
                   <Input id="logo" name="logo" type="file" accept="image/*" className="cursor-pointer" />
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              <div className="h-[1px] bg-slate-200" />
-
-              {/* Seção 2: Horários */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <span className="bg-primary text-primary-foreground w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
-                  Horário de Funcionamento
-                </h3>
-                
-                {/* Input Oculto para enviar o JSON dos horários */}
+            {/* CARD 3: HORÁRIOS */}
+            <Card className="shadow-lg border-0">
+              <CardHeader>
+                <CardTitle>Horário de Funcionamento</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <input type="hidden" name="businessHours" value={JSON.stringify(hours)} />
-
                 <div className="bg-slate-50 border rounded-lg p-4 space-y-3">
                   {hours.map((day, index) => (
                     <div key={day.day} className="flex items-center justify-between gap-2 text-sm">
@@ -178,14 +168,14 @@ export default function SetupPage() {
                             type="time" 
                             value={day.open}
                             onChange={(e) => updateTime(index, 'open', e.target.value)}
-                            className="w-24 h-8 text-xs"
+                            className="w-24 h-8 text-xs bg-background"
                           />
                           <span className="text-muted-foreground">-</span>
                           <Input 
                             type="time" 
                             value={day.close}
                             onChange={(e) => updateTime(index, 'close', e.target.value)}
-                            className="w-24 h-8 text-xs"
+                            className="w-24 h-8 text-xs bg-background"
                           />
                         </div>
                       ) : (
@@ -194,24 +184,24 @@ export default function SetupPage() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              {state?.error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{state.error}</AlertDescription>
-                </Alert>
+            {state?.error && (
+              <Alert variant="destructive">
+                <AlertDescription>{state.error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button type="submit" className="w-full h-12 text-lg" disabled={isPending}>
+              {isPending ? (
+                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Salvando...</>
+              ) : (
+                <><Check className="mr-2 h-5 w-5" /> Criar Conta e Loja</>
               )}
-
-              <Button type="submit" className="w-full h-12 text-lg" disabled={isPending}>
-                {isPending ? (
-                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Salvando...</>
-                ) : (
-                  <><Check className="mr-2 h-5 w-5" /> Salvar Tudo e Entrar</>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );

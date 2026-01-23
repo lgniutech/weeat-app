@@ -11,21 +11,26 @@ export default async function DashboardPage() {
     redirect("/login")
   }
 
-  // Buscamos name e logo_url
+  // Verifica se a loja existe
   const { data: store } = await supabase
     .from("stores")
     .select("name, logo_url")
     .eq("owner_id", user.id) 
-    .maybeSingle() 
+    .maybeSingle() // maybeSingle evita erro se não encontrar
+
+  // Se não tem loja, vai para o setup completo
+  if (!store) {
+    redirect("/setup")
+  }
 
   const userName = user.user_metadata.full_name || user.email?.split('@')[0] || "Usuário"
   const userEmail = user.email || ""
 
   return (
     <DashboardClient 
-      hasStore={!!store} 
-      storeName={store?.name}
-      storeLogo={store?.logo_url} // Passamos a logo
+      hasStore={true} 
+      storeName={store.name}
+      storeLogo={store.logo_url}
       userName={userName}
       userEmail={userEmail}
     />
