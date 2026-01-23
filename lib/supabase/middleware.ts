@@ -33,28 +33,29 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // --- LÓGICA DE PROTEÇÃO DE ROTAS ---
+  const url = request.nextUrl.clone()
   
-  // ADICIONADO: /forgot-password e /update-password agora são públicas
-  const publicRoutes = ['/login', '/auth', '/forgot-password', '/update-password']
+  // Rotas que não exigem login
+  const publicRoutes = ['/login', '/forgot-password', '/auth', '/update-password']
+  const isPublicRoute = publicRoutes.some(route => url.pathname.startsWith(route))
   
-  const isPublicRoute = publicRoutes.some(route => 
-    request.nextUrl.pathname.startsWith(route)
-  )
+  // Verificação de código na URL (essencial para convites e recuperação)
+  const hasCode = url.searchParams.has('code')
 
-  // 1. Se NÃO estiver logado e tentar acessar rota privada -> Login
+  // 1. Se estiver na rota de callback ou tiver um código, deixamos passar direto para o Route Handler processar
+  if (url.pathname.startsWith('/auth') || hasCode) {
+    return supabaseResponse
+  }
+
+  // 2. Se NÃO estiver logado e tentar acessar rota privada -> Login
   if (!user && !isPublicRoute) {
-    const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // 2. Se JÁ estiver logado e tentar acessar Login/Recuperação -> Dashboard
-  if (user && (
-    request.nextUrl.pathname.startsWith('/login') || 
-    request.nextUrl.pathname.startsWith('/forgot-password')
-  )) {
-    const url = request.nextUrl.clone()
+  // 3. Se JÁ estiver logado e tentar acessar Login/Recuperação -> Home
+  // Permitimos /update-password para usuários logados trocarem a senha
+  if (user && (url.pathname.startsWith('/login') || url.pathname.startsWith('/forgot-password'))) {
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
