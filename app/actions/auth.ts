@@ -30,24 +30,20 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  // MUDANÇA: Aponta para a página de verificação (Escudo) em vez do callback direto
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: `${origin}/auth/verify`, // Página intermediária
-      shouldCreateUser: false,
-    },
+  // MUDANÇA: Usamos resetPasswordForEmail. 
+  // Isso gera um link do tipo 'recovery' que é mais fácil de validar.
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/verify`, // Vai para o nosso Escudo
   });
 
   if (error) {
-    console.error("Magic Link Error:", error.message)
+    console.error("Recovery Error:", error.message)
     let msg = error.message
     if (msg.includes("Rate limit")) msg = "Muitas tentativas. Aguarde 60 segundos."
-    if (msg.includes("Signups not allowed")) msg = "Não encontramos uma conta com este e-mail."
     return { error: msg };
   }
 
-  return { success: "Se o e-mail estiver cadastrado, você receberá o link de acesso!" };
+  return { success: "Link de recuperação enviado! Verifique seu e-mail." };
 }
 
 export async function logoutAction() {

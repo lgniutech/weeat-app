@@ -1,52 +1,68 @@
 "use client"
 
 import { useSearchParams, useRouter } from "next/navigation"
-import { Suspense, useState } from "react"
+import { Suspense, useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { ShieldCheck, Loader2, ArrowRight, CheckCircle2, XCircle } from "lucide-react"
+import { ShieldCheck, Loader2, ArrowRight, CheckCircle2, XCircle, KeyRound } from "lucide-react"
 
 function VerifyContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  
+  // O Supabase manda 'code' (PKCE) OU 'token_hash' + 'type' (Recovery)
   const code = searchParams.get("code")
+  const token_hash = searchParams.get("token_hash")
+  const type = searchParams.get("type") as any // 'recovery' | 'signup' | 'magiclink'
   
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState("")
 
-  // Função que realiza o login IMEDIATAMENTE ao clicar
   const handleConfirm = async () => {
-    if (!code) return
-
     setStatus('loading')
     const supabase = createClient()
 
     try {
-      // Tenta trocar o código pela sessão aqui mesmo no navegador
-      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      let error = null
 
-      if (error) {
-        throw error
+      // ESTRATÉGIA 1: Se for Recuperação de Senha (token_hash)
+      // Esse é o método mais robusto para "Esqueci a Senha"
+      if (token_hash && type) {
+        const result = await supabase.auth.verifyOtp({
+          token_hash,
+          type,
+        })
+        error = result.error
+      } 
+      // ESTRATÉGIA 2: Se for Código OAuth (code)
+      else if (code) {
+        const result = await supabase.auth.exchangeCodeForSession(code)
+        error = result.error
+      } else {
+        throw new Error("Link incompleto.")
       }
 
-      // SUCESSO!
+      if (error) throw error
+
       setStatus('success')
       
-      // Aguarda um instante para o usuário ver o "Sucesso" e redireciona
+      // Redireciona para Home e abre o modal de configurações automaticamente
       setTimeout(() => {
-        router.push("/") // Manda pra Home
-        router.refresh() // Atualiza os dados
+        // Adicionamos ?reset=true para você poder abrir o modal de senha se quiser
+        router.push("/?reset_password=true") 
+        router.refresh()
       }, 1000)
 
     } catch (err: any) {
       console.error("Erro na verificação:", err)
       setStatus('error')
-      setErrorMessage("O link expirou ou é inválido. Tente solicitar novamente.")
+      setErrorMessage("O link expirou ou já foi utilizado. Solicite um novo.")
     }
   }
 
-  if (!code) {
+  // Se não tiver nenhum código, mostra erro visual
+  if (!code && !token_hash) {
     return (
       <div className="flex flex-col items-center gap-4 text-center">
         <div className="bg-destructive/10 p-3 rounded-full text-destructive">
@@ -54,7 +70,7 @@ function VerifyContent() {
         </div>
         <div>
             <h3 className="text-lg font-semibold">Link Inválido</h3>
-            <p className="text-sm text-muted-foreground">Não encontramos o código de verificação na URL.</p>
+            <p className="text-sm text-muted-foreground">O link não contém os códigos de segurança necessários.</p>
         </div>
         <Button asChild variant="outline">
             <a href="/login">Voltar ao Login</a>
@@ -66,7 +82,6 @@ function VerifyContent() {
   return (
     <div className="flex flex-col items-center gap-6 text-center animate-in fade-in zoom-in duration-300">
       
-      {/* ÍCONE DE STATUS */}
       <div className={`p-4 rounded-full transition-all duration-500 ${
         status === 'success' ? 'bg-green-100 text-green-600' :
         status === 'error' ? 'bg-red-100 text-red-600' :
@@ -75,24 +90,22 @@ function VerifyContent() {
         {status === 'loading' ? <Loader2 className="w-10 h-10 animate-spin" /> :
          status === 'success' ? <CheckCircle2 className="w-10 h-10" /> :
          status === 'error' ? <XCircle className="w-10 h-10" /> :
-         <ShieldCheck className="w-10 h-10" />}
+         <KeyRound className="w-10 h-10" />}
       </div>
       
-      {/* TEXTOS */}
       <div className="space-y-2">
         <h2 className="text-2xl font-bold tracking-tight">
-          {status === 'success' ? 'Acesso Confirmado!' : 
-           status === 'error' ? 'Erro no Acesso' :
-           'Verificação de Segurança'}
+          {status === 'success' ? 'Acesso Liberado!' : 
+           status === 'error' ? 'Link Expirado' :
+           'Recuperação de Acesso'}
         </h2>
         <p className="text-muted-foreground max-w-[280px] mx-auto">
-          {status === 'success' ? 'Entrando no sistema...' :
+          {status === 'success' ? 'Entrando no painel...' :
            status === 'error' ? errorMessage :
-           'Para sua segurança, clique no botão abaixo para liberar o acesso.'}
+           'Clique abaixo para confirmar sua identidade e acessar o sistema.'}
         </p>
       </div>
 
-      {/* BOTÃO DE AÇÃO */}
       {status === 'error' ? (
         <Button asChild variant="outline" className="w-full">
            <a href="/forgot-password">Solicitar Novo Link</a>
@@ -104,9 +117,9 @@ function VerifyContent() {
           onClick={handleConfirm}
           disabled={status === 'loading' || status === 'success'}
         >
-          {status === 'loading' ? 'Verificando...' : 
+          {status === 'loading' ? 'Validando...' : 
            status === 'success' ? 'Redirecionando...' : 
-           <>Confirmar Acesso <ArrowRight className="ml-2 w-4 h-4" /></>}
+           <>Confirmar e Entrar <ArrowRight className="ml-2 w-4 h-4" /></>}
         </Button>
       )}
     </div>
