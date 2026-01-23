@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Save, Store, Phone, FileText } from "lucide-react"
+import { Loader2, Save, Store, Phone, FileText, Clock } from "lucide-react"
 
 interface StoreSettingsModalProps {
   store: any
@@ -22,33 +22,39 @@ interface StoreSettingsModalProps {
   onOpenChange: (open: boolean) => void
 }
 
-const DEFAULT_HOURS = [
-  { day: "Segunda", open: "08:00", close: "18:00", active: true },
-  { day: "Terça", open: "08:00", close: "18:00", active: true },
-  { day: "Quarta", open: "08:00", close: "18:00", active: true },
-  { day: "Quinta", open: "08:00", close: "18:00", active: true },
-  { day: "Sexta", open: "08:00", close: "18:00", active: true },
-  { day: "Sábado", open: "09:00", close: "14:00", active: true },
-  { day: "Domingo", open: "00:00", close: "00:00", active: false },
-]
-
 export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSettingsModalProps) {
   const [state, action, isPending] = useActionState(updateStoreAction, null)
   
-  // Inicialização segura dos estados (Lazy initialization)
-  // Isso garante que os dados já existam na primeira renderização
-  const [cnpj, setCnpj] = useState(() => store?.cnpj || "")
-  const [phone, setPhone] = useState(() => store?.whatsapp || "")
-  const [hours, setHours] = useState<any[]>(() => store?.settings?.business_hours || DEFAULT_HOURS)
+  // States locais
+  const [cnpj, setCnpj] = useState("")
+  const [phone, setPhone] = useState("")
+  const [hours, setHours] = useState<any[]>([])
 
-  // Reseta os dados apenas se o modal abrir novamente ou a store mudar
+  // Sincroniza dados quando o modal abre ou a store muda
   useEffect(() => {
-    if (isOpen && store) {
+    if (store) {
       setCnpj(store.cnpj || "")
       setPhone(store.whatsapp || "")
-      setHours(store.settings?.business_hours || DEFAULT_HOURS)
+      
+      const defaultHours = [
+        { day: "Segunda", open: "08:00", close: "18:00", active: true },
+        { day: "Terça", open: "08:00", close: "18:00", active: true },
+        { day: "Quarta", open: "08:00", close: "18:00", active: true },
+        { day: "Quinta", open: "08:00", close: "18:00", active: true },
+        { day: "Sexta", open: "08:00", close: "18:00", active: true },
+        { day: "Sábado", open: "09:00", close: "14:00", active: true },
+        { day: "Domingo", open: "00:00", close: "00:00", active: false },
+      ]
+      setHours(store.settings?.business_hours || defaultHours)
     }
-  }, [isOpen, store])
+  }, [store, isOpen])
+
+  // Fecha o modal se salvar com sucesso
+  useEffect(() => {
+    if (state?.success) {
+      // Opcional: onOpenChange(false) // Se quiser fechar automático
+    }
+  }, [state])
 
   // Máscaras
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,34 +77,30 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
 
   const toggleDay = (index: number) => {
     const newHours = [...hours]
-    if (newHours[index]) {
-      newHours[index].active = !newHours[index].active
-      setHours(newHours)
-    }
+    newHours[index].active = !newHours[index].active
+    setHours(newHours)
   }
 
   const updateTime = (index: number, field: string, value: string) => {
     const newHours = [...hours]
-    if (newHours[index]) {
-      newHours[index][field] = value
-      setHours(newHours)
-    }
+    newHours[index][field] = value
+    setHours(newHours)
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent 
-        className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto"
-        aria-describedby="store-settings-description"
-      >
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Dados da Loja</DialogTitle>
-          <DialogDescription id="store-settings-description">
-            Atualize as informações do seu estabelecimento.
+          <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
+            <Store className="w-6 h-6 text-primary" />
+          </div>
+          <DialogTitle className="text-center">Dados da Loja</DialogTitle>
+          <DialogDescription className="text-center">
+            Gerencie as informações principais do seu estabelecimento.
           </DialogDescription>
         </DialogHeader>
 
-        <form action={action} className="space-y-6 mt-4">
+        <form action={action} className="space-y-6 mt-2">
           
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
@@ -108,7 +110,7 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
 
             <div className="space-y-2">
               <Label htmlFor="name">Nome da Loja</Label>
-              <Input id="name" name="name" defaultValue={store?.name || ""} required />
+              <Input id="name" name="name" defaultValue={store?.name} required placeholder="Ex: Hamburgueria do Zé" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -122,7 +124,7 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
                     value={cnpj} 
                     onChange={handleCnpjChange}
                     className="pl-9"
-                    disabled
+                    disabled // CNPJ geralmente não muda
                   />
                 </div>
               </div>
@@ -150,19 +152,22 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Horários</h3>
+            <div className="flex items-center gap-2 pb-2 border-b">
+              <Clock className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Horários</h3>
+            </div>
             <input type="hidden" name="businessHours" value={JSON.stringify(hours)} />
             
             <div className="bg-muted/30 border rounded-lg p-3 space-y-2">
               {hours.map((day, index) => (
-                <div key={day.day || index} className="flex items-center justify-between gap-2 text-sm">
+                <div key={index} className="flex items-center justify-between gap-2 text-sm">
                   <div className="flex items-center gap-3 w-32">
                     <Switch 
-                      checked={!!day.active} // O !! garante que seja booleano
+                      checked={day.active} 
                       onCheckedChange={() => toggleDay(index)} 
                       className="scale-75"
                     />
-                    <span className={!!day.active ? "font-medium" : "text-muted-foreground"}>
+                    <span className={day.active ? "font-medium" : "text-muted-foreground"}>
                       {day.day}
                     </span>
                   </div>
@@ -171,14 +176,14 @@ export function StoreSettingsModal({ store, isOpen, onOpenChange }: StoreSetting
                     <div className="flex items-center gap-2 flex-1 justify-end">
                       <Input 
                         type="time" 
-                        value={day.open ?? ""} // Garante que não seja undefined
+                        value={day.open}
                         onChange={(e) => updateTime(index, 'open', e.target.value)}
                         className="w-20 h-7 text-xs bg-background p-1"
                       />
                       <span className="text-muted-foreground text-xs">-</span>
                       <Input 
                         type="time" 
-                        value={day.close ?? ""} // Garante que não seja undefined
+                        value={day.close}
                         onChange={(e) => updateTime(index, 'close', e.target.value)}
                         className="w-20 h-7 text-xs bg-background p-1"
                       />

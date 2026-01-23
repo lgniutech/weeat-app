@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link" // Importante para o link de edição
+import Link from "next/link"
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -43,7 +43,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { logoutAction } from "@/app/actions/auth"
 
-// Atualizei a URL de "Dados da Loja" para apontar para a nova página
+// LISTA DE NAVEGAÇÃO ATUALIZADA
 const navigationItems = [
   {
     title: "Dashboard",
@@ -97,7 +97,9 @@ const navigationItems = [
     icon: Settings,
     id: "configuracoes",
     items: [
-      { title: "Dados da Loja", url: "/settings/store", icon: Store }, // AQUI O LINK NOVO
+      // AQUI ESTÁ A MUDANÇA: url="#" e id="store-settings"
+      // Isso fará abrir o Modal no DashboardClient, em vez de navegar
+      { title: "Dados da Loja", url: "#", id: "store-settings", icon: Store }, 
       { title: "Equipe & Permissões", url: "#" },
       { title: "Pagamentos", url: "#" },
       { title: "Tema", url: "#", icon: Palette, id: "tema" },
@@ -109,7 +111,7 @@ interface AppSidebarProps {
   activeModule: string
   onModuleChange: (moduleId: string) => void
   storeName?: string
-  storeLogo?: string // Nova prop
+  storeLogo?: string
   userName: string
   userEmail: string
 }
@@ -125,16 +127,14 @@ export function AppSidebar({
   const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes"])
 
   const getInitials = (name: string) => {
-    return name.split(' ').map(part => part[0]).join('').toUpperCase().substring(0, 2)
+    return name ? name.split(' ').map(part => part[0]).join('').toUpperCase().substring(0, 2) : "U"
   }
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          {/* LOGIC DO FRAME DA LOGO */}
           {storeLogo ? (
-             // Frame para a foto se ajustar
             <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-lg shadow-md shadow-primary/20 border border-border">
               <img 
                 src={storeLogo} 
@@ -143,7 +143,6 @@ export function AppSidebar({
               />
             </div>
           ) : (
-            // Ícone padrão se não tiver logo
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20">
               <Store className="h-5 w-5" />
             </div>
@@ -183,7 +182,7 @@ export function AppSidebar({
                         <SidebarMenuSub>
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
-                              {/* Verifica se é um Link interno (como /settings/store) ou módulo do dashboard */}
+                              {/* Lógica: Se tiver URL começando com /, é link. Senão, é botão de ação (modal) */}
                               {subItem.url && subItem.url.startsWith("/") ? (
                                 <SidebarMenuSubButton asChild>
                                   <Link href={subItem.url} className="cursor-pointer hover:text-primary transition-colors">
