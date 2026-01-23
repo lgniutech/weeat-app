@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // Se for uma confirmação de e-mail ou convite, o Supabase pode enviar um 'next'
+  
+  // Se for recuperação de senha, o Supabase envia para /update-password depois
   const next = searchParams.get("next") ?? "/";
 
   if (code) {
@@ -12,15 +13,11 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (!error) {
-      // Se não houver erro, levamos o usuário para o destino final (home ou setup)
+      // Se deu certo, vai para a página definida (home ou troca de senha)
       return NextResponse.redirect(`${origin}${next}`);
     }
-    
-    // Log do erro para depuração se necessário
-    console.error("Auth error:", error.message);
   }
 
-  // Se o código expirou ou é inválido, redireciona com um parâmetro claro
-  // Adicionamos o fragmento original para ajudar o front-end a entender o erro se necessário
-  return NextResponse.redirect(`${origin}/login?error=link-expirado`);
+  // Se o link falhar (ex: expirado), volta pro login com erro amigável
+  return NextResponse.redirect(`${origin}/login?error=link-invalido`);
 }

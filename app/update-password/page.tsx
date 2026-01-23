@@ -15,33 +15,31 @@ export default function UpdatePasswordPage() {
   return (
     <div className="container relative h-screen flex-col items-center justify-center grid lg:max-w-none lg:px-0 bg-background">
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-        <Card className="border-0 shadow-none sm:border sm:shadow-sm">
+        <Card className="border shadow-lg">
           <CardHeader className="text-center">
             <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-4">
               <Lock className="w-6 h-6 text-primary" />
             </div>
-            <CardTitle className="text-2xl font-semibold tracking-tight">
-              Criar Nova Senha
-            </CardTitle>
+            <CardTitle className="text-2xl font-bold">Nova Senha</CardTitle>
             <CardDescription>
-              Digite sua nova senha abaixo para recuperar o acesso.
+              Crie uma senha forte para acessar sua conta.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form action={action}>
               <div className="grid gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="password">Nova Senha</Label>
+                  <Label htmlFor="password">Senha</Label>
                   <Input
                     id="password"
                     name="password"
                     type="password"
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Sua nova senha"
                     required
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
+                  <Label htmlFor="confirmPassword">Confirmar Senha</Label>
                   <Input
                     id="confirmPassword"
                     name="confirmPassword"
@@ -61,10 +59,10 @@ export default function UpdatePasswordPage() {
                   {isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Atualizando...
+                      Salvando...
                     </>
                   ) : (
-                    "Salvar Nova Senha"
+                    "Atualizar Senha"
                   )}
                 </Button>
               </div>
