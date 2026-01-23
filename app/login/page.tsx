@@ -12,7 +12,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Mail, Lock, ChefHat, AlertCircle } from "lucide-react"
 
-// 1. Componente Interno
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -25,37 +24,43 @@ function LoginForm() {
   useEffect(() => {
     const supabase = createClient()
     
-    // 1. Verifica erros na HASH da URL (comum no Supabase: #error=...)
-    // O Next.js useSearchParams não pega o hash, então usamos window.location
+    // 1. Verifica erros na URL e TRADUZ para Português
     if (typeof window !== "undefined") {
       const hash = window.location.hash
-      if (hash && hash.includes("error_code=otp_expired")) {
-        setUrlError("O link de recuperação expirou ou já foi utilizado. Por favor, solicite uma nova senha.")
-      } else if (hash && hash.includes("error")) {
-         // Tenta extrair a descrição do erro de forma genérica
+      
+      if (hash && hash.includes("error")) {
          const params = new URLSearchParams(hash.substring(1)) // remove o #
-         const description = params.get("error_description")?.replace(/\+/g, " ")
+         let description = params.get("error_description")?.replace(/\+/g, " ") || ""
+         let code = params.get("error_code") || ""
+
+         // TRADUÇÃO DE ERROS COMUNS DO SUPABASE
+         if (code === "otp_expired" || description.includes("Email link is invalid")) {
+            description = "Este link de acesso expirou ou já foi utilizado."
+         } else if (description.includes("Invalid login credentials")) {
+            description = "E-mail ou senha incorretos."
+         } else if (description.includes("Rate limit exceeded")) {
+            description = "Muitas tentativas consecutivas. Aguarde um pouco."
+         } else if (description.includes("User already registered")) {
+            description = "Este e-mail já possui cadastro."
+         }
+
          if (description) setUrlError(description)
       }
     }
 
-    // 2. Verifica se estamos num fluxo de convite (type=invite na URL)
+    // 2. Verifica fluxo de convite
     const type = searchParams.get("type")
     if (type === "invite") {
       setInviteMessage("Validando seu convite...")
       setIsRedirecting(true)
     }
 
-    // 3. Ouve mudanças na autenticação
+    // 3. Ouve login
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") {
-        
-        // Se cairmos aqui com erro na URL, não redireciona, deixa o usuário ver o erro
         if (window.location.hash.includes("error")) return
-
         setIsRedirecting(true)
         setInviteMessage("Login confirmado! Entrando...")
-        
         setTimeout(() => {
             router.push("/")
             router.refresh()
@@ -74,14 +79,13 @@ function LoginForm() {
             <ChefHat className="h-8 w-8 text-primary" />
           </div>
         </div>
-        <CardTitle className="text-2xl font-bold">Bem-vindo ao WeEat</CardTitle>
+        <CardTitle className="text-2xl font-bold">Bem-vindo ao weeatapp</CardTitle>
         <CardDescription>
           Entre para gerenciar seu estabelecimento
         </CardDescription>
       </CardHeader>
       <CardContent>
         
-        {/* Feedback de Erro de Link (Hash URL) */}
         {urlError && (
             <Alert variant="destructive" className="mb-6">
                 <AlertCircle className="h-4 w-4" />
@@ -89,21 +93,19 @@ function LoginForm() {
                     <span>{urlError}</span>
                     <Link href="/forgot-password">
                         <Button variant="outline" size="sm" className="w-full mt-2 border-destructive/50 hover:bg-destructive/10">
-                            Solicitar novamente
+                            Solicitar novo link
                         </Button>
                     </Link>
                 </AlertDescription>
             </Alert>
         )}
 
-        {/* Feedback Visual de Redirecionamento */}
         {isRedirecting ? (
           <div className="flex flex-col items-center justify-center py-8 space-y-4 animate-in fade-in">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">{inviteMessage || "Redirecionando..."}</p>
           </div>
         ) : (
-          /* Formulário de Login Padrão */
           <form action={action} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
@@ -173,7 +175,6 @@ function LoginForm() {
   )
 }
 
-// 2. Componente Principal
 export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">

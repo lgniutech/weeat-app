@@ -4,17 +4,21 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-// ... createStoreAction continua igual ...
+// Função auxiliar para traduzir erros do Supabase/Postgres
+function translateError(errorMsg: string) {
+  if (errorMsg.includes("duplicate key")) {
+     if (errorMsg.includes("stores_slug_key")) return "O nome/link desta loja já está em uso."
+     if (errorMsg.includes("stores_cnpj_key")) return "Este CNPJ já está cadastrado em outra loja."
+     return "Este registro já existe."
+  }
+  if (errorMsg.includes("violates check constraint")) return "Dados inválidos."
+  if (errorMsg.includes("Password should be")) return "A senha deve ter pelo menos 6 caracteres."
+  return errorMsg;
+}
+
 export async function createStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
-  // ... (código existente da criação)
-  // Mantenha o código original do createStoreAction aqui
-  // Vou abreviar para focar na mudança do updateStoreAction abaixo
   
-  // Se precisar do código completo do createStoreAction, me avise, 
-  // mas ele não mudou nessa estratégia.
-  
-  // Apenas para garantir que não quebre, vou copiar o bloco essencial:
   const fullName = formData.get("fullName") as string;
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
@@ -32,6 +36,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       return { error: "Preencha todos os campos obrigatórios." };
     }
 
+    // Update User
     const userUpdates: any = { data: { full_name: fullName } };
     if (password) {
       if (password.length < 6) return { error: "A senha deve ter no mínimo 6 caracteres." };
@@ -39,11 +44,13 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       userUpdates.password = password;
     }
     const { error: userError } = await supabase.auth.updateUser(userUpdates);
-    if (userError) throw new Error("Erro ao atualizar usuário: " + userError.message);
+    if (userError) throw new Error(translateError(userError.message));
 
+    // Slug
     const randomSuffix = Math.floor(Math.random() * 10000);
     const generatedSlug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + `-${randomSuffix}`;
 
+    // Upload Logo
     let logoUrl = "";
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
@@ -55,6 +62,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       }
     }
 
+    // Insert Store
     const { error } = await supabase.from("stores").insert({
       owner_id: user.id,
       name,
@@ -64,16 +72,18 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       logo_url: logoUrl,
       settings: { business_hours: businessHours ? JSON.parse(businessHours) : [] }
     });
-    if (error) throw error;
+    
+    if (error) throw new Error(translateError(error.message));
+
   } catch (error: any) {
-    return { error: error.message };
+    return { error: translateError(error.message) };
   }
+
   revalidatePath("/");
   redirect("/");
 }
 
 
-// --- AQUI ESTÁ A MUDANÇA PRINCIPAL ---
 export async function updateStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
@@ -83,7 +93,7 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
   
-  // Novos campos de senha
+  // Senha (Opcional)
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
@@ -91,9 +101,8 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Sessão expirada. Recarregue a página." };
 
-    // 1. Atualizar Usuário (Nome e SENHA se houver)
+    // 1. Atualizar Auth (Nome e Senha)
     const authUpdates: any = {};
-    
     if (fullName) authUpdates.data = { full_name: fullName };
     
     if (password) {
@@ -104,10 +113,10 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
 
     if (Object.keys(authUpdates).length > 0) {
       const { error: userError } = await supabase.auth.updateUser(authUpdates);
-      if (userError) throw new Error("Erro ao atualizar perfil: " + userError.message);
+      if (userError) throw new Error(translateError(userError.message));
     }
 
-    // 2. Atualizar Loja
+    // 2. Atualizar Store
     let updateData: any = {
       name,
       whatsapp: whatsapp.replace(/\D/g, ''),
@@ -118,7 +127,6 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('store-assets').upload(fileName, logoFile, { upsert: true });
-      
       if (!uploadError) {
         const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
         updateData.logo_url = data.publicUrl;
@@ -130,12 +138,12 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       .update(updateData)
       .eq("owner_id", user.id);
 
-    if (error) throw error;
+    if (error) throw new Error(translateError(error.message));
 
   } catch (error: any) {
-    return { error: error.message };
+    return { error: translateError(error.message) };
   }
 
   revalidatePath("/");
-  return { success: "Dados (e senha) atualizados com sucesso!" };
+  return { success: "Dados atualizados com sucesso!" };
 }

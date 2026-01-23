@@ -15,7 +15,12 @@ export async function loginAction(prevState: any, formData: FormData) {
   });
 
   if (error) {
-    return { error: "E-mail ou senha inválidos." };
+    console.error("Login Error:", error.message)
+    // Tradução básica
+    if (error.message.includes("Invalid login credentials")) {
+        return { error: "E-mail ou senha inválidos." };
+    }
+    return { error: "Erro ao entrar: " + error.message };
   }
 
   return redirect("/");
@@ -26,20 +31,23 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  // signInWithOtp com TRAVA DE SEGURANÇA
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
       emailRedirectTo: `${origin}/auth/callback`,
-      shouldCreateUser: false, // <--- AQUI ESTÁ A MÁGICA: Bloqueia criação de novas contas
+      shouldCreateUser: false, // Bloqueia criação de novas contas
     },
   });
 
   if (error) {
-    // Dica: Por segurança, o Supabase pode não retornar erro se o usuário não existir
-    // (para evitar que hackers descubram quais emails existem).
-    // Mas o importante é que a conta NÃO será criada.
-    return { error: "Erro ao processar: " + error.message };
+    console.error("Magic Link Error:", error.message)
+    let msg = error.message
+    
+    // Traduções
+    if (msg.includes("Rate limit")) msg = "Muitas tentativas. Aguarde 60 segundos."
+    if (msg.includes("Signups not allowed")) msg = "Não encontramos uma conta com este e-mail."
+
+    return { error: msg };
   }
 
   return { success: "Se o e-mail estiver cadastrado, você receberá o link de acesso!" };
