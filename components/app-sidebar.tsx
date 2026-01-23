@@ -43,7 +43,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { logoutAction } from "@/app/actions/auth"
 
-// LISTA DE NAVEGAÇÃO ATUALIZADA
 const navigationItems = [
   {
     title: "Dashboard",
@@ -97,8 +96,6 @@ const navigationItems = [
     icon: Settings,
     id: "configuracoes",
     items: [
-      // AQUI ESTÁ A MUDANÇA: url="#" e id="store-settings"
-      // Isso fará abrir o Modal no DashboardClient, em vez de navegar
       { title: "Dados da Loja", url: "#", id: "store-settings", icon: Store }, 
       { title: "Equipe & Permissões", url: "#" },
       { title: "Pagamentos", url: "#" },
@@ -132,10 +129,13 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-3">
+      {/* HEADER: Adicionado 'group-data-[collapsible=icon]:p-2' para reduzir padding quando fechado
+         e 'justify-center' para centralizar o logo.
+      */}
+      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           {storeLogo ? (
-            <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-lg shadow-md shadow-primary/20 border border-border">
+            <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-lg shadow-md shadow-primary/20 border border-border transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
               <img 
                 src={storeLogo} 
                 alt="Logo da Loja" 
@@ -143,12 +143,12 @@ export function AppSidebar({
               />
             </div>
           ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20 transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
               <Store className="h-5 w-5" />
             </div>
           )}
           
-          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden transition-opacity duration-300">
             <span className="text-sm font-semibold text-foreground">weeat</span>
             <span className="text-xs text-muted-foreground truncate max-w-[150px]" title={storeName}>
               {storeName}
@@ -157,7 +157,7 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-4">
+      <SidebarContent className="px-2 py-4 group-data-[collapsible=icon]:px-1">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -182,7 +182,6 @@ export function AppSidebar({
                         <SidebarMenuSub>
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
-                              {/* Lógica: Se tiver URL começando com /, é link. Senão, é botão de ação (modal) */}
                               {subItem.url && subItem.url.startsWith("/") ? (
                                 <SidebarMenuSubButton asChild>
                                   <Link href={subItem.url} className="cursor-pointer hover:text-primary transition-colors">
@@ -231,14 +230,18 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
-        <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-colors hover:bg-muted/50 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
-          <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
+      {/* FOOTER: Ajustado padding e layout para o modo collapsed.
+         Agora o container se ajusta para centralizar o avatar quando fechado.
+      */}
+      <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2">
+        <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-all hover:bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
+          <Avatar className="h-9 w-9 border-2 border-background shadow-sm transition-all group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
             <AvatarImage src="" alt={userName} />
             <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
               {getInitials(userName)}
             </AvatarFallback>
           </Avatar>
+          
           <div className="flex flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
             <span className="text-sm font-medium text-foreground truncate" title={userName}>
               {userName}
@@ -247,6 +250,7 @@ export function AppSidebar({
               {userEmail}
             </span>
           </div>
+          
           <Button
             variant="ghost"
             size="icon"
