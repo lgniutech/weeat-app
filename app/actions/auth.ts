@@ -15,7 +15,6 @@ export async function loginAction(prevState: any, formData: FormData) {
   });
 
   if (error) {
-    console.error("Login Error:", error.message)
     if (error.message.includes("Invalid login credentials")) {
         return { error: "E-mail ou senha inválidos." };
     }
@@ -30,20 +29,24 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  // MUDANÇA: Usamos resetPasswordForEmail. 
-  // Isso gera um link do tipo 'recovery' que é mais fácil de validar.
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/verify`, // Vai para o nosso Escudo
+  // MUDANÇA: Voltamos para signInWithOtp (Link Mágico)
+  // Ele gera um 'token_hash' que funciona Cross-Device (PC para Celular, etc)
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: `${origin}/auth/verify`, // Aponta para o Escudo
+      shouldCreateUser: false, // Não cria conta nova
+    },
   });
 
   if (error) {
-    console.error("Recovery Error:", error.message)
     let msg = error.message
     if (msg.includes("Rate limit")) msg = "Muitas tentativas. Aguarde 60 segundos."
+    if (msg.includes("Signups not allowed")) msg = "Não encontramos uma conta com este e-mail."
     return { error: msg };
   }
 
-  return { success: "Link de recuperação enviado! Verifique seu e-mail." };
+  return { success: "Link de acesso enviado! Verifique seu e-mail." };
 }
 
 export async function logoutAction() {
