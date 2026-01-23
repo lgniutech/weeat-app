@@ -4,29 +4,21 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  
+  // Se existir um "next" na URL (ex: /auth/reset-password), usamos ele. 
+  // Se não, vai para a home.
   const next = searchParams.get("next") ?? "/";
 
   if (code) {
-    // 1. Prepara a URL de destino correta (tratando Vercel/Localhost)
-    const forwardedHost = request.headers.get('x-forwarded-host');
-    const isLocalEnv = process.env.NODE_ENV === 'development';
-    
-    let redirectUrl = `${origin}${next}`;
-    if (!isLocalEnv && forwardedHost) {
-      redirectUrl = `https://${forwardedHost}${next}`;
-    }
+    const cookieStore = new Map<string, any>(); // Simulador temporário para capturar cookies
 
-    // 2. Cria a Resposta de Redirecionamento (ainda vazia de cookies)
-    const response = NextResponse.redirect(redirectUrl);
-
-    // 3. Cria o cliente Supabase configurado para escrever cookies NESSA resposta
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll() {
-            // Lê os cookies da requisição original
+            // Lê cookies da request
             const all: any[] = [];
             request.headers.get("cookie")?.split("; ").forEach((c) => {
                const [name, value] = c.split("=");
@@ -35,24 +27,39 @@ export async function GET(request: Request) {
             return all;
           },
           setAll(cookiesToSet) {
-            // AQUI ESTÁ O SEGREDO: Escreve os cookies no Redirect Response
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
+            // Apenas coleta os cookies que o Supabase quer setar
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, { value, options });
+            });
           },
         },
       }
     );
 
-    // 4. Troca o código pela sessão (isso vai disparar o setAll acima)
+    // Troca o código pela sessão
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (!error) {
-      // Retorna a resposta que já contém o redirecionamento E os cookies
+      // Monta a URL de destino final
+      const forwardedHost = request.headers.get('x-forwarded-host');
+      const isLocalEnv = process.env.NODE_ENV === 'development';
+      
+      let redirectUrl = `${origin}${next}`;
+      if (!isLocalEnv && forwardedHost) {
+        redirectUrl = `https://${forwardedHost}${next}`;
+      }
+
+      const response = NextResponse.redirect(redirectUrl);
+
+      // Agora sim, escrevemos os cookies na resposta final
+      cookieStore.forEach((cookie, name) => {
+        response.cookies.set(name, cookie.value, cookie.options);
+      });
+
       return response;
     }
   }
 
-  // Se der erro, manda pro login
+  // Erro? Manda pro login com aviso
   return NextResponse.redirect(`${origin}/login?error=auth_code_error`);
 }

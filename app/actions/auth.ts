@@ -15,10 +15,7 @@ export async function loginAction(prevState: any, formData: FormData) {
   });
 
   if (error) {
-    if (error.message.includes("Invalid login credentials")) {
-        return { error: "E-mail ou senha inválidos." };
-    }
-    return { error: "Erro ao entrar: " + error.message };
+    return { error: "E-mail ou senha inválidos." };
   }
 
   return redirect("/");
@@ -29,21 +26,16 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  // AJUSTE: Mantivemos o signInWithOtp pela robustez cross-device que você citou,
-  // mas agora apontamos o redirecionamento (next) para a página de criar nova senha.
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      // O segredo está aqui: ?next=/auth/reset-password
-      emailRedirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
-      shouldCreateUser: false,
-    },
+  // MUDANÇA CRUCIAL:
+  // 1. Usamos resetPasswordForEmail (Gera e-mail de 'Recuperação de Senha' e não Magic Link comum)
+  // 2. O redirectTo aponta para o callback, mas já avisa: "Depois de logar, vá para /auth/reset-password"
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
   });
 
   if (error) {
-    let msg = error.message
-    if (msg.includes("Rate limit")) msg = "Muitas tentativas. Aguarde 60 segundos."
-    if (msg.includes("Signups not allowed")) msg = "Não encontramos uma conta com este e-mail."
+    let msg = error.message;
+    if (msg.includes("Rate limit")) msg = "Muitas tentativas. Aguarde 60 segundos.";
     return { error: msg };
   }
 
@@ -63,14 +55,14 @@ export async function updatePasswordAction(prevState: any, formData: FormData) {
     return { error: "A senha deve ter no mínimo 6 caracteres." };
   }
 
-  // Como o usuário chegou aqui via Link Mágico, ele já está logado na sessão atual.
-  // Podemos apenas atualizar o usuário.
+  // O usuário já chega aqui LOGADO pelo link do e-mail.
+  // Então só precisamos atualizar o usuário da sessão atual.
   const { error } = await supabase.auth.updateUser({ 
     password: password 
   });
 
   if (error) {
-    return { error: "Erro ao atualizar senha: " + error.message };
+    return { error: "Erro ao atualizar: " + error.message };
   }
 
   return redirect("/");
