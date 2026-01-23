@@ -18,7 +18,9 @@ import {
   BarChart3,
   Ticket,
   Star,
-  Palette
+  Palette,
+  PanelLeftOpen, // Ícone para abrir
+  PanelLeftClose // Ícone para fechar
 } from "lucide-react"
 import {
   Sidebar,
@@ -33,6 +35,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
+  useSidebar, // Importante para controlar o estado
 } from "@/components/ui/sidebar"
 import {
   Collapsible,
@@ -122,34 +125,26 @@ export function AppSidebar({
   userEmail 
 }: AppSidebarProps) {
   const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes"])
+  const { state, toggleSidebar } = useSidebar() // Hook para controlar abrir/fechar
 
   const getInitials = (name: string) => {
     return name ? name.split(' ').map(part => part[0]).join('').toUpperCase().substring(0, 2) : "U"
   }
 
   return (
-    <Sidebar 
-      collapsible="icon"
-      // LÓGICA DE HOVER:
-      // Quando estiver colapsado (icon), ao passar o mouse (hover):
-      // 1. Largura volta ao normal (w-[--sidebar-width])
-      // 2. Adiciona sombra e z-index para flutuar sobre o conteúdo
-      // 3. Importante: Força os botões internos a expandirem também
-      className="
-        group-data-[collapsible=icon]:hover:w-[--sidebar-width] 
-        group-data-[collapsible=icon]:hover:shadow-2xl 
-        group-data-[collapsible=icon]:hover:z-50
-        transition-all duration-300 ease-in-out
-        [&_[data-sidebar=menu-button]]:group-data-[collapsible=icon]:group-hover:w-full
-        [&_[data-sidebar=menu-button]]:group-data-[collapsible=icon]:group-hover:h-auto
-        [&_[data-sidebar=menu-button]]:group-data-[collapsible=icon]:group-hover:p-2
-      "
-    >
-      {/* HEADER */}
-      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:group-hover:p-4">
-        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:group-hover:justify-start">
+    <Sidebar collapsible="icon">
+      
+      {/* HEADER: Clique no logo para expandir se estiver fechado */}
+      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2">
+        <div 
+          className="flex items-center gap-3 cursor-pointer group-data-[collapsible=icon]:justify-center hover:opacity-80 transition-opacity"
+          onClick={() => {
+            if (state === 'collapsed') toggleSidebar()
+          }}
+          title={state === 'collapsed' ? "Clique para expandir" : ""}
+        >
           {storeLogo ? (
-            <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-lg shadow-md shadow-primary/20 border border-border transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:group-hover:h-10 group-data-[collapsible=icon]:group-hover:w-10">
+            <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-lg shadow-md shadow-primary/20 border border-border transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
               <img 
                 src={storeLogo} 
                 alt="Logo da Loja" 
@@ -157,22 +152,34 @@ export function AppSidebar({
               />
             </div>
           ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20 transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:group-hover:h-10 group-data-[collapsible=icon]:group-hover:w-10">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20 transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
               <Store className="h-5 w-5" />
             </div>
           )}
           
-          <div className="flex flex-col group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:flex transition-opacity duration-300">
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden transition-opacity duration-300">
             <span className="text-sm font-semibold text-foreground">weeat</span>
             <span className="text-xs text-muted-foreground truncate max-w-[150px]" title={storeName}>
               {storeName}
             </span>
           </div>
+
+          {/* Botão extra de fechar (só aparece aberto) */}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="ml-auto h-6 w-6 text-muted-foreground group-data-[collapsible=icon]:hidden"
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleSidebar()
+            }}
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </Button>
         </div>
       </SidebarHeader>
 
-      {/* CONTENT */}
-      <SidebarContent className="px-2 py-4 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:group-hover:px-2 group-data-[collapsible=icon]:group-hover:py-4">
+      <SidebarContent className="px-2 py-4 group-data-[collapsible=icon]:p-0">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -189,12 +196,12 @@ export function AppSidebar({
                           className="text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors duration-200 data-[state=open]:text-primary"
                         >
                           <item.icon className="h-4 w-4" />
-                          <span className="font-medium group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:inline-block">{item.title}</span>
-                          <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:block" />
+                          <span className="font-medium">{item.title}</span>
+                          <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <SidebarMenuSub className="group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:flex">
+                        <SidebarMenuSub>
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
                               {subItem.url && subItem.url.startsWith("/") ? (
@@ -235,7 +242,7 @@ export function AppSidebar({
                       }`}
                     >
                       <item.icon className="h-4 w-4" />
-                      <span className="font-medium group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:inline-block">{item.title}</span>
+                      <span className="font-medium">{item.title}</span>
                     </SidebarMenuButton>
                   )}
                 </SidebarMenuItem>
@@ -245,17 +252,22 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
 
-      {/* FOOTER */}
-      <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:group-hover:p-4">
-        <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-all hover:bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:group-hover:justify-start group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:group-hover:bg-muted/30 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:group-hover:p-2">
-          <Avatar className="h-9 w-9 border-2 border-background shadow-sm transition-all group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:group-hover:h-9 group-data-[collapsible=icon]:group-hover:w-9">
+      <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2">
+        {/* Lógica do Footer: Se fechado, clica para expandir */}
+        <div 
+          className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-all hover:bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0 cursor-pointer"
+          onClick={() => {
+             if (state === 'collapsed') toggleSidebar()
+          }}
+        >
+          <Avatar className="h-9 w-9 border-2 border-background shadow-sm transition-all group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
             <AvatarImage src="" alt={userName} />
             <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
               {getInitials(userName)}
             </AvatarFallback>
           </Avatar>
           
-          <div className="flex flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:flex">
+          <div className="flex flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
             <span className="text-sm font-medium text-foreground truncate" title={userName}>
               {userName}
             </span>
@@ -267,8 +279,11 @@ export function AppSidebar({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => logoutAction()} 
-            className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:flex"
+            onClick={(e) => {
+              e.stopPropagation() // Evita expandir se clicar só no logout
+              logoutAction()
+            }} 
+            className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors group-data-[collapsible=icon]:hidden"
             title="Sair do sistema"
           >
             <LogOut className="h-4 w-4" />
