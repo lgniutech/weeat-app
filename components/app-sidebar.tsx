@@ -18,9 +18,7 @@ import {
   BarChart3,
   Ticket,
   Star,
-  Palette,
-  PanelLeftOpen, // Ícone para abrir
-  PanelLeftClose // Ícone para fechar
+  Palette
 } from "lucide-react"
 import {
   Sidebar,
@@ -35,7 +33,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
-  useSidebar, // Importante para controlar o estado
+  useSidebar,
 } from "@/components/ui/sidebar"
 import {
   Collapsible,
@@ -125,7 +123,9 @@ export function AppSidebar({
   userEmail 
 }: AppSidebarProps) {
   const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes"])
-  const { state, toggleSidebar } = useSidebar() // Hook para controlar abrir/fechar
+  
+  // Hook para controlar o estado da sidebar
+  const { state, setOpen } = useSidebar()
 
   const getInitials = (name: string) => {
     return name ? name.split(' ').map(part => part[0]).join('').toUpperCase().substring(0, 2) : "U"
@@ -134,15 +134,20 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon">
       
-      {/* HEADER: Clique no logo para expandir se estiver fechado */}
-      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2">
+      {/* MÁGICA: Overlay invisível que captura cliques quando fechado.
+        Se a sidebar estiver 'collapsed', essa div cobre tudo e expande ao clicar.
+      */}
+      {state === 'collapsed' && (
         <div 
-          className="flex items-center gap-3 cursor-pointer group-data-[collapsible=icon]:justify-center hover:opacity-80 transition-opacity"
-          onClick={() => {
-            if (state === 'collapsed') toggleSidebar()
-          }}
-          title={state === 'collapsed' ? "Clique para expandir" : ""}
-        >
+          className="absolute inset-0 z-50 cursor-pointer bg-transparent"
+          onClick={() => setOpen(true)}
+          title="Clique para expandir o menu"
+        />
+      )}
+
+      {/* HEADER */}
+      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           {storeLogo ? (
             <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-lg shadow-md shadow-primary/20 border border-border transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
               <img 
@@ -163,22 +168,10 @@ export function AppSidebar({
               {storeName}
             </span>
           </div>
-
-          {/* Botão extra de fechar (só aparece aberto) */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="ml-auto h-6 w-6 text-muted-foreground group-data-[collapsible=icon]:hidden"
-            onClick={(e) => {
-              e.stopPropagation()
-              toggleSidebar()
-            }}
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </Button>
         </div>
       </SidebarHeader>
 
+      {/* CONTENT */}
       <SidebarContent className="px-2 py-4 group-data-[collapsible=icon]:p-0">
         <SidebarGroup>
           <SidebarGroupContent>
@@ -252,14 +245,9 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
 
+      {/* FOOTER */}
       <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2">
-        {/* Lógica do Footer: Se fechado, clica para expandir */}
-        <div 
-          className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-all hover:bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0 cursor-pointer"
-          onClick={() => {
-             if (state === 'collapsed') toggleSidebar()
-          }}
-        >
+        <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-all hover:bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
           <Avatar className="h-9 w-9 border-2 border-background shadow-sm transition-all group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
             <AvatarImage src="" alt={userName} />
             <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
@@ -279,11 +267,9 @@ export function AppSidebar({
           <Button
             variant="ghost"
             size="icon"
-            onClick={(e) => {
-              e.stopPropagation() // Evita expandir se clicar só no logout
-              logoutAction()
-            }} 
-            className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors group-data-[collapsible=icon]:hidden"
+            onClick={() => logoutAction()} 
+            // Removido o hover:text-destructive (vermelho)
+            className="h-8 w-8 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors group-data-[collapsible=icon]:hidden"
             title="Sair do sistema"
           >
             <LogOut className="h-4 w-4" />
