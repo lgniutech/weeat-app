@@ -29,13 +29,14 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  // MUDANÇA: Voltamos para signInWithOtp (Link Mágico)
-  // Ele gera um 'token_hash' que funciona Cross-Device (PC para Celular, etc)
+  // AJUSTE: Mantivemos o signInWithOtp pela robustez cross-device que você citou,
+  // mas agora apontamos o redirecionamento (next) para a página de criar nova senha.
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${origin}/auth/verify`, // Aponta para o Escudo
-      shouldCreateUser: false, // Não cria conta nova
+      // O segredo está aqui: ?next=/auth/reset-password
+      emailRedirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
+      shouldCreateUser: false,
     },
   });
 
@@ -46,7 +47,33 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
     return { error: msg };
   }
 
-  return { success: "Link de acesso enviado! Verifique seu e-mail." };
+  return { success: "Link de redefinição enviado! Verifique seu e-mail." };
+}
+
+export async function updatePasswordAction(prevState: any, formData: FormData) {
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+  const supabase = await createClient();
+
+  if (password !== confirmPassword) {
+    return { error: "As senhas não coincidem." };
+  }
+
+  if (password.length < 6) {
+    return { error: "A senha deve ter no mínimo 6 caracteres." };
+  }
+
+  // Como o usuário chegou aqui via Link Mágico, ele já está logado na sessão atual.
+  // Podemos apenas atualizar o usuário.
+  const { error } = await supabase.auth.updateUser({ 
+    password: password 
+  });
+
+  if (error) {
+    return { error: "Erro ao atualizar senha: " + error.message };
+  }
+
+  return redirect("/");
 }
 
 export async function logoutAction() {
