@@ -26,9 +26,9 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  // MUDANÇA CRUCIAL:
-  // 1. Usamos resetPasswordForEmail (Gera e-mail de 'Recuperação de Senha' e não Magic Link comum)
-  // 2. O redirectTo aponta para o callback, mas já avisa: "Depois de logar, vá para /auth/reset-password"
+  // AQUI ESTÁ O SEGREDO:
+  // redirectTo aponta para o callback, enviando o 'next' como parâmetro.
+  // Assim, o link do email será: .../callback?code=123&next=/auth/reset-password
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
   });

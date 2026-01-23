@@ -4,13 +4,11 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  
-  // Se existir um "next" na URL (ex: /auth/reset-password), usamos ele. 
-  // Se não, vai para a home.
+  // Se houver um "next" na URL (ex: /auth/reset-password), usamos ele
   const next = searchParams.get("next") ?? "/";
 
   if (code) {
-    const cookieStore = new Map<string, any>(); // Simulador temporário para capturar cookies
+    const cookieStore = new Map(); // Armazém temporário
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +16,7 @@ export async function GET(request: Request) {
       {
         cookies: {
           getAll() {
-            // Lê cookies da request
+            // Lê os cookies da requisição original
             const all: any[] = [];
             request.headers.get("cookie")?.split("; ").forEach((c) => {
                const [name, value] = c.split("=");
@@ -27,7 +25,7 @@ export async function GET(request: Request) {
             return all;
           },
           setAll(cookiesToSet) {
-            // Apenas coleta os cookies que o Supabase quer setar
+            // Guarda os cookies que o Supabase quer criar
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, { value, options });
             });
@@ -36,11 +34,11 @@ export async function GET(request: Request) {
       }
     );
 
-    // Troca o código pela sessão
+    // TROCA O CÓDIGO PELA SESSÃO (Aqui acontece a mágica do login)
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (!error) {
-      // Monta a URL de destino final
+      // Prepara o redirecionamento
       const forwardedHost = request.headers.get('x-forwarded-host');
       const isLocalEnv = process.env.NODE_ENV === 'development';
       
@@ -51,7 +49,7 @@ export async function GET(request: Request) {
 
       const response = NextResponse.redirect(redirectUrl);
 
-      // Agora sim, escrevemos os cookies na resposta final
+      // Aplica os cookies de sessão na resposta final
       cookieStore.forEach((cookie, name) => {
         response.cookies.set(name, cookie.value, cookie.options);
       });
@@ -60,6 +58,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Erro? Manda pro login com aviso
+  // Se der erro no código, volta pro login com erro
   return NextResponse.redirect(`${origin}/login?error=auth_code_error`);
 }
