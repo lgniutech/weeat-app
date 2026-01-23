@@ -128,12 +128,28 @@ export function AppSidebar({
   }
 
   return (
-    <Sidebar collapsible="icon">
-      {/* HEADER: Ajustado para p-2 no modo collapsed para centralizar (48px width - 16px padding = 32px content) */}
-      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2">
-        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
+    <Sidebar 
+      collapsible="icon"
+      // LÓGICA DE HOVER:
+      // Quando estiver colapsado (icon), ao passar o mouse (hover):
+      // 1. Largura volta ao normal (w-[--sidebar-width])
+      // 2. Adiciona sombra e z-index para flutuar sobre o conteúdo
+      // 3. Importante: Força os botões internos a expandirem também
+      className="
+        group-data-[collapsible=icon]:hover:w-[--sidebar-width] 
+        group-data-[collapsible=icon]:hover:shadow-2xl 
+        group-data-[collapsible=icon]:hover:z-50
+        transition-all duration-300 ease-in-out
+        [&_[data-sidebar=menu-button]]:group-data-[collapsible=icon]:group-hover:w-full
+        [&_[data-sidebar=menu-button]]:group-data-[collapsible=icon]:group-hover:h-auto
+        [&_[data-sidebar=menu-button]]:group-data-[collapsible=icon]:group-hover:p-2
+      "
+    >
+      {/* HEADER */}
+      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:group-hover:p-4">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:group-hover:justify-start">
           {storeLogo ? (
-            <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-lg shadow-md shadow-primary/20 border border-border transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
+            <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-lg shadow-md shadow-primary/20 border border-border transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:group-hover:h-10 group-data-[collapsible=icon]:group-hover:w-10">
               <img 
                 src={storeLogo} 
                 alt="Logo da Loja" 
@@ -141,12 +157,12 @@ export function AppSidebar({
               />
             </div>
           ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20 transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20 transition-all duration-300 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:group-hover:h-10 group-data-[collapsible=icon]:group-hover:w-10">
               <Store className="h-5 w-5" />
             </div>
           )}
           
-          <div className="flex flex-col group-data-[collapsible=icon]:hidden transition-opacity duration-300">
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:flex transition-opacity duration-300">
             <span className="text-sm font-semibold text-foreground">weeat</span>
             <span className="text-xs text-muted-foreground truncate max-w-[150px]" title={storeName}>
               {storeName}
@@ -155,12 +171,8 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
 
-      {/* CONTENT: A MÁGICA ESTÁ AQUI
-         Removemos o padding do container (p-0) quando fechado.
-         Como o SidebarGroup já tem p-2 por padrão, isso resulta em exatamente 8px de margem,
-         centralizando perfeitamente os ícones.
-      */}
-      <SidebarContent className="px-2 py-4 group-data-[collapsible=icon]:p-0">
+      {/* CONTENT */}
+      <SidebarContent className="px-2 py-4 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:group-hover:px-2 group-data-[collapsible=icon]:group-hover:py-4">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -177,12 +189,12 @@ export function AppSidebar({
                           className="text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors duration-200 data-[state=open]:text-primary"
                         >
                           <item.icon className="h-4 w-4" />
-                          <span className="font-medium">{item.title}</span>
-                          <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                          <span className="font-medium group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:inline-block">{item.title}</span>
+                          <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:block" />
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <SidebarMenuSub>
+                        <SidebarMenuSub className="group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:flex">
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
                               {subItem.url && subItem.url.startsWith("/") ? (
@@ -223,7 +235,7 @@ export function AppSidebar({
                       }`}
                     >
                       <item.icon className="h-4 w-4" />
-                      <span className="font-medium">{item.title}</span>
+                      <span className="font-medium group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:inline-block">{item.title}</span>
                     </SidebarMenuButton>
                   )}
                 </SidebarMenuItem>
@@ -233,17 +245,17 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
 
-      {/* FOOTER: Mesma lógica do header. p-2 quando fechado. */}
-      <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2">
-        <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-all hover:bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
-          <Avatar className="h-9 w-9 border-2 border-background shadow-sm transition-all group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
+      {/* FOOTER */}
+      <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:group-hover:p-4">
+        <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-all hover:bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:group-hover:justify-start group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:group-hover:bg-muted/30 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:group-hover:p-2">
+          <Avatar className="h-9 w-9 border-2 border-background shadow-sm transition-all group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:group-hover:h-9 group-data-[collapsible=icon]:group-hover:w-9">
             <AvatarImage src="" alt={userName} />
             <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
               {getInitials(userName)}
             </AvatarFallback>
           </Avatar>
           
-          <div className="flex flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
+          <div className="flex flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:flex">
             <span className="text-sm font-medium text-foreground truncate" title={userName}>
               {userName}
             </span>
@@ -256,7 +268,7 @@ export function AppSidebar({
             variant="ghost"
             size="icon"
             onClick={() => logoutAction()} 
-            className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors group-data-[collapsible=icon]:hidden"
+            className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-hover:flex"
             title="Sair do sistema"
           >
             <LogOut className="h-4 w-4" />
