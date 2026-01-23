@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Mail, ArrowLeft, KeyRound } from "lucide-react"
+import { Loader2, Mail, ArrowLeft, Wand2 } from "lucide-react"
 
 export default function ForgotPasswordPage() {
   const [state, action, isPending] = useActionState(forgotPasswordAction, null)
@@ -19,26 +19,26 @@ export default function ForgotPasswordPage() {
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
             <div className="bg-primary/10 p-3 rounded-full">
-              <KeyRound className="h-6 w-6 text-primary" />
+              <Wand2 className="h-6 w-6 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Recuperar Senha</CardTitle>
+          <CardTitle className="text-2xl font-bold">Acesso sem Senha</CardTitle>
           <CardDescription>
-            Digite seu e-mail para receber as instruções
+            Digite seu e-mail para receber um Link Mágico de acesso imediato.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {state?.success ? (
             <Alert className="bg-green-50 text-green-700 border-green-200">
               <AlertDescription className="flex flex-col gap-2">
-                <span className="font-semibold">E-mail enviado!</span>
-                Verifique sua caixa de entrada (e spam) para redefinir sua senha.
+                <span className="font-semibold">Link Mágico Enviado!</span>
+                Verifique seu e-mail. Ao clicar no link, você entrará automaticamente no painel.
               </AlertDescription>
             </Alert>
           ) : (
             <form action={action} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">E-mail cadastrado</Label>
+                <Label htmlFor="email">Seu E-mail</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input 
@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
                 {isPending ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
                 ) : (
-                  "Enviar Link de Recuperação"
+                  "Enviar Link Mágico"
                 )}
               </Button>
             </form>

@@ -14,11 +14,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Save, Store, Phone, FileText, Clock, User } from "lucide-react"
+import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock } from "lucide-react"
 
 interface StoreSettingsModalProps {
   store: any
-  userName: string // Nova prop
+  userName: string
   isOpen: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -50,7 +50,14 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     }
   }, [store, isOpen])
 
-  // Máscaras (Manter as funções auxiliares iguais)
+  // Fecha modal após sucesso
+  useEffect(() => {
+    if(state?.success) {
+      // Opcional: onOpenChange(false)
+    }
+  }, [state])
+
+  // Máscaras... (manter iguais)
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "")
     if (value.length > 14) value = value.slice(0, 14)
@@ -86,25 +93,42 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
-            <Store className="w-6 h-6 text-primary" />
+            <Settings className="w-6 h-6 text-primary" />
           </div>
-          <DialogTitle className="text-center">Dados da Loja & Perfil</DialogTitle>
+          <DialogTitle className="text-center">Configurações & Perfil</DialogTitle>
           <DialogDescription className="text-center">
-            Atualize suas informações pessoais e do estabelecimento.
+            Gerencie seus dados e informações da loja.
           </DialogDescription>
         </DialogHeader>
 
         <form action={action} className="space-y-6 mt-2">
           
-          {/* SEÇÃO 1: PESSOAL */}
+          {/* SEÇÃO 1: PESSOAL & SEGURANÇA */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
               <User className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Dados Pessoais</h3>
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Perfil e Segurança</h3>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fullName">Seu Nome Completo</Label>
+              <Label htmlFor="fullName">Seu Nome</Label>
               <Input id="fullName" name="fullName" defaultValue={userName} required />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="space-y-2">
+                <Label htmlFor="password">Nova Senha (Opcional)</Label>
+                <div className="relative">
+                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                   <Input id="password" name="password" type="password" placeholder="Mudar senha..." className="pl-9"/>
+                </div>
+               </div>
+               <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
+                <div className="relative">
+                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                   <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="Repita a senha" className="pl-9"/>
+                </div>
+               </div>
             </div>
           </div>
 

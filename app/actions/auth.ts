@@ -21,46 +21,26 @@ export async function loginAction(prevState: any, formData: FormData) {
   return redirect("/");
 }
 
+// MUDANÇA: Agora envia um link de LOGIN MÁGICO (Magic Link)
 export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const email = formData.get("email") as string;
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/callback?next=/update-password`,
+  // signInWithOtp envia um link que loga o usuário direto
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      // Redireciona para o callback, que vai mandar para a Home '/'
+      emailRedirectTo: `${origin}/auth/callback`, 
+    },
   });
 
   if (error) {
-    return { error: "Erro ao enviar e-mail: " + error.message };
+    return { error: "Erro ao enviar link: " + error.message };
   }
 
-  return { success: "E-mail de recuperação enviado!" };
-}
-
-export async function updatePasswordAction(prevState: any, formData: FormData) {
-  const password = formData.get("password") as string;
-  const confirmPassword = formData.get("confirmPassword") as string;
-
-  if (password !== confirmPassword) {
-    return { error: "As senhas não coincidem." };
-  }
-
-  if (password.length < 6) {
-    return { error: "A senha deve ter pelo menos 6 caracteres." };
-  }
-
-  const supabase = await createClient();
-
-  const { error } = await supabase.auth.updateUser({
-    password: password,
-  });
-
-  if (error) {
-    return { error: "Erro ao atualizar senha: " + error.message };
-  }
-
-  // MUDANÇA: Redireciona para a Home, onde o Modal assumirá o controle
-  return redirect("/");
+  return { success: "Link de acesso mágico enviado para seu e-mail!" };
 }
 
 export async function logoutAction() {
@@ -68,3 +48,4 @@ export async function logoutAction() {
   await supabase.auth.signOut();
   return redirect("/login");
 }
+// Removemos a updatePasswordAction pois faremos isso na loja agora
