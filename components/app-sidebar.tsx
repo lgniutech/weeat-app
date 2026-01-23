@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link" // Importante para o link de edição
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -42,6 +43,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { logoutAction } from "@/app/actions/auth"
 
+// Atualizei a URL de "Dados da Loja" para apontar para a nova página
 const navigationItems = [
   {
     title: "Dashboard",
@@ -95,7 +97,7 @@ const navigationItems = [
     icon: Settings,
     id: "configuracoes",
     items: [
-      { title: "Dados da Loja", url: "#" },
+      { title: "Dados da Loja", url: "/settings/store", icon: Store }, // AQUI O LINK NOVO
       { title: "Equipe & Permissões", url: "#" },
       { title: "Pagamentos", url: "#" },
       { title: "Tema", url: "#", icon: Palette, id: "tema" },
@@ -107,6 +109,7 @@ interface AppSidebarProps {
   activeModule: string
   onModuleChange: (moduleId: string) => void
   storeName?: string
+  storeLogo?: string // Nova prop
   userName: string
   userEmail: string
 }
@@ -115,29 +118,38 @@ export function AppSidebar({
   activeModule, 
   onModuleChange, 
   storeName = "Minha Loja", 
+  storeLogo, 
   userName, 
   userEmail 
 }: AppSidebarProps) {
   const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes"])
 
   const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2)
+    return name.split(' ').map(part => part[0]).join('').toUpperCase().substring(0, 2)
   }
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20">
-            <Store className="h-5 w-5" />
-          </div>
+          {/* LOGIC DO FRAME DA LOGO */}
+          {storeLogo ? (
+             // Frame para a foto se ajustar
+            <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-lg shadow-md shadow-primary/20 border border-border">
+              <img 
+                src={storeLogo} 
+                alt="Logo da Loja" 
+                className="h-full w-full object-cover" 
+              />
+            </div>
+          ) : (
+            // Ícone padrão se não tiver logo
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20">
+              <Store className="h-5 w-5" />
+            </div>
+          )}
+          
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            {/* NOME CORRIGIDO AQUI */}
             <span className="text-sm font-semibold text-foreground">weeat</span>
             <span className="text-xs text-muted-foreground truncate max-w-[150px]" title={storeName}>
               {storeName}
@@ -171,23 +183,28 @@ export function AppSidebar({
                         <SidebarMenuSub>
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton
-                                asChild
-                                onClick={() => onModuleChange((subItem as any).id || item.id)}
-                                className={`cursor-pointer hover:text-primary transition-colors ${
-                                  activeModule === (subItem as any).id ? "text-primary font-medium bg-primary/10" : ""
-                                }`}
-                              >
-                                <span>
-                                  {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 inline-block" />}
-                                  <span className="mr-2 inline-block">{subItem.title}</span>
-                                  {(subItem as any).badge && (
-                                    <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                                      {(subItem as any).badge}
-                                    </span>
-                                  )}
-                                </span>
-                              </SidebarMenuSubButton>
+                              {/* Verifica se é um Link interno (como /settings/store) ou módulo do dashboard */}
+                              {subItem.url && subItem.url.startsWith("/") ? (
+                                <SidebarMenuSubButton asChild>
+                                  <Link href={subItem.url} className="cursor-pointer hover:text-primary transition-colors">
+                                      {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 inline-block" />}
+                                      <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              ) : (
+                                <SidebarMenuSubButton
+                                  asChild
+                                  onClick={() => onModuleChange((subItem as any).id || item.id)}
+                                  className={`cursor-pointer hover:text-primary transition-colors ${
+                                    activeModule === (subItem as any).id ? "text-primary font-medium bg-primary/10" : ""
+                                  }`}
+                                >
+                                  <span>
+                                    {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 inline-block" />}
+                                    <span className="mr-2 inline-block">{subItem.title}</span>
+                                  </span>
+                                </SidebarMenuSubButton>
+                              )}
                             </SidebarMenuSubItem>
                           ))}
                         </SidebarMenuSub>
@@ -204,9 +221,7 @@ export function AppSidebar({
                           : "text-muted-foreground hover:bg-primary/5 hover:text-primary hover:translate-x-1"
                       }`}
                     >
-                      <item.icon className={`h-4 w-4 transition-transform duration-300 ${
-                        activeModule === item.id ? "" : "group-hover/menu-item:scale-110"
-                      }`} />
+                      <item.icon className="h-4 w-4" />
                       <span className="font-medium">{item.title}</span>
                     </SidebarMenuButton>
                   )}

@@ -11,6 +11,7 @@ import { StoreSetupModal } from "@/components/modals/store-setup-modal"
 interface DashboardClientProps {
   hasStore: boolean
   storeName?: string
+  storeLogo?: string // Nova prop
   userName: string
   userEmail: string
 }
@@ -18,24 +19,22 @@ interface DashboardClientProps {
 export default function DashboardClient({ 
   hasStore, 
   storeName, 
+  storeLogo,
   userName, 
   userEmail 
 }: DashboardClientProps) {
-  // Estado para controlar qual tela está ativa no dashboard
   const [activeModule, setActiveModule] = useState("dashboard")
-  
-  // Estado para controlar se a loja está aberta ou fechada
   const [isStoreOpen, setIsStoreOpen] = useState(true)
 
   return (
     <SidebarProvider>
-      {/* Se o usuário não tiver loja, este modal aparece e bloqueia a tela até ele criar */}
       {!hasStore && <StoreSetupModal />}
       
       <AppSidebar 
         activeModule={activeModule} 
         onModuleChange={setActiveModule}
         storeName={storeName}
+        storeLogo={storeLogo} // Passando para a Sidebar
         userName={userName}
         userEmail={userEmail}
       />
