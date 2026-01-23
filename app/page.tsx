@@ -16,21 +16,19 @@ export default async function DashboardPage() {
     .from("stores")
     .select("name, logo_url")
     .eq("owner_id", user.id) 
-    .maybeSingle() // maybeSingle evita erro se não encontrar
+    .maybeSingle() 
 
-  // Se não tem loja, vai para o setup completo
-  if (!store) {
-    redirect("/setup")
-  }
+  // Se não tem loja, passamos hasStore=false para o cliente abrir o Modal
+  // Não fazemos mais redirect("/setup")
 
   const userName = user.user_metadata.full_name || user.email?.split('@')[0] || "Usuário"
   const userEmail = user.email || ""
 
   return (
     <DashboardClient 
-      hasStore={true} 
-      storeName={store.name}
-      storeLogo={store.logo_url}
+      hasStore={!!store} 
+      storeName={store?.name}
+      storeLogo={store?.logo_url}
       userName={userName}
       userEmail={userEmail}
     />

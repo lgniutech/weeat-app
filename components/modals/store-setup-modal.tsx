@@ -14,9 +14,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Store, FileText, Phone, Check } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { Loader2, Store, FileText, Phone, Check, Lock } from "lucide-react"
 
 export function StoreSetupModal() {
+  // O modal sempre começa aberto se for renderizado (controlado pelo pai ou condicional)
   const [isOpen, setIsOpen] = useState(true)
   const [state, action, isPending] = useActionState(createStoreAction, null)
   
@@ -78,17 +80,40 @@ export function StoreSetupModal() {
           </div>
           <DialogTitle className="text-2xl text-center font-bold">Bem-vindo ao WeEat!</DialogTitle>
           <DialogDescription className="text-center">
-            Para começar, precisamos configurar os dados oficiais da sua loja.
+            Vamos configurar sua loja e definir sua senha de acesso.
           </DialogDescription>
         </DialogHeader>
 
-        <form action={action} className="space-y-6 mt-4">
+        <form action={action} className="space-y-6 mt-2">
           
+          {/* SEÇÃO 1: SEGURANÇA */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Dados Básicos</h3>
+            <div className="flex items-center gap-2 pb-2 border-b">
+              <Lock className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Acesso & Segurança</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="password">Nova Senha</Label>
+                <Input id="password" name="password" type="password" placeholder="Min. 6 caracteres" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="Repita a senha" />
+              </div>
+            </div>
+          </div>
+
+          {/* SEÇÃO 2: DADOS DA LOJA */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b">
+              <Store className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Dados da Loja</h3>
+            </div>
             
             <div className="space-y-2">
-              <Label htmlFor="name">Nome da Loja <span className="text-destructive">*</span></Label>
+              <Label htmlFor="name">Nome Fantasia <span className="text-destructive">*</span></Label>
               <Input id="name" name="name" placeholder="Ex: Hamburgueria do Dev" required />
             </div>
 
@@ -132,17 +157,23 @@ export function StoreSetupModal() {
             </div>
           </div>
 
+          {/* SEÇÃO 3: HORÁRIOS */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Horário de Funcionamento</h3>
+             <div className="flex items-center gap-2 pb-2 border-b">
+              <Check className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Funcionamento</h3>
+            </div>
+            
             <input type="hidden" name="businessHours" value={JSON.stringify(hours)} />
 
-            <div className="bg-muted/40 border rounded-lg p-4 space-y-3">
+            <div className="bg-muted/30 border rounded-lg p-3 space-y-2">
               {hours.map((day, index) => (
                 <div key={day.day} className="flex items-center justify-between gap-2 text-sm">
                   <div className="flex items-center gap-3 w-32">
                     <Switch 
                       checked={day.active} 
                       onCheckedChange={() => toggleDay(index)} 
+                      className="scale-75"
                     />
                     <span className={day.active ? "font-medium" : "text-muted-foreground"}>
                       {day.day}
@@ -155,14 +186,14 @@ export function StoreSetupModal() {
                         type="time" 
                         value={day.open}
                         onChange={(e) => updateTime(index, 'open', e.target.value)}
-                        className="w-24 h-8 text-xs bg-background"
+                        className="w-20 h-7 text-xs bg-background p-1"
                       />
-                      <span className="text-muted-foreground">-</span>
+                      <span className="text-muted-foreground text-xs">-</span>
                       <Input 
                         type="time" 
                         value={day.close}
                         onChange={(e) => updateTime(index, 'close', e.target.value)}
-                        className="w-24 h-8 text-xs bg-background"
+                        className="w-20 h-7 text-xs bg-background p-1"
                       />
                     </div>
                   ) : (
@@ -179,11 +210,11 @@ export function StoreSetupModal() {
             </Alert>
           )}
 
-          <Button type="submit" className="w-full h-11" disabled={isPending}>
+          <Button type="submit" className="w-full h-12 text-md font-bold" disabled={isPending}>
             {isPending ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Configurando Loja...</>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Configurando Tudo...</>
             ) : (
-              <><Check className="mr-2 h-4 w-4" /> Salvar e Acessar Painel</>
+              <><Check className="mr-2 h-5 w-5" /> Salvar Loja e Acessar</>
             )}
           </Button>
         </form>
