@@ -11,24 +11,19 @@ export default async function DashboardPage() {
     redirect("/login")
   }
 
-  // Verifica se a loja existe
+  // Busca a loja COMPLETA agora
   const { data: store } = await supabase
     .from("stores")
-    .select("name, logo_url")
+    .select("*") 
     .eq("owner_id", user.id) 
-    .maybeSingle() 
-
-  // Se não tem loja, passamos hasStore=false para o cliente abrir o Modal
-  // Não fazemos mais redirect("/setup")
+    .maybeSingle()
 
   const userName = user.user_metadata.full_name || user.email?.split('@')[0] || "Usuário"
   const userEmail = user.email || ""
 
   return (
     <DashboardClient 
-      hasStore={!!store} 
-      storeName={store?.name}
-      storeLogo={store?.logo_url}
+      store={store} // Passamos o objeto store inteiro (pode ser null)
       userName={userName}
       userEmail={userEmail}
     />
