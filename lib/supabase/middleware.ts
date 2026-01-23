@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
+  // Cria uma resposta base que permite modificar cookies
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -29,31 +30,35 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
+  // Verifica se o usuário já tem sessão
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   const url = request.nextUrl.clone()
   
-  // Rotas que não precisam de login
+  // Rotas públicas que não precisam de login
+  // IMPORTANTE: '/auth' deve ser pública para o callback funcionar
   const publicRoutes = ['/login', '/forgot-password', '/auth', '/update-password']
   const isPublicRoute = publicRoutes.some(route => url.pathname.startsWith(route))
   
-  // Detecta se há um código de autenticação na URL (vindo do e-mail)
+  // Verifica se há um código na URL (típico de convites/recuperação)
   const hasCode = url.searchParams.has('code')
 
-  // REGRA DE OURO: Se tiver código ou for rota de auth, não redireciona para login
+  // REGRA 1: Se tiver código (convite) ou for rota de auth, deixa passar!
+  // Isso impede que o usuário seja jogado para o login antes de validar o convite.
   if (hasCode || url.pathname.startsWith('/auth')) {
     return supabaseResponse
   }
 
-  // 1. Se NÃO estiver logado e tentar acessar rota privada -> Login
+  // REGRA 2: Se NÃO estiver logado e tentar acessar rota privada -> Login
   if (!user && !isPublicRoute) {
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // 2. Se JÁ estiver logado e tentar acessar Login/Recuperação -> Home
+  // REGRA 3: Se JÁ estiver logado e tentar acessar Login/Recuperação -> Dashboard
+  // Mas permitimos '/update-password' para quem acabou de entrar via convite
   if (user && (url.pathname.startsWith('/login') || url.pathname.startsWith('/forgot-password'))) {
     url.pathname = '/'
     return NextResponse.redirect(url)
