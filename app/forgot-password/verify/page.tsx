@@ -29,25 +29,28 @@ function VerifyAndResetContent() {
         </div>
         <CardTitle className="text-2xl font-bold">Redefinir Senha</CardTitle>
         <CardDescription>
-          Para sua segurança, digite o código enviado para <strong>{email}</strong> e crie sua nova senha.
+          Digite o código recebido no e-mail <strong>{email}</strong> e defina sua nova senha.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form action={action} className="space-y-4">
           <input type="hidden" name="email" value={email} />
 
-          {/* Campo de Código */}
+          {/* Campo de Código - AGORA ACEITA CÓDIGOS MAIORES */}
           <div className="space-y-2">
-            <Label htmlFor="code">Código de 6 Dígitos</Label>
+            <Label htmlFor="code">Código de Verificação</Label>
             <Input 
               id="code" 
               name="code" 
               type="text" 
-              placeholder="000000" 
-              className="text-center text-lg tracking-[0.5em] font-mono"
-              maxLength={6}
+              placeholder="Digite o código..." 
+              className="text-center text-lg tracking-widest font-mono"
+              maxLength={20} 
               required 
             />
+            <p className="text-xs text-muted-foreground text-center">
+              Ex: 123456 ou 12345678
+            </p>
           </div>
 
           <div className="border-t my-4 opacity-50"></div>
