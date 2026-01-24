@@ -22,51 +22,42 @@ export default function ForgotPasswordPage() {
               <Wand2 className="h-6 w-6 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Acesso sem Senha</CardTitle>
+          <CardTitle className="text-2xl font-bold">Recuperar Acesso</CardTitle>
           <CardDescription>
-            Digite seu e-mail para receber um Link Mágico de acesso imediato.
+            Digite seu e-mail para receber um código de acesso.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {state?.success ? (
-            <Alert className="bg-green-50 text-green-700 border-green-200">
-              <AlertDescription className="flex flex-col gap-2">
-                <span className="font-semibold">Link Mágico Enviado!</span>
-                Verifique seu e-mail. Ao clicar no link, você entrará automaticamente no painel.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <form action={action} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Seu E-mail</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="email" 
-                    name="email" 
-                    type="email" 
-                    placeholder="seu@email.com" 
-                    className="pl-9"
-                    required 
-                  />
-                </div>
+          <form action={action} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Seu E-mail</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  id="email" 
+                  name="email" 
+                  type="email" 
+                  placeholder="seu@email.com" 
+                  className="pl-9"
+                  required 
+                />
               </div>
+            </div>
 
-              {state?.error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{state.error}</AlertDescription>
-                </Alert>
+            {state?.error && (
+              <Alert variant="destructive">
+                <AlertDescription>{state.error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
+              ) : (
+                "Enviar Código"
               )}
-
-              <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
-                ) : (
-                  "Enviar Link Mágico"
-                )}
-              </Button>
-            </form>
-          )}
+            </Button>
+          </form>
         </CardContent>
         <CardFooter className="justify-center border-t pt-4">
           <Link 

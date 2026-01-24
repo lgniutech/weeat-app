@@ -2,11 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 
 export async function loginAction(prevState: any, formData: FormData) {
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const email = (formData.get("email") as string).trim();
+  const password = (formData.get("password") as string).trim();
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -21,20 +20,16 @@ export async function loginAction(prevState: any, formData: FormData) {
   return redirect("/");
 }
 
+// 1. Envia o código
 export async function forgotPasswordAction(prevState: any, formData: FormData) {
-  const email = formData.get("email") as string;
+  const email = (formData.get("email") as string).trim();
   const supabase = await createClient();
-  const origin = (await headers()).get("origin");
 
-  // ESTRATÉGIA BLINDADA: Login Mágico (Magic Link)
-  // Em vez de "Recuperar Senha" (que tem regras chatas de segurança),
-  // nós apenas logamos o usuário via e-mail e mandamos ele para a tela de trocar a senha.
+  // Envia o Magic Link (que contém o código no corpo do email que você configurou)
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      // O 'next' aqui garante que após o clique, ele caia na tela de Nova Senha
-      emailRedirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
-      shouldCreateUser: false, // Só funciona se o usuário já existir
+      shouldCreateUser: false,
     },
   });
 
@@ -45,12 +40,17 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
     return { error: msg };
   }
 
-  return { success: "Link de acesso enviado! Verifique seu e-mail." };
+  // Redireciona para a tela de verificar
+  return redirect(`/forgot-password/verify?email=${encodeURIComponent(email)}`);
 }
 
-export async function updatePasswordAction(prevState: any, formData: FormData) {
-  const password = formData.get("password") as string;
-  const confirmPassword = formData.get("confirmPassword") as string;
+// 2. Ação Blindada: Tenta verificar como 'email' ou 'magiclink'
+export async function resetPasswordWithCodeAction(prevState: any, formData: FormData) {
+  const email = (formData.get("email") as string).trim();
+  const code = (formData.get("code") as string).trim(); // Remove espaços extras
+  const password = (formData.get("password") as string).trim();
+  const confirmPassword = (formData.get("confirmPassword") as string).trim();
+  
   const supabase = await createClient();
 
   if (password !== confirmPassword) {
@@ -61,14 +61,46 @@ export async function updatePasswordAction(prevState: any, formData: FormData) {
     return { error: "A senha deve ter no mínimo 6 caracteres." };
   }
 
-  // Aqui o usuário JÁ ESTÁ LOGADO (pelo Magic Link).
-  // Então o supabase sabe quem é e permite trocar a senha.
-  const { error } = await supabase.auth.updateUser({ 
-    password: password 
+  // TENTATIVA 1: Verificar como token de E-mail padrão
+  let { error: verifyError, data } = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: 'email',
   });
 
-  if (error) {
-    return { error: "Erro ao atualizar senha: " + error.message };
+  // TENTATIVA 2: Se falhar, tenta verificar como token de Magic Link
+  // (Isso é comum quando o código vem do template de Magic Link)
+  if (verifyError) {
+    const { error: magicLinkError, data: magicLinkData } = await supabase.auth.verifyOtp({
+      email,
+      token: code,
+      type: 'magiclink',
+    });
+
+    if (!magicLinkError && magicLinkData.session) {
+      // Sucesso na segunda tentativa! Limpa o erro anterior.
+      verifyError = null;
+      data = magicLinkData;
+    }
+  }
+
+  // Se ainda assim der erro...
+  if (verifyError) {
+    console.error("Erro na verificação:", verifyError);
+    return { error: "Código inválido ou expirado. Tente solicitar um novo." };
+  }
+
+  if (!data?.session) {
+    return { error: "Sessão não criada. Tente novamente." };
+  }
+
+  // Sucesso! Atualiza a senha.
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: password
+  });
+
+  if (updateError) {
+    return { error: "Erro ao salvar nova senha: " + updateError.message };
   }
 
   return redirect("/");
