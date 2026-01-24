@@ -21,13 +21,12 @@ export async function loginAction(prevState: any, formData: FormData) {
   return redirect("/");
 }
 
-// 1. Envia o código para o e-mail
+// 1. Envia o código
 export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const email = formData.get("email") as string;
   const supabase = await createClient();
 
-  // Usa signInWithOtp SEM link de redirecionamento. 
-  // Isso força o envio de um código (Token) no template de e-mail padrão.
+  // Envia apenas o código (sem link mágico para evitar problemas de redirect)
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
@@ -42,53 +41,55 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
     return { error: msg };
   }
 
-  // Redireciona para a tela de digitar o código
+  // Redireciona para a tela unificada de Código + Nova Senha
   return redirect(`/forgot-password/verify?email=${encodeURIComponent(email)}`);
 }
 
-// 2. Verifica o código digitado e loga o usuário
-export async function verifyOtpAction(prevState: any, formData: FormData) {
+// 2. Ação Blindada: Verifica Código + Atualiza Senha de uma vez
+export async function resetPasswordWithCodeAction(prevState: any, formData: FormData) {
   const email = formData.get("email") as string;
   const code = formData.get("code") as string;
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+  
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.verifyOtp({
+  // Validações básicas
+  if (password !== confirmPassword) {
+    return { error: "As senhas não coincidem." };
+  }
+  if (password.length < 6) {
+    return { error: "A senha deve ter no mínimo 6 caracteres." };
+  }
+
+  // PASSO 1: Verificar o código e Logar
+  // Isso cria a sessão na instância atual do cliente supabase
+  const { error: verifyError, data } = await supabase.auth.verifyOtp({
     email,
     token: code,
     type: 'email',
   });
 
-  if (error) {
+  if (verifyError) {
+    console.error("Erro verifyOtp:", verifyError);
     return { error: "Código inválido ou expirado." };
   }
 
-  // Se deu certo, o usuário já está logado com a sessão gravada.
-  // Mandamos ele para definir a nova senha.
-  return redirect("/auth/reset-password");
-}
-
-// 3. Salva a nova senha
-export async function updatePasswordAction(prevState: any, formData: FormData) {
-  const password = formData.get("password") as string;
-  const confirmPassword = formData.get("confirmPassword") as string;
-  const supabase = await createClient();
-
-  if (password !== confirmPassword) {
-    return { error: "As senhas não coincidem." };
+  if (!data.session) {
+    return { error: "Não foi possível validar a sessão. Tente novamente." };
   }
 
-  if (password.length < 6) {
-    return { error: "A senha deve ter no mínimo 6 caracteres." };
-  }
-
-  const { error } = await supabase.auth.updateUser({ 
-    password: password 
+  // PASSO 2: Com a sessão ativa na memória, atualizamos a senha
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: password
   });
 
-  if (error) {
-    return { error: "Erro ao atualizar senha: " + error.message };
+  if (updateError) {
+    console.error("Erro updateUser:", updateError);
+    return { error: "Erro ao salvar nova senha: " + updateError.message };
   }
 
+  // Sucesso total
   return redirect("/");
 }
 
