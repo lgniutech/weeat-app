@@ -36,7 +36,7 @@ function VerifyAndResetContent() {
         <form action={action} className="space-y-4">
           <input type="hidden" name="email" value={email} />
 
-          {/* Campo de Código - AGORA ACEITA CÓDIGOS MAIORES */}
+          {/* Campo de Código */}
           <div className="space-y-2">
             <Label htmlFor="code">Código de Verificação</Label>
             <Input 
@@ -48,9 +48,6 @@ function VerifyAndResetContent() {
               maxLength={20} 
               required 
             />
-            <p className="text-xs text-muted-foreground text-center">
-              Ex: 123456 ou 12345678
-            </p>
           </div>
 
           <div className="border-t my-4 opacity-50"></div>
