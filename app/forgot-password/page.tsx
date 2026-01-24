@@ -1,20 +1,17 @@
 "use client"
 
 import { useActionState } from "react"
-import { verifyOtpAction } from "@/app/actions/auth"
-import { useSearchParams } from "next/navigation"
+import { forgotPasswordAction } from "@/app/actions/auth"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, ArrowLeft, KeyRound } from "lucide-react"
+import { Loader2, Mail, ArrowLeft, Wand2 } from "lucide-react"
 
-export default function VerifyCodePage() {
-  const searchParams = useSearchParams()
-  const email = searchParams.get("email") || ""
-  const [state, action, isPending] = useActionState(verifyOtpAction, null)
+export default function ForgotPasswordPage() {
+  const [state, action, isPending] = useActionState(forgotPasswordAction, null)
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
@@ -22,32 +19,29 @@ export default function VerifyCodePage() {
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
             <div className="bg-primary/10 p-3 rounded-full">
-              <KeyRound className="h-6 w-6 text-primary" />
+              <Wand2 className="h-6 w-6 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Verificar Código</CardTitle>
+          <CardTitle className="text-2xl font-bold">Recuperar Acesso</CardTitle>
           <CardDescription>
-            Enviamos um código de 6 dígitos para <strong>{email}</strong>.
-            <br/>Digite-o abaixo para continuar.
+            Digite seu e-mail para receber um código de acesso.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form action={action} className="space-y-4">
-            {/* Campo oculto para passar o email */}
-            <input type="hidden" name="email" value={email} />
-
             <div className="space-y-2">
-              <Label htmlFor="code">Código de Verificação</Label>
-              <Input 
-                id="code" 
-                name="code" 
-                type="text" 
-                placeholder="123456" 
-                className="text-center text-lg tracking-widest"
-                maxLength={6}
-                required 
-                autoFocus
-              />
+              <Label htmlFor="email">Seu E-mail</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  id="email" 
+                  name="email" 
+                  type="email" 
+                  placeholder="seu@email.com" 
+                  className="pl-9"
+                  required 
+                />
+              </div>
             </div>
 
             {state?.error && (
@@ -58,20 +52,20 @@ export default function VerifyCodePage() {
 
             <Button type="submit" className="w-full" disabled={isPending}>
               {isPending ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verificando...</>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
               ) : (
-                "Verificar Código"
+                "Enviar Código"
               )}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="justify-center border-t pt-4">
           <Link 
-            href="/forgot-password" 
+            href="/login" 
             className="flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Voltar e reenviar
+            Voltar para o Login
           </Link>
         </CardFooter>
       </Card>
