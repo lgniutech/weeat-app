@@ -21,12 +21,13 @@ export async function loginAction(prevState: any, formData: FormData) {
   return redirect("/");
 }
 
-// 1. Envia o código
+// 1. Envia o e-mail (que agora terá o CÓDIGO VISÍVEL após sua alteração no painel)
 export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const email = formData.get("email") as string;
   const supabase = await createClient();
 
-  // Envia apenas o código (sem link mágico para evitar problemas de redirect)
+  // signInWithOtp dispara o template "Magic Link".
+  // Com a alteração no painel, o usuário verá o Token numérico.
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
@@ -41,11 +42,11 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
     return { error: msg };
   }
 
-  // Redireciona para a tela unificada de Código + Nova Senha
+  // Redireciona para a tela onde ele digita o código e a nova senha juntos
   return redirect(`/forgot-password/verify?email=${encodeURIComponent(email)}`);
 }
 
-// 2. Ação Blindada: Verifica Código + Atualiza Senha de uma vez
+// 2. Verifica Código + Atualiza Senha (Tudo junto para não perder a sessão)
 export async function resetPasswordWithCodeAction(prevState: any, formData: FormData) {
   const email = formData.get("email") as string;
   const code = formData.get("code") as string;
@@ -54,42 +55,38 @@ export async function resetPasswordWithCodeAction(prevState: any, formData: Form
   
   const supabase = await createClient();
 
-  // Validações básicas
   if (password !== confirmPassword) {
     return { error: "As senhas não coincidem." };
   }
+
   if (password.length < 6) {
     return { error: "A senha deve ter no mínimo 6 caracteres." };
   }
 
-  // PASSO 1: Verificar o código e Logar
-  // Isso cria a sessão na instância atual do cliente supabase
+  // PASSO A: Valida o código (Isso cria a sessão no servidor momentaneamente)
   const { error: verifyError, data } = await supabase.auth.verifyOtp({
     email,
     token: code,
-    type: 'email',
+    type: 'email', // 'email' é o tipo correto para OTP gerado via signInWithOtp
   });
 
   if (verifyError) {
-    console.error("Erro verifyOtp:", verifyError);
     return { error: "Código inválido ou expirado." };
   }
 
   if (!data.session) {
-    return { error: "Não foi possível validar a sessão. Tente novamente." };
+    return { error: "Falha na validação. Tente gerar um novo código." };
   }
 
-  // PASSO 2: Com a sessão ativa na memória, atualizamos a senha
+  // PASSO B: Atualiza a senha imediatamente usando a sessão recém-criada
   const { error: updateError } = await supabase.auth.updateUser({
     password: password
   });
 
   if (updateError) {
-    console.error("Erro updateUser:", updateError);
     return { error: "Erro ao salvar nova senha: " + updateError.message };
   }
 
-  // Sucesso total
   return redirect("/");
 }
 
