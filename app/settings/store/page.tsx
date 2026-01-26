@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { StoreSettingsForm } from "./store-settings-form"
+import { AppearanceForm } from "@/components/settings/appearance-form"
+import { Separator } from "@/components/ui/separator"
 
 export default async function StoreSettingsPage() {
   const supabase = await createClient()
@@ -18,26 +20,41 @@ export default async function StoreSettingsPage() {
     .eq("owner_id", user.id)
     .maybeSingle()
 
-  // Se não tiver loja, volta para o dashboard (que abrirá o setup)
+  // Se não tiver loja, volta para o dashboard
   if (!store) {
     redirect("/")
   }
 
-  // Garante que settings seja um objeto válido para não quebrar o front
   const safeStore = {
     ...store,
     settings: store.settings || {} 
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-10">
+      {/* Cabeçalho Geral */}
       <div>
-        <h3 className="text-lg font-medium">Dados da Loja</h3>
-        <p className="text-sm text-muted-foreground">
-          Gerencie as informações principais do seu estabelecimento.
+        <h3 className="text-2xl font-bold tracking-tight">Configurações</h3>
+        <p className="text-muted-foreground">
+          Gerencie os dados do seu estabelecimento e suas preferências de uso.
         </p>
       </div>
-      <StoreSettingsForm store={safeStore} />
+
+      <Separator />
+
+      {/* Seção 1: Dados da Loja */}
+      <div className="space-y-4">
+        <h4 className="text-lg font-semibold">Dados da Loja</h4>
+        <StoreSettingsForm store={safeStore} />
+      </div>
+
+      <Separator />
+
+      {/* Seção 2: Aparência do Painel (O Novo Componente) */}
+      <div className="space-y-4">
+        <h4 className="text-lg font-semibold">Personalização do Sistema</h4>
+        <AppearanceForm />
+      </div>
     </div>
   )
 }
