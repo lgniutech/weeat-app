@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react" // ADICIONADO: useRef
 import { useTheme } from "next-themes"
 import { useThemeColor } from "@/components/theme-provider"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
@@ -32,33 +32,39 @@ export default function DashboardClient({
   const [isStoreOpen, setIsStoreOpen] = useState(true)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
 
-  // Hooks de Tema para Sincronização
+  // Hooks de Tema
   const { setTheme } = useTheme()
   const { setThemeColor } = useThemeColor()
+  
+  // --- CORREÇÃO DO LAG ---
+  // Usamos uma referência para saber se já carregamos o tema inicial.
+  // Assim, evitamos que o Dashboard sobrescreva sua escolha enquanto você edita.
+  const isThemeInitialized = useRef(false)
 
-  // 1. Sincronizar Tema do Banco de Dados ao Carregar
   useEffect(() => {
-    if (store) {
+    // Só roda se tiver loja e se AINDA NÃO tivermos inicializado o tema
+    if (store && !isThemeInitialized.current) {
       if (store.theme_mode) setTheme(store.theme_mode)
       if (store.theme_color) setThemeColor(store.theme_color)
+      
+      // Marca como inicializado para não rodar de novo
+      isThemeInitialized.current = true
     }
   }, [store, setTheme, setThemeColor])
 
-  // 2. Interceptar clique em "Dados da Loja" e abrir o modal
+  // 2. Interceptar clique em "Dados da Loja"
   useEffect(() => {
     if (activeModule === 'store-settings') {
       setIsSettingsModalOpen(true)
-      setActiveModule('dashboard') // Mantém o usuário na tela atual ao fundo
+      setActiveModule('dashboard')
     }
   }, [activeModule])
 
   const hasStore = !!store
 
-  // Função que decide qual componente renderizar na área principal
   const renderContent = () => {
     switch (activeModule) {
       case 'tema':
-        // Passamos o ID da loja para salvar as alterações
         return <AppearanceForm storeId={store?.id} />
       case 'store-appearance':
         return <StoreAppearance store={store} />
@@ -73,10 +79,8 @@ export default function DashboardClient({
 
   return (
     <SidebarProvider>
-      {/* 1. Modal de Setup Inicial (Se não tiver loja) */}
       {!hasStore && <StoreSetupModal />}
       
-      {/* 2. Modal de Configurações da Loja (Edição) */}
       {hasStore && (
         <StoreSettingsModal 
           store={store} 
@@ -86,7 +90,6 @@ export default function DashboardClient({
         />
       )}
       
-      {/* 3. Barra Lateral */}
       <AppSidebar 
         activeModule={activeModule} 
         onModuleChange={setActiveModule}
@@ -96,7 +99,6 @@ export default function DashboardClient({
         userEmail={userEmail}
       />
       
-      {/* 4. Área Principal */}
       <SidebarInset>
         <DashboardHeader
           activeModule={activeModule}
