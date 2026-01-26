@@ -18,7 +18,8 @@ import {
   BarChart3,
   Ticket,
   Star,
-  Palette
+  Palette,
+  Image as ImageIcon // Ícone novo para aparência
 } from "lucide-react"
 import {
   Sidebar,
@@ -44,6 +45,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { logoutAction } from "@/app/actions/auth"
 
+// --- ATENÇÃO AQUI: IDs Atualizados ---
 const navigationItems = [
   {
     title: "Dashboard",
@@ -56,7 +58,7 @@ const navigationItems = [
     icon: ShoppingBag,
     id: "operacao",
     items: [
-      { title: "Gestão de Pedidos", url: "#", badge: "12" },
+      { title: "Gestão de Pedidos", url: "#", badge: "12", id: "orders" },
       { title: "Mesas & Salão", url: "#", icon: QrCode },
       { title: "Tela da Cozinha", url: "#", icon: ChefHat },
     ],
@@ -66,8 +68,7 @@ const navigationItems = [
     icon: UtensilsCrossed,
     id: "cardapio",
     items: [
-      { title: "Produtos & Categorias", url: "#" },
-      { title: "Personalizar Cardápio", url: "#" }, 
+      { title: "Produtos & Categorias", url: "#", id: "menu-products" }, // ID NOVO
       { title: "Estoque", url: "#" },
     ],
   },
@@ -98,9 +99,9 @@ const navigationItems = [
     id: "configuracoes",
     items: [
       { title: "Dados da Loja", url: "#", id: "store-settings", icon: Store }, 
+      { title: "Aparência & Marca", url: "#", id: "store-appearance", icon: ImageIcon }, // ID NOVO
       { title: "Equipe & Permissões", url: "#" },
-      { title: "Pagamentos", url: "#" },
-      { title: "Tema", url: "#", icon: Palette, id: "tema" },
+      { title: "Tema (Claro/Escuro)", url: "#", icon: Palette, id: "tema" },
     ],
   },
 ]
@@ -122,9 +123,7 @@ export function AppSidebar({
   userName, 
   userEmail 
 }: AppSidebarProps) {
-  const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes"])
-  
-  // Hook para controlar o estado da sidebar
+  const [openGroups, setOpenGroups] = React.useState<string[]>(["cardapio", "configuracoes"])
   const { state, setOpen } = useSidebar()
 
   const getInitials = (name: string) => {
@@ -133,10 +132,6 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon">
-      
-      {/* MÁGICA: Overlay invisível que captura cliques quando fechado.
-        Se a sidebar estiver 'collapsed', essa div cobre tudo e expande ao clicar.
-      */}
       {state === 'collapsed' && (
         <div 
           className="absolute inset-0 z-50 cursor-pointer bg-transparent"
@@ -145,7 +140,6 @@ export function AppSidebar({
         />
       )}
 
-      {/* HEADER */}
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2">
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           {storeLogo ? (
@@ -171,7 +165,6 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
 
-      {/* CONTENT */}
       <SidebarContent className="px-2 py-4 group-data-[collapsible=icon]:p-0">
         <SidebarGroup>
           <SidebarGroupContent>
@@ -197,27 +190,18 @@ export function AppSidebar({
                         <SidebarMenuSub>
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
-                              {subItem.url && subItem.url.startsWith("/") ? (
-                                <SidebarMenuSubButton asChild>
-                                  <Link href={subItem.url} className="cursor-pointer hover:text-primary transition-colors">
-                                      {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 inline-block" />}
-                                      <span>{subItem.title}</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              ) : (
-                                <SidebarMenuSubButton
-                                  asChild
-                                  onClick={() => onModuleChange((subItem as any).id || item.id)}
-                                  className={`cursor-pointer hover:text-primary transition-colors ${
-                                    activeModule === (subItem as any).id ? "text-primary font-medium bg-primary/10" : ""
-                                  }`}
-                                >
-                                  <span>
-                                    {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 inline-block" />}
-                                    <span className="mr-2 inline-block">{subItem.title}</span>
-                                  </span>
-                                </SidebarMenuSubButton>
-                              )}
+                              <SidebarMenuSubButton
+                                asChild
+                                onClick={() => onModuleChange((subItem as any).id || item.id)}
+                                className={`cursor-pointer hover:text-primary transition-colors ${
+                                  activeModule === ((subItem as any).id || item.id) ? "text-primary font-medium bg-primary/10" : ""
+                                }`}
+                              >
+                                <span>
+                                  {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 inline-block" />}
+                                  <span className="mr-2 inline-block">{subItem.title}</span>
+                                </span>
+                              </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                           ))}
                         </SidebarMenuSub>
@@ -245,7 +229,6 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
 
-      {/* FOOTER */}
       <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2">
         <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-2 transition-all hover:bg-muted/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
           <Avatar className="h-9 w-9 border-2 border-background shadow-sm transition-all group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
@@ -268,7 +251,6 @@ export function AppSidebar({
             variant="ghost"
             size="icon"
             onClick={() => logoutAction()} 
-            // Removido o hover:text-destructive (vermelho)
             className="h-8 w-8 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors group-data-[collapsible=icon]:hidden"
             title="Sair do sistema"
           >
