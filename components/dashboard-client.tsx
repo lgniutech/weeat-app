@@ -9,7 +9,7 @@ import { ThemeSettings } from "@/components/theme-settings"
 import { StoreSetupModal } from "@/components/modals/store-setup-modal"
 import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
 
-// IMPORTANTE: Importar os novos módulos
+// Importação dos Módulos que criamos
 import { StoreAppearance } from "@/components/modules/store-appearance"
 import { MenuManager } from "@/components/modules/menu-manager"
 
@@ -31,24 +31,24 @@ export default function DashboardClient({
   
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
 
+  // Efeito para interceptar o clique em "Dados da Loja" e abrir o modal
   useEffect(() => {
-    // Se clicar em "Dados da Loja", abre o modal em vez de trocar a tela
     if (activeModule === 'store-settings') {
       setIsSettingsModalOpen(true)
-      setActiveModule('dashboard') // Volta pro dashboard por baixo
+      setActiveModule('dashboard') // Mantém o usuário na tela atual ao fundo
     }
   }, [activeModule])
 
   const hasStore = !!store
 
-  // Renderiza o conteúdo baseado no módulo ativo
+  // Função que decide qual componente renderizar na área principal
   const renderContent = () => {
     switch (activeModule) {
       case 'tema':
         return <ThemeSettings />
-      case 'store-appearance': // Módulo Novo
+      case 'store-appearance':
         return <StoreAppearance store={store} />
-      case 'menu-products':    // Módulo Novo
+      case 'menu-products':
         return <MenuManager store={store} categories={categories} />
       case 'dashboard':
         return <EmptyState moduleId="Dashboard (Visão Geral em Breve)" />
@@ -59,8 +59,10 @@ export default function DashboardClient({
 
   return (
     <SidebarProvider>
+      {/* 1. Modal de Setup Inicial (Se não tiver loja) */}
       {!hasStore && <StoreSetupModal />}
       
+      {/* 2. Modal de Configurações da Loja (Edição) */}
       {hasStore && (
         <StoreSettingsModal 
           store={store} 
@@ -70,6 +72,7 @@ export default function DashboardClient({
         />
       )}
       
+      {/* 3. Barra Lateral */}
       <AppSidebar 
         activeModule={activeModule} 
         onModuleChange={setActiveModule}
@@ -79,12 +82,14 @@ export default function DashboardClient({
         userEmail={userEmail}
       />
       
+      {/* 4. Área Principal */}
       <SidebarInset>
         <DashboardHeader
           activeModule={activeModule}
           isStoreOpen={isStoreOpen}
           onStoreStatusChange={setIsStoreOpen}
           storeName={store?.name}
+          storeSlug={store?.slug} // <-- AQUI: Passamos o slug para o botão funcionar
         />
         
         <main className="flex flex-1 flex-col bg-background p-4 overflow-y-auto">

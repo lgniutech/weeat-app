@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 
-// Interfaces para Tipagem
+// Interfaces para Tipagem (ajuda o editor de código a te avisar erros)
 interface Product {
   id: string
   name: string
@@ -20,7 +20,7 @@ interface Product {
 
 interface CartItem extends Product {
   quantity: number
-  cartId: string // Identificador único no carrinho
+  cartId: string // Identificador único no carrinho (útil se tivermos adicionais depois)
 }
 
 export function StoreFront({ store, categories }: { store: any, categories: any[] }) {
@@ -37,12 +37,13 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   
   const addToCart = (product: Product) => {
     setCart(prev => {
-      // Verifica se já existe produto igual (sem adicionais por enquanto)
+      // Verifica se já existe produto igual no carrinho
       const existing = prev.find(item => item.id === product.id)
       if (existing) {
+        // Se existe, só aumenta a quantidade
         return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
       }
-      // Se não, adiciona novo
+      // Se não, adiciona novo item
       return [...prev, { ...product, quantity: 1, cartId: Math.random().toString() }]
     })
     // Abre o carrinho automaticamente para feedback visual
@@ -57,6 +58,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     setCart(prev => prev.map(item => {
       if (item.cartId === cartId) {
         const newQty = item.quantity + delta
+        // Se quantidade for maior que 0 atualiza, senão mantém (ou poderia remover)
         return newQty > 0 ? { ...item, quantity: newQty } : item
       }
       return item
@@ -67,7 +69,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0)
 
-  // Filtro de Busca
+  // Filtro de Busca (pesquisa por nome ou descrição)
   const filteredCategories = useMemo(() => {
     if (!searchTerm) return categories
     return categories.map(cat => ({
@@ -79,7 +81,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     })).filter(cat => cat.products.length > 0)
   }, [searchTerm, categories])
 
-  // Cor principal da loja (ou vermelho padrão)
+  // Cor principal da loja (se não tiver, usa vermelho padrão)
   const primaryColor = store.primary_color || "#ea1d2c"
 
   return (
@@ -143,7 +145,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         </div>
       </div>
 
-      {/* 3. NAVEGAÇÃO DE CATEGORIAS (Sticky) */}
+      {/* 3. NAVEGAÇÃO DE CATEGORIAS (Sticky - Cola no topo) */}
       <div className="sticky top-0 z-20 bg-white border-b shadow-sm px-4 md:px-8 py-3">
         <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex gap-2 pb-1">
@@ -230,7 +232,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         )}
       </div>
 
-      {/* 5. BOTÃO FLUTUANTE (Apenas Mobile) */}
+      {/* 5. BOTÃO FLUTUANTE (Apenas Mobile - Aparece quando tem itens) */}
       {cartCount > 0 && (
         <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center z-40 md:hidden">
             <Button 

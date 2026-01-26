@@ -7,7 +7,7 @@ type Props = {
   params: Promise<{ slug: string }>
 }
 
-// 1. Gera o título da página dinamicamente para o navegador (SEO)
+// 1. Gera o título da página dinamicamente para o Google/Navegador (SEO)
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const supabase = await createClient()
@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-// 2. A página principal
+// 2. A página principal que carrega os dados
 export default async function StorePage({ params }: Props) {
   const { slug } = await params
   const supabase = await createClient()
@@ -61,9 +61,9 @@ export default async function StorePage({ params }: Props) {
       .order("index", { ascending: true }) // Tenta ordenar por índice
   
   // Processa os dados:
-  // - Filtra produtos indisponíveis
-  // - Ordena produtos por data
-  // - Remove categorias vazias
+  // - Filtra produtos indisponíveis (is_available = false)
+  // - Ordena produtos por data de criação
+  // - Remove categorias que ficaram vazias
   let categories: any[] = []
   if (categoriesData) {
     categories = categoriesData.map(cat => ({
@@ -74,7 +74,7 @@ export default async function StorePage({ params }: Props) {
     })).filter(cat => cat.products.length > 0)
   }
 
-  // Entrega tudo para o componente visual
+  // Entrega tudo para o componente visual (Front-end)
   return (
     <StoreFront store={store} categories={categories} />
   )
