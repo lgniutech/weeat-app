@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useActionState } from "react"
 import { createCategoryAction, deleteCategoryAction, createProductAction, deleteProductAction, toggleProductAvailabilityAction } from "@/app/actions/menu"
 import { Button } from "@/components/ui/button"
@@ -16,26 +16,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // Componente Wrapper para adicionar nova Categoria
 function AddCategoryForm({ storeId }: { storeId: string }) {
-  const [name, setName] = useState("")
   const [isOpen, setIsOpen] = useState(false)
+  // useActionState na raiz do componente (correto)
+  const [state, action, isPending] = useActionState(createCategoryAction, null)
   
-  const CreateCategoryButton = () => {
-     const [state, action, isPending] = useActionState(createCategoryAction.bind(null, storeId, name), null)
-     
-     if (state?.success && isOpen) {
+  // Efeito para fechar o modal quando der sucesso
+  useEffect(() => {
+    if (state?.success) {
         setIsOpen(false)
-        setName("")
-     }
-
-     return (
-        <div className="space-y-2">
-            <Button onClick={() => action()} disabled={isPending || !name} className="w-full">
-                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar Categoria"}
-            </Button>
-            {state?.error && <p className="text-xs text-destructive">{state.error}</p>}
-        </div>
-     )
-  }
+    }
+  }, [state])
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -49,11 +39,23 @@ function AddCategoryForm({ storeId }: { storeId: string }) {
           <DialogTitle>Nova Categoria</DialogTitle>
           <DialogDescription>Ex: Lanches, Bebidas, Sobremesas</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-            <Label>Nome da Categoria</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Digite o nome..." />
-            <CreateCategoryButton />
-        </div>
+        
+        {/* FORMULÁRIO NATIVO: A forma correta de usar server actions */}
+        <form action={action} className="space-y-4 py-2">
+            <input type="hidden" name="storeId" value={storeId} />
+            
+            <div className="space-y-2">
+                <Label htmlFor="category-name">Nome da Categoria</Label>
+                <Input id="category-name" name="name" placeholder="Digite o nome..." required />
+            </div>
+
+            {state?.error && <p className="text-xs text-destructive">{state.error}</p>}
+
+            <Button type="submit" disabled={isPending} className="w-full">
+                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar Categoria"}
+            </Button>
+        </form>
+
       </DialogContent>
     </Dialog>
   )
@@ -64,12 +66,11 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
     const [state, action, isPending] = useActionState(createProductAction, null)
     const [isOpen, setIsOpen] = useState(false)
 
-    // Nota: Em Next.js server actions, o fechamento ideal é via useEffect monitorando o state, 
-    // mas para simplificar aqui mantemos a lógica no render condicional simples ou usuário fecha manualmente
-    if (state?.success && isOpen) {
-       // Reset manual simples para UX
-       // Idealmente usaria um useEffect, mas vamos manter simples para copiar/colar
-    }
+    useEffect(() => {
+        if (state?.success) {
+            setIsOpen(false)
+        }
+    }, [state])
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -117,8 +118,6 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
 
                     {state?.error && <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>}
                     
-                    {state?.success && <Alert className="bg-green-50 text-green-700"><AlertDescription>Produto criado!</AlertDescription></Alert>}
-
                     <Button type="submit" className="w-full" disabled={isPending}>
                         {isPending ? <Loader2 className="animate-spin" /> : "Salvar Produto"}
                     </Button>
@@ -132,15 +131,17 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
 function DeleteCategoryBtn({ id }: { id: string }) {
     const [state, action, isPending] = useActionState(deleteCategoryAction.bind(null, id), null)
     return (
-        <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={() => { if(confirm("Tem certeza?")) action() }}
-            disabled={isPending}
-        >
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-        </Button>
+        <form action={action}>
+            <Button 
+                variant="ghost" 
+                size="icon" 
+                type="submit"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                disabled={isPending}
+            >
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            </Button>
+        </form>
     )
 }
 
@@ -148,15 +149,17 @@ function DeleteCategoryBtn({ id }: { id: string }) {
 function DeleteProductBtn({ id }: { id: string }) {
     const [state, action, isPending] = useActionState(deleteProductAction.bind(null, id), null)
     return (
-        <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={() => { if(confirm("Excluir este produto?")) action() }}
-            disabled={isPending}
-        >
-            <Trash2 className="h-4 w-4" />
-        </Button>
+        <form action={action}>
+            <Button 
+                variant="ghost" 
+                size="icon" 
+                type="submit"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                disabled={isPending}
+            >
+                <Trash2 className="h-4 w-4" />
+            </Button>
+        </form>
     )
 }
 
@@ -171,7 +174,6 @@ function ProductToggle({ id, isAvailable }: { id: string, isAvailable: boolean }
 }
 
 export function MenuManager({ store, categories }: { store: any, categories: any[] }) {
-  
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
