@@ -139,14 +139,17 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
-// --- Atualização de Design da Loja (Banner, Bio, Cores) ---
+// --- ATUALIZADO: Função para Atualizar Design e Banners ---
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
     
+    // Captura dos campos
     const name = formData.get("name") as string;
     const bio = formData.get("bio") as string;
     const primaryColor = formData.get("primaryColor") as string;
     const fontFamily = formData.get("fontFamily") as string;
+    
+    // Tratamento de Arquivos
     const bannerOrderJson = formData.get("bannerOrder") as string;
     const newBannerFiles = formData.getAll("newBanners") as File[];
     const logoFile = formData.get("logo") as File;
@@ -162,12 +165,20 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
         font_family: fontFamily
       };
   
-      // 1. Upload do LOGO
+      // 1. Upload do LOGO (Só atualiza se enviou um novo)
       if (logoFile && logoFile.size > 0) {
         const fileExt = logoFile.name.split('.').pop();
-        const fileName = `${user.id}-${Date.now()}-logo.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('store-assets').upload(fileName, logoFile, { upsert: true });
-        if (!uploadError) {
+        const fileName = `logo-${user.id}-${Date.now()}.${fileExt}`; // Prefixo logo para organizar
+        
+        // Tenta fazer upload
+        const { error: uploadError } = await supabase.storage
+            .from('store-assets')
+            .upload(fileName, logoFile, { upsert: true });
+            
+        if (uploadError) {
+            console.error("Erro upload logo:", uploadError);
+            // Não paramos o processo, apenas logamos o erro
+        } else {
           const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
           updateData.logo_url = data.publicUrl;
         }
@@ -177,47 +188,61 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
       let finalBanners: string[] = [];
       let newFileIndex = 0;
 
+      // Se existir uma ordem definida pelo front
       if (bannerOrderJson) {
         try {
             const orderList = JSON.parse(bannerOrderJson);
             for (const item of orderList) {
                 if (item === "__NEW__") {
+                    // É um arquivo novo que precisa ser upado
                     const file = newBannerFiles[newFileIndex];
                     newFileIndex++;
+                    
                     if (file && file.size > 0) {
                         const fileExt = file.name.split('.').pop();
-                        const fileName = `banner-${user.id}-${Date.now()}-${Math.random()}.${fileExt}`;
+                        const fileName = `banner-${user.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+                        
                         const { error: uploadError } = await supabase.storage
                             .from('store-assets')
                             .upload(fileName, file, { upsert: true });
+
                         if (!uploadError) {
                             const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
                             finalBanners.push(data.publicUrl);
+                        } else {
+                            console.error("Erro upload banner:", uploadError);
                         }
                     }
                 } else {
+                    // É uma URL antiga, mantém
                     finalBanners.push(item);
                 }
             }
         } catch (e) {
-            console.error("Erro ordem banners", e);
+            console.error("Erro ao processar ordem dos banners", e);
         }
       }
 
+      // Se houver banners (novos ou mantidos), atualiza o array e a url principal
       if (bannerOrderJson || (newBannerFiles && newBannerFiles.length > 0)) {
          updateData.banners = finalBanners;
+         // O banner_url principal é sempre o primeiro da lista
          updateData.banner_url = finalBanners.length > 0 ? finalBanners[0] : null;
       }
   
+      // Atualiza no banco
       const { error } = await supabase
         .from("stores")
         .update(updateData)
         .eq("owner_id", user.id);
   
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("Erro Supabase update:", error);
+        throw new Error(error.message);
+      }
   
     } catch (error: any) {
-      console.error(error);
+      console.error("Erro geral updateStoreDesignAction:", error);
       return { error: "Erro ao atualizar: " + error.message };
     }
   
@@ -225,7 +250,7 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
     return { success: "Loja atualizada com sucesso!" };
 }
 
-// --- NOVO: Função para Salvar Preferências de Aparência (Tema/Cor) ---
+// --- Função para Salvar Preferências de Aparência (Tema/Cor) ---
 export async function updateStoreSettings(storeId: string, settings: { theme_mode?: string, theme_color?: string }) {
   const supabase = await createClient();
   
