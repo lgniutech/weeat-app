@@ -5,13 +5,14 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { EmptyState } from "@/components/empty-state"
-import { ThemeSettings } from "@/components/theme-settings"
+// import { ThemeSettings } from "@/components/theme-settings" // REMOVIDO: Não usaremos mais o dropdown
 import { StoreSetupModal } from "@/components/modals/store-setup-modal"
 import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
 
-// Importação dos Módulos que criamos
+// Importação dos Módulos
 import { StoreAppearance } from "@/components/modules/store-appearance"
 import { MenuManager } from "@/components/modules/menu-manager"
+import { AppearanceForm } from "@/components/settings/appearance-form" // ADICIONADO: O formulário completo
 
 interface DashboardClientProps {
   store: any
@@ -45,7 +46,8 @@ export default function DashboardClient({
   const renderContent = () => {
     switch (activeModule) {
       case 'tema':
-        return <ThemeSettings />
+        // ALTERADO: Agora renderiza a página completa de Aparência em vez do Dropdown
+        return <AppearanceForm />
       case 'store-appearance':
         return <StoreAppearance store={store} />
       case 'menu-products':
@@ -89,7 +91,7 @@ export default function DashboardClient({
           isStoreOpen={isStoreOpen}
           onStoreStatusChange={setIsStoreOpen}
           storeName={store?.name}
-          storeSlug={store?.slug} // <-- AQUI: Passamos o slug para o botão funcionar
+          storeSlug={store?.slug}
         />
         
         <main className="flex flex-1 flex-col bg-background p-4 overflow-y-auto">
