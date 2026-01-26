@@ -8,19 +8,18 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Palette, Image as ImageIcon, Check } from "lucide-react"
+import { Loader2, Image as ImageIcon, Check, Store } from "lucide-react"
 
 export function StoreAppearance({ store }: { store: any }) {
   const [state, action, isPending] = useActionState(updateStoreDesignAction, null)
   
-  // Estado local para preview imediato da cor
   const [primaryColor, setPrimaryColor] = useState(store?.primary_color || "#ea1d2c")
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Aparência & Marca</h2>
-        <p className="text-muted-foreground">Personalize como sua loja aparece para os clientes.</p>
+        <p className="text-muted-foreground">Personalize as cores, logos e banners da sua loja.</p>
       </div>
 
       <form action={action}>
@@ -29,18 +28,35 @@ export function StoreAppearance({ store }: { store: any }) {
           {/* Coluna Esquerda: Configurações */}
           <div className="md:col-span-2 space-y-6">
             
-            {/* CORES */}
+            {/* 1. LOGO & COR */}
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <Palette className="w-5 h-5 text-primary" />
-                  <CardTitle>Identidade Visual</CardTitle>
+                  <Store className="w-5 h-5 text-primary" />
+                  <CardTitle>Identidade da Marca</CardTitle>
                 </div>
-                <CardDescription>A cor principal será usada em botões e destaques.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
+              <CardContent className="space-y-6">
+                
+                {/* Logo Upload */}
+                <div className="flex items-center gap-6">
+                    <div className="shrink-0">
+                        <div className="w-20 h-20 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50">
+                            {store?.logo_url ? (
+                                <img src={store.logo_url} className="w-full h-full object-cover" alt="Logo atual" />
+                            ) : (
+                                <span className="text-xs text-muted-foreground">Sem Logo</span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-2 flex-1">
+                        <Label>Logo da Loja</Label>
+                        <Input type="file" name="logo" accept="image/*" />
+                        <p className="text-xs text-muted-foreground">Aparecerá no ícone do cardápio.</p>
+                    </div>
+                </div>
+
+                <div className="space-y-2">
                     <Label>Cor Principal</Label>
                     <div className="flex gap-3 items-center">
                       <Input 
@@ -52,25 +68,30 @@ export function StoreAppearance({ store }: { store: any }) {
                       />
                       <span className="text-sm font-mono text-muted-foreground">{primaryColor}</span>
                     </div>
-                  </div>
+                    <p className="text-xs text-muted-foreground">Usada em botões e destaques.</p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* BANNER & BIO */}
+            {/* 2. CARROSSEL & BIO */}
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <ImageIcon className="w-5 h-5 text-primary" />
-                  <CardTitle>Capa & Informações</CardTitle>
+                  <CardTitle>Carrossel & Capa</CardTitle>
                 </div>
-                <CardDescription>Essa imagem aparece no topo do cardápio digital.</CardDescription>
+                <CardDescription>Imagens rotativas que aparecem no topo do cardápio.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Banner da Loja</Label>
-                  <Input type="file" name="banner" accept="image/*" />
-                  <p className="text-xs text-muted-foreground">Recomendado: 1200x400px (JPG ou PNG)</p>
+                  <Label>Imagens do Carrossel (Selecione várias)</Label>
+                  <Input 
+                    type="file" 
+                    name="banners" 
+                    accept="image/*" 
+                    multiple 
+                  />
+                  <p className="text-xs text-muted-foreground">Recomendado: Formato vertical (9:16) ou quadrado. Selecione todas as fotos de uma vez para atualizar o carrossel.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -98,43 +119,52 @@ export function StoreAppearance({ store }: { store: any }) {
               </Alert>
             )}
 
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending} className="w-full md:w-auto">
               {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
               Salvar Alterações
             </Button>
           </div>
 
-          {/* Coluna Direita: Preview Simples */}
+          {/* Coluna Direita: Preview Mobile */}
           <div className="space-y-4">
              <div className="sticky top-4">
-                <Label className="mb-2 block text-muted-foreground">Pré-visualização (Simplificada)</Label>
+                <Label className="mb-2 block text-muted-foreground">Preview Mobile</Label>
                 
-                <div className="border rounded-xl overflow-hidden shadow-lg bg-white w-full max-w-[300px] mx-auto">
-                    {/* Header com Banner */}
-                    <div className="h-24 w-full bg-slate-200 relative">
+                <div className="border-4 border-slate-800 rounded-3xl overflow-hidden shadow-2xl bg-white w-[280px] mx-auto h-[500px] flex flex-col relative">
+                    {/* Header estilo "Stories" */}
+                    <div className="h-3/5 bg-slate-200 relative">
+                        {/* Imagem de Fundo (Banner) */}
                         {store?.banner_url ? (
-                           <img src={store.banner_url} className="w-full h-full object-cover" alt="Banner" />
+                           <img src={store.banner_url} className="w-full h-full object-cover opacity-90" alt="Banner" />
                         ) : (
-                           <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">Sem Banner</div>
+                           <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">Sem Imagens</div>
                         )}
-                        {/* Logo Flutuante */}
-                        <div className="absolute -bottom-6 left-4 w-12 h-12 rounded-full border-2 border-white bg-slate-100 overflow-hidden shadow-sm">
-                            {store?.logo_url && <img src={store.logo_url} className="w-full h-full object-cover" />}
+                        
+                        {/* Overlay Gradiente */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+
+                        {/* Logo Sobreposto */}
+                        <div className="absolute bottom-4 left-4 flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full border-2 border-white bg-white overflow-hidden shadow-sm">
+                                {store?.logo_url && <img src={store.logo_url} className="w-full h-full object-cover" />}
+                            </div>
+                            <div className="text-white">
+                                <div className="text-sm font-bold drop-shadow-md">{store?.name || "Nome da Loja"}</div>
+                            </div>
                         </div>
                     </div>
 
                     {/* Corpo */}
-                    <div className="pt-8 px-4 pb-4 space-y-3">
-                        <div className="h-4 w-3/4 bg-slate-100 rounded animate-pulse" />
-                        <div className="h-3 w-1/2 bg-slate-50 rounded animate-pulse" />
-                        
-                        {/* Botão com a cor escolhida */}
+                    <div className="flex-1 p-4 space-y-3 bg-white">
                         <div 
-                          className="h-8 w-full rounded-md flex items-center justify-center text-white text-xs font-bold shadow-sm mt-4"
+                          className="h-8 w-full rounded-md flex items-center justify-center text-white text-xs font-bold shadow-sm"
                           style={{ backgroundColor: primaryColor }}
                         >
                             Ver Cardápio
                         </div>
+                        <div className="h-2 w-3/4 bg-slate-100 rounded" />
+                        <div className="h-2 w-1/2 bg-slate-100 rounded" />
+                        <div className="h-20 w-full bg-slate-50 rounded-lg border border-slate-100 mt-4" />
                     </div>
                 </div>
              </div>

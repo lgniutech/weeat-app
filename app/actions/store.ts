@@ -148,13 +148,16 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
-// NOVA FUNÇÃO: Atualiza apenas o visual (Design) da loja
+// ATUALIZADO: Função que suporta Logo e Múltiplos Banners
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
     
     const bio = formData.get("bio") as string;
     const primaryColor = formData.get("primaryColor") as string;
-    const bannerFile = formData.get("banner") as File;
+    
+    // Arquivos
+    const logoFile = formData.get("logo") as File;
+    const bannerFiles = formData.getAll("banners") as File[]; 
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -165,19 +168,39 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
         primary_color: primaryColor
       };
   
-      // Upload do Banner
-      if (bannerFile && bannerFile.size > 0) {
-        const fileExt = bannerFile.name.split('.').pop();
-        // Prefixo 'banner-' para diferenciar de logos
-        const fileName = `banner-${user.id}-${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-            .from('store-assets')
-            .upload(fileName, bannerFile, { upsert: true });
-            
+      // 1. Upload do LOGO
+      if (logoFile && logoFile.size > 0) {
+        const fileExt = logoFile.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}-logo.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('store-assets').upload(fileName, logoFile, { upsert: true });
         if (!uploadError) {
           const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
-          updateData.banner_url = data.publicUrl;
+          updateData.logo_url = data.publicUrl;
+        }
+      }
+
+      // 2. Upload dos BANNERS (Carrossel)
+      if (bannerFiles && bannerFiles.length > 0 && bannerFiles[0].size > 0) {
+        const uploadedUrls: string[] = [];
+
+        for (const file of bannerFiles) {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `banner-${user.id}-${Date.now()}-${Math.random()}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage
+                .from('store-assets')
+                .upload(fileName, file, { upsert: true });
+                
+            if (!uploadError) {
+                const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
+                uploadedUrls.push(data.publicUrl);
+            }
+        }
+        
+        if (uploadedUrls.length > 0) {
+            updateData.banners = uploadedUrls;
+            // Mantemos banner_url como fallback para a primeira imagem
+            updateData.banner_url = uploadedUrls[0]; 
         }
       }
   
@@ -186,9 +209,10 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
         .update(updateData)
         .eq("owner_id", user.id);
   
-      if (error) throw new Error(translateError(error.message));
+      if (error) throw new Error(error.message);
   
     } catch (error: any) {
+      console.error(error);
       return { error: "Erro ao atualizar aparência: " + error.message };
     }
   

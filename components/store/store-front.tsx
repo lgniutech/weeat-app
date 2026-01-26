@@ -1,15 +1,16 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { ShoppingBag, Plus, Minus, MapPin, Clock, Search } from "lucide-react"
+import { useState, useMemo, useEffect } from "react"
+import { ShoppingBag, Plus, Minus, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
+import { cn } from "@/lib/utils"
 
-// Interfaces para Tipagem (ajuda o editor de código a te avisar erros)
+// Interfaces
 interface Product {
   id: string
   name: string
@@ -20,33 +21,46 @@ interface Product {
 
 interface CartItem extends Product {
   quantity: number
-  cartId: string // Identificador único no carrinho (útil se tivermos adicionais depois)
+  cartId: string
 }
 
 export function StoreFront({ store, categories }: { store: any, categories: any[] }) {
   const [cart, setCart] = useState<CartItem[]>([])
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  
+  // -- Lógica do Carrossel --
+  const [currentSlide, setCurrentSlide] = useState(0)
+  // Se 'banners' for array vazio ou nulo, usa 'banner_url' como fallback num array
+  const banners = (store.banners && store.banners.length > 0) 
+    ? store.banners 
+    : (store.banner_url ? [store.banner_url] : [])
 
-  // Formata valor para Real (R$)
+  // Auto-play do carrossel
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const interval = setInterval(() => {
+        setCurrentSlide(prev => (prev + 1) % banners.length)
+    }, 4000) // Muda a cada 4 segundos
+    return () => clearInterval(interval)
+  }, [banners.length])
+
+  // -- Helpers --
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
   }
 
-  // --- Lógica do Carrinho ---
-  
+  const primaryColor = store.primary_color || "#ea1d2c"
+
+  // -- Carrinho --
   const addToCart = (product: Product) => {
     setCart(prev => {
-      // Verifica se já existe produto igual no carrinho
       const existing = prev.find(item => item.id === product.id)
       if (existing) {
-        // Se existe, só aumenta a quantidade
         return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
       }
-      // Se não, adiciona novo item
       return [...prev, { ...product, quantity: 1, cartId: Math.random().toString() }]
     })
-    // Abre o carrinho automaticamente para feedback visual
     setIsCartOpen(true)
   }
 
@@ -58,18 +72,15 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     setCart(prev => prev.map(item => {
       if (item.cartId === cartId) {
         const newQty = item.quantity + delta
-        // Se quantidade for maior que 0 atualiza, senão mantém (ou poderia remover)
         return newQty > 0 ? { ...item, quantity: newQty } : item
       }
       return item
     }))
   }
 
-  // Cálculos de totais
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0)
 
-  // Filtro de Busca (pesquisa por nome ou descrição)
   const filteredCategories = useMemo(() => {
     if (!searchTerm) return categories
     return categories.map(cat => ({
@@ -81,149 +92,143 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     })).filter(cat => cat.products.length > 0)
   }, [searchTerm, categories])
 
-  // Cor principal da loja (se não tiver, usa vermelho padrão)
-  const primaryColor = store.primary_color || "#ea1d2c"
-
   return (
-    // Injetamos a cor primária como variável CSS para usar no estilo inline
-    <div className="min-h-screen bg-slate-50 pb-20 font-sans" style={{ "--primary": primaryColor } as React.CSSProperties}>
+    <div className="min-h-screen bg-slate-50 pb-24 font-sans">
       
-      {/* 1. CAPA / BANNER */}
-      <div className="relative h-48 md:h-64 bg-slate-200">
-        {store.banner_url ? (
-          <img src={store.banner_url} alt="Capa da Loja" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-slate-300 text-slate-500">
-            <span className="text-sm uppercase tracking-widest font-bold opacity-50">Sem Capa Definida</span>
-          </div>
-        )}
-        
-        {/* Logo Flutuante */}
-        <div className="absolute -bottom-10 left-4 md:left-8 flex items-end">
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden">
-                {store.logo_url ? (
-                    <img src={store.logo_url} alt="Logo" className="w-full h-full object-cover" />
-                ) : (
-                    <div className="w-full h-full bg-slate-100 flex items-center justify-center text-2xl font-bold text-slate-400">
-                        {store.name?.substring(0,2).toUpperCase()}
+      {/* 1. CARROSSEL (Estilo Stories/Capa) */}
+      <div className="relative w-full bg-slate-900 overflow-hidden">
+        {/* Altura dinâmica: 
+            - Mobile: h-[50vh] (metade da tela, bom para 9:16)
+            - Desktop: h-[400px] (mais contido para não ocupar tudo) 
+        */}
+        <div className="relative h-[50vh] md:h-[400px] w-full">
+            {banners.length > 0 ? (
+                banners.map((img: string, index: number) => (
+                    <div 
+                        key={index}
+                        className={cn(
+                            "absolute inset-0 transition-opacity duration-1000 ease-in-out",
+                            index === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"
+                        )}
+                    >
+                        <img src={img} alt={`Banner ${index}`} className="w-full h-full object-cover opacity-80" />
+                        {/* Overlay gradiente para garantir leitura do texto */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                     </div>
-                )}
-            </div>
-        </div>
-      </div>
+                ))
+            ) : (
+                <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                     <span className="text-white/30 text-sm font-medium tracking-widest uppercase">Sem Imagens</span>
+                </div>
+            )}
 
-      {/* 2. CABEÇALHO DA LOJA (Infos) */}
-      <div className="pt-12 px-4 md:px-8 pb-6 bg-white shadow-sm mb-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-slate-900">{store.name}</h1>
-                {store.bio && <p className="text-slate-500 mt-1 max-w-2xl text-sm md:text-base">{store.bio}</p>}
-                
-                <div className="flex flex-wrap gap-4 mt-3 text-sm text-slate-500">
-                    <div className="flex items-center gap-1">
-                        <Clock className="w-4 h-4 text-green-600" />
-                        <span className="text-green-600 font-medium">Aberto agora</span>
-                    </div>
-                    {/* Exemplo estático - Futuramente vindo do banco */}
-                    <div className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        <span>Retirada ou Entrega</span>
-                    </div>
+            {/* Indicadores do Carrossel */}
+            {banners.length > 1 && (
+                <div className="absolute bottom-24 left-0 right-0 z-20 flex justify-center gap-1.5">
+                    {banners.map((_: any, idx: number) => (
+                        <div 
+                            key={idx} 
+                            className={cn(
+                                "h-1 rounded-full transition-all duration-300", 
+                                idx === currentSlide ? "w-6 bg-white" : "w-1.5 bg-white/40"
+                            )} 
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+
+        {/* Informações da Loja (Sobrepostas ao Banner) */}
+        <div className="absolute bottom-0 left-0 w-full z-20 p-4 md:p-8 pb-6">
+            <div className="flex items-end gap-4">
+                {/* Logo da Loja (Uploadável) */}
+                <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden shrink-0">
+                    {store.logo_url ? (
+                        <img src={store.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-xl">
+                            {store.name?.substring(0,2).toUpperCase()}
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex-1 text-white mb-1">
+                    <h1 className="text-2xl md:text-4xl font-bold drop-shadow-md leading-tight">{store.name}</h1>
+                    {store.bio && (
+                        <p className="text-white/90 text-sm md:text-base line-clamp-2 mt-1 drop-shadow-sm max-w-xl">
+                            {store.bio}
+                        </p>
+                    )}
                 </div>
             </div>
-
-            {/* Barra de Busca */}
-            <div className="relative w-full md:w-72">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                    placeholder="Buscar itens..." 
-                    className="pl-9 bg-slate-50 border-slate-200 focus-visible:ring-[var(--primary)]"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-            </div>
         </div>
       </div>
 
-      {/* 3. NAVEGAÇÃO DE CATEGORIAS (Sticky - Cola no topo) */}
-      <div className="sticky top-0 z-20 bg-white border-b shadow-sm px-4 md:px-8 py-3">
-        <ScrollArea className="w-full whitespace-nowrap">
-            <div className="flex gap-2 pb-1">
-                {filteredCategories.map((cat) => (
-                    <a 
-                        key={cat.id} 
-                        href={`#cat-${cat.id}`}
-                        className="inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 transition-colors"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            document.getElementById(`cat-${cat.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }}
-                    >
-                        {cat.name}
-                    </a>
-                ))}
+      {/* 2. BARRA DE BUSCA E NAVEGAÇÃO */}
+      <div className="sticky top-0 z-30 bg-white border-b shadow-sm">
+        <div className="px-4 md:px-8 py-3 max-w-7xl mx-auto space-y-3">
+            {/* Input Busca */}
+            <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="O que você procura hoje?" 
+                    className="pl-9 bg-slate-100 border-transparent focus:bg-white transition-colors"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ borderColor: searchTerm ? primaryColor : 'transparent' }}
+                />
             </div>
-            <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+            
+            {/* Categorias */}
+            <ScrollArea className="w-full whitespace-nowrap pb-1">
+                <div className="flex gap-2">
+                    {filteredCategories.map((cat) => (
+                        <button 
+                            key={cat.id} 
+                            onClick={() => document.getElementById(`cat-${cat.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                            className="px-4 py-1.5 rounded-full text-sm font-medium bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 transition-colors"
+                        >
+                            {cat.name}
+                        </button>
+                    ))}
+                </div>
+                <ScrollBar orientation="horizontal" className="hidden" />
+            </ScrollArea>
+        </div>
       </div>
 
-      {/* 4. LISTAGEM DE PRODUTOS */}
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-12">
+      {/* 3. PRODUTOS */}
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-10">
         {filteredCategories.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-xl border border-dashed">
-                <p className="text-muted-foreground text-lg">Nenhum produto encontrado.</p>
-                <p className="text-sm text-slate-400">Tente buscar por outro termo.</p>
-            </div>
+             <div className="text-center py-20 opacity-50">
+                <p>Nenhum item encontrado.</p>
+             </div>
         ) : (
             filteredCategories.map((cat) => (
-                <div key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-32">
-                    <div className="flex items-center gap-3 mb-4">
-                        <h2 className="text-xl md:text-2xl font-bold text-slate-800">{cat.name}</h2>
-                        <Badge variant="secondary" className="text-xs font-normal text-slate-500 bg-slate-100">
-                            {cat.products.length}
-                        </Badge>
-                    </div>
+                <div key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-40">
+                    <h2 className="text-lg md:text-xl font-bold text-slate-800 mb-4">{cat.name}</h2>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {cat.products.map((product: Product) => (
                             <div 
                                 key={product.id} 
-                                className="group bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col h-full"
+                                className="flex bg-white rounded-xl border border-slate-100 shadow-sm p-3 gap-3 hover:border-slate-300 transition-all cursor-pointer"
+                                onClick={() => addToCart(product)}
                             >
-                                <div className="p-4 flex gap-4 h-full">
-                                    {/* Infos do Produto */}
-                                    <div className="flex-1 flex flex-col justify-between">
-                                        <div>
-                                            <h3 className="font-semibold text-slate-900 line-clamp-2 mb-1 group-hover:text-[var(--primary)] transition-colors">
-                                                {product.name}
-                                            </h3>
-                                            <p className="text-sm text-slate-500 line-clamp-3 mb-3 leading-relaxed">
-                                                {product.description}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center justify-between mt-auto pt-2">
-                                            <span className="font-bold text-slate-900 text-lg">{formatPrice(product.price)}</span>
-                                            <Button 
-                                                size="sm" 
-                                                className="h-9 px-4 rounded-full bg-[var(--primary)] hover:brightness-90 text-white shadow-sm hover:shadow transition-all"
-                                                onClick={() => addToCart(product)}
-                                            >
-                                                <Plus className="w-4 h-4 mr-1" /> Adicionar
-                                            </Button>
-                                        </div>
+                                <div className="flex-1 flex flex-col justify-between">
+                                    <div>
+                                        <h3 className="font-semibold text-slate-900 line-clamp-2 text-sm md:text-base">{product.name}</h3>
+                                        <p className="text-xs md:text-sm text-slate-500 line-clamp-2 mt-1">{product.description}</p>
                                     </div>
-                                    
-                                    {/* Imagem do Produto */}
-                                    {product.image_url && (
-                                        <div className="w-28 h-28 shrink-0 rounded-lg bg-slate-50 overflow-hidden">
-                                            <img 
-                                                src={product.image_url} 
-                                                alt={product.name} 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                            />
-                                        </div>
-                                    )}
+                                    <div className="mt-2 font-bold text-slate-900">
+                                        {formatPrice(product.price)}
+                                    </div>
                                 </div>
+                                {product.image_url && (
+                                    <div className="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-slate-100">
+                                        <img src={product.image_url} className="w-full h-full object-cover" alt={product.name} />
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -232,67 +237,51 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         )}
       </div>
 
-      {/* 5. BOTÃO FLUTUANTE (Apenas Mobile - Aparece quando tem itens) */}
+      {/* 4. BOTÃO FLUTUANTE (Cart) */}
       {cartCount > 0 && (
-        <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center z-40 md:hidden">
+        <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center z-40">
             <Button 
-                className="w-full max-w-sm h-14 rounded-full shadow-xl bg-[var(--primary)] text-white hover:brightness-90 flex items-center justify-between px-6 text-lg animate-in slide-in-from-bottom-5"
+                className="w-full max-w-md h-14 rounded-full shadow-2xl text-white flex items-center justify-between px-6 text-lg animate-in slide-in-from-bottom-4"
+                style={{ backgroundColor: primaryColor }} // COR RIGOROSAMENTE APLICADA AQUI
                 onClick={() => setIsCartOpen(true)}
             >
                 <div className="flex items-center gap-2">
-                    <ShoppingBag className="w-5 h-5" />
-                    <span className="font-bold">{cartCount}</span>
+                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm font-bold">{cartCount}</span>
+                    <span className="font-medium">Ver Sacola</span>
                 </div>
-                <span className="font-medium">Ver Sacola</span>
                 <span className="font-bold">{formatPrice(cartTotal)}</span>
             </Button>
         </div>
       )}
 
-      {/* 6. GAVETA DO CARRINHO (SHEET) */}
+      {/* 5. GAVETA CARRINHO */}
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <SheetTrigger asChild>
-             <div className="hidden" />
-        </SheetTrigger>
-        <SheetContent className="w-full sm:max-w-md flex flex-col h-full bg-white">
-            <SheetHeader className="border-b pb-4 px-0 mx-6">
-                <SheetTitle className="flex items-center gap-2 text-xl">
-                    <ShoppingBag className="w-5 h-5 text-[var(--primary)]" />
-                    Sua Sacola
+        <SheetContent className="w-full sm:max-w-md flex flex-col h-full bg-white p-0">
+            <SheetHeader className="p-4 border-b">
+                <SheetTitle className="flex items-center gap-2">
+                    <ShoppingBag className="w-5 h-5" style={{ color: primaryColor }} />
+                    Sacola
                 </SheetTitle>
             </SheetHeader>
 
-            <ScrollArea className="flex-1 -mx-6 px-6 py-4">
+            <ScrollArea className="flex-1 p-4">
                 {cart.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-[50vh] text-slate-400">
-                        <ShoppingBag className="w-16 h-16 mb-4 opacity-20" />
-                        <p className="font-medium">Sua sacola está vazia.</p>
-                        <p className="text-sm">Adicione itens para começar.</p>
+                    <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                        <ShoppingBag className="w-12 h-12 opacity-20 mb-2" />
+                        <p>Sacola vazia</p>
                     </div>
                 ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         {cart.map((item) => (
-                            <div key={item.cartId} className="flex gap-4 animate-in fade-in duration-300">
+                            <div key={item.cartId} className="flex gap-4 items-center">
                                 <div className="flex-1">
-                                    <h4 className="font-medium text-slate-900 text-sm">{item.name}</h4>
-                                    <p className="text-xs text-muted-foreground mt-1">{formatPrice(item.price)}</p>
+                                    <p className="font-medium text-sm">{item.name}</p>
+                                    <p className="text-xs text-muted-foreground">{formatPrice(item.price)}</p>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center border rounded-lg bg-slate-50">
-                                        <button 
-                                            className="w-8 h-8 flex items-center justify-center hover:bg-slate-200 rounded-l-lg transition-colors text-slate-600"
-                                            onClick={() => item.quantity > 1 ? updateQuantity(item.cartId, -1) : removeFromCart(item.cartId)}
-                                        >
-                                            <Minus className="w-3 h-3" />
-                                        </button>
-                                        <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                                        <button 
-                                            className="w-8 h-8 flex items-center justify-center hover:bg-slate-200 rounded-r-lg transition-colors text-slate-600"
-                                            onClick={() => updateQuantity(item.cartId, 1)}
-                                        >
-                                            <Plus className="w-3 h-3" />
-                                        </button>
-                                    </div>
+                                <div className="flex items-center border rounded-lg h-8">
+                                    <button onClick={() => item.quantity > 1 ? updateQuantity(item.cartId, -1) : removeFromCart(item.cartId)} className="px-2 h-full hover:bg-slate-100">-</button>
+                                    <span className="px-2 text-sm font-medium">{item.quantity}</span>
+                                    <button onClick={() => updateQuantity(item.cartId, 1)} className="px-2 h-full hover:bg-slate-100">+</button>
                                 </div>
                             </div>
                         ))}
@@ -300,28 +289,15 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                 )}
             </ScrollArea>
 
-            {/* Rodapé do Carrinho */}
-            <div className="border-t pt-4 mt-auto space-y-4 bg-white pb-safe">
-                <div className="space-y-2 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
-                        <span>Subtotal</span>
-                        <span>{formatPrice(cartTotal)}</span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                        <span>Taxa de Entrega</span>
-                        <span>Grátis</span>
-                    </div>
-                    <Separator className="my-2" />
-                    <div className="flex justify-between font-bold text-xl text-slate-900">
-                        <span>Total</span>
-                        <span>{formatPrice(cartTotal)}</span>
-                    </div>
+            <div className="p-4 bg-slate-50 border-t space-y-3 pb-safe">
+                <div className="flex justify-between font-bold text-lg">
+                    <span>Total</span>
+                    <span>{formatPrice(cartTotal)}</span>
                 </div>
-
                 <Button 
-                    className="w-full h-14 text-lg font-bold bg-[var(--primary)] hover:brightness-90 text-white rounded-xl shadow-lg shadow-orange-500/10"
+                    className="w-full h-12 text-lg font-bold text-white hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: primaryColor }} // COR APLICADA AQUI TAMBÉM
                     disabled={cart.length === 0}
-                    onClick={() => alert("Em breve: Integração com WhatsApp e Pedidos!")}
                 >
                     Finalizar Pedido
                 </Button>
