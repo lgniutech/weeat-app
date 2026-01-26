@@ -49,8 +49,11 @@ export function StoreAppearance({ store }: { store: any }) {
     finalFormData.append("primaryColor", formData.get("primaryColor") as string)
     finalFormData.append("fontFamily", formData.get("fontFamily") as string)
     
-    const logo = formData.get("logo") as File
-    if (logo.size > 0) finalFormData.append("logo", logo)
+    // Logo (se houver novo)
+    const logoFile = formData.get("logo") as File
+    if (logoFile && logoFile.size > 0) {
+        finalFormData.append("logo", logoFile)
+    }
 
     // Banners
     const orderMap: string[] = []
@@ -75,6 +78,9 @@ export function StoreAppearance({ store }: { store: any }) {
   const [primaryColor, setPrimaryColor] = useState(store?.primary_color || "#ea1d2c")
   const [fontFamily, setFontFamily] = useState(store?.font_family || "Inter")
   
+  // -- NOVO: Estado para Preview do Logo --
+  const [logoPreview, setLogoPreview] = useState<string | null>(store?.logo_url || null)
+
   const getInitialItems = (): BannerItem[] => {
     const existing = (store?.banners && store.banners.length > 0) 
       ? store.banners 
@@ -86,7 +92,11 @@ export function StoreAppearance({ store }: { store: any }) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
   useEffect(() => {
-    if (state?.success) setFormKey(k => k + 1)
+    if (state?.success) {
+        setFormKey(k => k + 1)
+        // Opcional: recarregar a página para limpar caches de imagem se necessário
+        // window.location.reload()
+    }
   }, [state])
   
   // Sincroniza se vierem dados novos do server
@@ -96,6 +106,7 @@ export function StoreAppearance({ store }: { store: any }) {
     setBio(store?.bio || "")
     setPrimaryColor(store?.primary_color || "#ea1d2c")
     setFontFamily(store?.font_family || "Inter")
+    setLogoPreview(store?.logo_url || null)
   }, [store])
 
   // Handlers
@@ -109,6 +120,14 @@ export function StoreAppearance({ store }: { store: any }) {
             file: file
         }))
         setItems(prev => [...prev, ...newItems])
+    }
+  }
+
+  // -- NOVO: Handler para o Logo --
+  const handleLogoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0]
+        setLogoPreview(URL.createObjectURL(file))
     }
   }
 
@@ -143,8 +162,7 @@ export function StoreAppearance({ store }: { store: any }) {
         {/* CAMPOS OCULTOS PARA O FORM DATA */}
         <input type="hidden" name="primaryColor" value={primaryColor} />
         <input type="hidden" name="fontFamily" value={fontFamily} />
-        {/* Note que 'name' e 'bio' vão diretos nos inputs visíveis abaixo */}
-
+        
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* --- COLUNA ESQUERDA: Controles --- */}
@@ -161,18 +179,28 @@ export function StoreAppearance({ store }: { store: any }) {
               <CardContent className="space-y-6">
                 
                 <div className="flex flex-col sm:flex-row gap-6">
-                    {/* Logo */}
+                    {/* Logo (CORRIGIDO) */}
                     <div className="flex items-center gap-4">
                         <div className="shrink-0 w-24 h-24 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50 relative group shadow-sm hover:border-primary transition-colors">
-                            {store?.logo_url ? (
-                                <img src={store.logo_url} className="w-full h-full object-cover" alt="Logo" />
+                            {logoPreview ? (
+                                <img src={logoPreview} className="w-full h-full object-cover" alt="Logo Preview" />
                             ) : (
                                 <span className="text-xs text-muted-foreground font-medium">Sem Logo</span>
                             )}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
+                            
+                            {/* Overlay de Hover */}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none z-10">
                                 <Upload className="w-6 h-6 text-white" />
                             </div>
-                            <Input type="file" name="logo" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" />
+                            
+                            {/* Input Invisível com Z-Index Alto */}
+                            <Input 
+                                type="file" 
+                                name="logo" 
+                                accept="image/*" 
+                                onChange={handleLogoSelected}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50" 
+                            />
                         </div>
                     </div>
 
@@ -356,12 +384,13 @@ export function StoreAppearance({ store }: { store: any }) {
 
                         {/* Infos da Loja (COM NOME e BIO em Tempo Real) */}
                         <div className="absolute bottom-6 left-5 right-5 z-20 flex items-end gap-3">
+                            {/* Logo no Preview (Agora usa logoPreview) */}
                             <div className="w-16 h-16 rounded-full border-2 border-white bg-white overflow-hidden shadow-sm shrink-0">
-                                {store?.logo_url ? (
-                                    <img src={store.logo_url} className="w-full h-full object-cover" />
+                                {logoPreview ? (
+                                    <img src={logoPreview} className="w-full h-full object-cover" alt="Logo Preview" />
                                 ) : (
                                     <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-xl">
-                                        {store?.name?.substring(0,2).toUpperCase()}
+                                        {storeName?.substring(0,2).toUpperCase() || "LJ"}
                                     </div>
                                 )}
                             </div>
