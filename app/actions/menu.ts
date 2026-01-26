@@ -5,16 +5,22 @@ import { revalidatePath } from "next/cache";
 
 // --- CATEGORIAS ---
 
-export async function createCategoryAction(storeId: string, name: string) {
+// Ajustado para receber prevState e formData
+export async function createCategoryAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
+  const storeId = formData.get("storeId") as string;
+  const name = formData.get("name") as string;
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Usuário não autenticado" };
+
+  if (!name) return { error: "Nome da categoria é obrigatório." };
 
   const { error } = await supabase.from("categories").insert({
     store_id: storeId,
     name,
-    index: 99 // Adiciona no final por padrão
+    index: 99
   });
 
   if (error) {
@@ -33,7 +39,6 @@ export async function deleteCategoryAction(categoryId: string) {
 
   if (error) {
     console.error("Erro ao excluir categoria:", error);
-    // Erro comum: tentar excluir categoria que tem produtos
     return { error: "Não é possível excluir categoria com produtos." };
   }
 
@@ -43,7 +48,8 @@ export async function deleteCategoryAction(categoryId: string) {
 
 // --- PRODUTOS ---
 
-export async function createProductAction(formData: FormData) {
+// Ajustado para receber prevState e formData (assinatura padrão)
+export async function createProductAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
 
   const storeId = formData.get("storeId") as string;
@@ -51,7 +57,6 @@ export async function createProductAction(formData: FormData) {
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
   
-  // Tratamento de preço (R$ 19,90 -> 19.90)
   const rawPrice = formData.get("price") as string;
   const price = parseFloat(rawPrice.replace("R$", "").replace(/\./g, "").replace(",", "."));
   
@@ -59,12 +64,10 @@ export async function createProductAction(formData: FormData) {
 
   let imageUrl = "";
 
-  // Upload da Imagem (se houver)
   if (imageFile && imageFile.size > 0) {
     const fileExt = imageFile.name.split('.').pop();
     const fileName = `${storeId}-${Date.now()}.${fileExt}`;
     
-    // Upload para o bucket 'menu-assets'
     const { error: uploadError } = await supabase.storage
       .from('menu-assets')
       .upload(fileName, imageFile);
