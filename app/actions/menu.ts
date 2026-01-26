@@ -8,7 +8,6 @@ import { revalidatePath } from "next/cache";
 export async function createCategoryAction(storeId: string, name: string) {
   const supabase = await createClient();
   
-  // Verifica se o usuário é dono da loja (Segurança extra além do RLS)
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Usuário não autenticado" };
 
@@ -34,7 +33,8 @@ export async function deleteCategoryAction(categoryId: string) {
 
   if (error) {
     console.error("Erro ao excluir categoria:", error);
-    return { error: "Erro ao excluir categoria. Verifique se há produtos nela." };
+    // Erro comum: tentar excluir categoria que tem produtos
+    return { error: "Não é possível excluir categoria com produtos." };
   }
 
   revalidatePath("/");
@@ -50,7 +50,8 @@ export async function createProductAction(formData: FormData) {
   const categoryId = formData.get("categoryId") as string;
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
-  // Converte "19,90" para 19.90
+  
+  // Tratamento de preço (R$ 19,90 -> 19.90)
   const rawPrice = formData.get("price") as string;
   const price = parseFloat(rawPrice.replace("R$", "").replace(/\./g, "").replace(",", "."));
   
