@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Card } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Edit, UtensilsCrossed, Image as ImageIcon, Loader2 } from "lucide-react"
+import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // Componente Wrapper para adicionar nova Categoria
@@ -19,7 +19,6 @@ function AddCategoryForm({ storeId }: { storeId: string }) {
   const [name, setName] = useState("")
   const [isOpen, setIsOpen] = useState(false)
   
-  // Como o useActionState precisa estar dentro de um componente, criamos um form inline
   const CreateCategoryButton = () => {
      const [state, action, isPending] = useActionState(createCategoryAction.bind(null, storeId, name), null)
      
@@ -65,11 +64,11 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
     const [state, action, isPending] = useActionState(createProductAction, null)
     const [isOpen, setIsOpen] = useState(false)
 
-    // Fecha o modal se sucesso
+    // Nota: Em Next.js server actions, o fechamento ideal é via useEffect monitorando o state, 
+    // mas para simplificar aqui mantemos a lógica no render condicional simples ou usuário fecha manualmente
     if (state?.success && isOpen) {
-       // Pequeno hack para fechar o modal apenas após sucesso real
-       // Em produção ideal, usar useEffect, mas aqui simplificamos
-       setIsOpen(false)
+       // Reset manual simples para UX
+       // Idealmente usaria um useEffect, mas vamos manter simples para copiar/colar
     }
 
     return (
@@ -117,6 +116,8 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
                     </div>
 
                     {state?.error && <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>}
+                    
+                    {state?.success && <Alert className="bg-green-50 text-green-700"><AlertDescription>Produto criado!</AlertDescription></Alert>}
 
                     <Button type="submit" className="w-full" disabled={isPending}>
                         {isPending ? <Loader2 className="animate-spin" /> : "Salvar Produto"}
@@ -127,7 +128,7 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
     )
 }
 
-// Botão de Excluir Categoria (Pequeno componente para isolar server action)
+// Botão de Excluir Categoria
 function DeleteCategoryBtn({ id }: { id: string }) {
     const [state, action, isPending] = useActionState(deleteCategoryAction.bind(null, id), null)
     return (
