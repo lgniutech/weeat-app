@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useState, useEffect, useRef } from "react"
+import { useActionState, useState, useEffect } from "react"
 import { updateStoreDesignAction } from "@/app/actions/store"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,23 +30,21 @@ const GOOGLE_FONTS = [
   { name: "Space Mono", value: "Space Mono", type: "Monospace (Tech)" },
 ]
 
-// Tipo para controlar itens visuais
 type BannerItem = {
   id: string
   url: string
   isNew: boolean
-  file?: File // Apenas se for novo
+  file?: File
 }
 
 export function StoreAppearance({ store }: { store: any }) {
-  // Hack para resetar o form após sucesso
   const [formKey, setFormKey] = useState(0)
   
   const updateWithReset = async (prevState: any, formData: FormData) => {
-    // Constrói manualmente o FormData correto baseado no estado visual
     const finalFormData = new FormData()
     
-    // Dados básicos
+    // Dados Básicos e Visuais
+    finalFormData.append("name", formData.get("name") as string)
     finalFormData.append("bio", formData.get("bio") as string)
     finalFormData.append("primaryColor", formData.get("primaryColor") as string)
     finalFormData.append("fontFamily", formData.get("fontFamily") as string)
@@ -54,10 +52,8 @@ export function StoreAppearance({ store }: { store: any }) {
     const logo = formData.get("logo") as File
     if (logo.size > 0) finalFormData.append("logo", logo)
 
-    // Lógica complexa de Banners
-    // Cria um array de ordem: ["url_antiga", "__NEW__", "url_antiga", "__NEW__"]
+    // Banners
     const orderMap: string[] = []
-    
     items.forEach(item => {
         if (item.isNew && item.file) {
             finalFormData.append("newBanners", item.file)
@@ -66,7 +62,6 @@ export function StoreAppearance({ store }: { store: any }) {
             orderMap.push(item.url)
         }
     })
-    
     finalFormData.append("bannerOrder", JSON.stringify(orderMap))
 
     return updateStoreDesignAction(prevState, finalFormData)
@@ -74,83 +69,63 @@ export function StoreAppearance({ store }: { store: any }) {
 
   const [state, action, isPending] = useActionState(updateWithReset, null)
   
-  // Estados Locais
+  // Estados Locais (Para Preview em Tempo Real)
+  const [storeName, setStoreName] = useState(store?.name || "")
+  const [bio, setBio] = useState(store?.bio || "")
   const [primaryColor, setPrimaryColor] = useState(store?.primary_color || "#ea1d2c")
   const [fontFamily, setFontFamily] = useState(store?.font_family || "Inter")
   
-  // Inicializa lista visual misturando o que veio do banco
   const getInitialItems = (): BannerItem[] => {
     const existing = (store?.banners && store.banners.length > 0) 
       ? store.banners 
       : (store?.banner_url ? [store.banner_url] : [])
-      
-    return existing.map((url: string) => ({
-        id: url, // usa URL como ID para existentes
-        url,
-        isNew: false
-    }))
+    return existing.map((url: string) => ({ id: url, url, isNew: false }))
   }
 
   const [items, setItems] = useState<BannerItem[]>(getInitialItems())
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
-  // Atualiza quando o servidor devolve dados novos
   useEffect(() => {
-    if (state?.success) {
-       // Pequeno delay para garantir que o user veja o check de sucesso
-       // Em apps reais, idealmente o server action retornaria os novos dados para setar aqui imediatamente
-       setFormKey(k => k + 1) // Reseta inputs de arquivo
-    }
+    if (state?.success) setFormKey(k => k + 1)
   }, [state])
   
-  // Se o store mudar via props (revalidate), atualiza
+  // Sincroniza se vierem dados novos do server
   useEffect(() => {
     setItems(getInitialItems())
+    setStoreName(store?.name || "")
+    setBio(store?.bio || "")
     setPrimaryColor(store?.primary_color || "#ea1d2c")
     setFontFamily(store?.font_family || "Inter")
   }, [store])
 
-
-  // -- Handlers --
-
+  // Handlers
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
         const newFiles = Array.from(e.target.files)
-        
         const newItems: BannerItem[] = newFiles.map(file => ({
-            id: Math.random().toString(36), // ID temporário
-            url: URL.createObjectURL(file), // Preview instantâneo
+            id: Math.random().toString(36),
+            url: URL.createObjectURL(file),
             isNew: true,
             file: file
         }))
-
         setItems(prev => [...prev, ...newItems])
     }
   }
 
-  const removeBanner = (index: number) => {
-    setItems(prev => prev.filter((_, i) => i !== index))
-  }
+  const removeBanner = (index: number) => setItems(prev => prev.filter((_, i) => i !== index))
 
-  // Drag & Drop
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index)
-  }
+  const handleDragStart = (index: number) => setDraggedIndex(index)
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault() 
     if (draggedIndex === null || draggedIndex === index) return
-    
     const newItems = [...items]
     const draggedItem = newItems[draggedIndex]
     newItems.splice(draggedIndex, 1)
     newItems.splice(index, 0, draggedItem)
-    
     setItems(newItems)
     setDraggedIndex(index)
   }
-  const handleDragEnd = () => {
-    setDraggedIndex(null)
-  }
+  const handleDragEnd = () => setDraggedIndex(null)
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -165,15 +140,17 @@ export function StoreAppearance({ store }: { store: any }) {
       </div>
 
       <form action={action} key={formKey}>
-        {/* Inputs controlados pelo React, passados via FormData manual no wrapper */}
+        {/* CAMPOS OCULTOS PARA O FORM DATA */}
         <input type="hidden" name="primaryColor" value={primaryColor} />
         <input type="hidden" name="fontFamily" value={fontFamily} />
+        {/* Note que 'name' e 'bio' vão diretos nos inputs visíveis abaixo */}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
+          {/* --- COLUNA ESQUERDA: Controles --- */}
           <div className="lg:col-span-2 space-y-6">
             
-            {/* 1. MARCA */}
+            {/* 1. MARCA & IDENTIDADE */}
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -182,8 +159,10 @@ export function StoreAppearance({ store }: { store: any }) {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                
                 <div className="flex flex-col sm:flex-row gap-6">
-                    <div className="flex items-center gap-4 flex-1">
+                    {/* Logo */}
+                    <div className="flex items-center gap-4">
                         <div className="shrink-0 w-24 h-24 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50 relative group shadow-sm hover:border-primary transition-colors">
                             {store?.logo_url ? (
                                 <img src={store.logo_url} className="w-full h-full object-cover" alt="Logo" />
@@ -195,25 +174,34 @@ export function StoreAppearance({ store }: { store: any }) {
                             </div>
                             <Input type="file" name="logo" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" />
                         </div>
-                        <div className="space-y-1">
-                            <Label>Logo da Loja</Label>
-                            <p className="text-xs text-muted-foreground">Clique na imagem para enviar seu logo.</p>
-                        </div>
                     </div>
 
-                    <div className="space-y-2 flex-1">
-                        <Label>Cor Principal</Label>
-                        <div className="flex gap-3 items-center">
-                            <div className="relative overflow-hidden w-full h-10 rounded-md border shadow-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-                                <input 
-                                    type="color" 
-                                    value={primaryColor}
-                                    onChange={(e) => setPrimaryColor(e.target.value)}
-                                    className="absolute -top-2 -left-2 w-[150%] h-[150%] cursor-pointer p-0 border-0" 
-                                />
-                            </div>
-                            <div className="text-xs font-mono text-muted-foreground w-20 px-2 py-1 bg-slate-100 rounded text-center">
-                                {primaryColor}
+                    {/* Nome e Cor */}
+                    <div className="flex-1 space-y-4">
+                        <div className="space-y-2">
+                            <Label>Nome de Exibição (Cardápio)</Label>
+                            <Input 
+                                name="name" 
+                                value={storeName} 
+                                onChange={(e) => setStoreName(e.target.value)} 
+                                placeholder="Nome do seu restaurante"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Cor Principal</Label>
+                            <div className="flex gap-3 items-center">
+                                <div className="relative overflow-hidden w-full h-10 rounded-md border shadow-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                                    <input 
+                                        type="color" 
+                                        value={primaryColor}
+                                        onChange={(e) => setPrimaryColor(e.target.value)}
+                                        className="absolute -top-2 -left-2 w-[150%] h-[150%] cursor-pointer p-0 border-0" 
+                                    />
+                                </div>
+                                <div className="text-xs font-mono text-muted-foreground w-20 px-2 py-1 bg-slate-100 rounded text-center">
+                                    {primaryColor}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -240,18 +228,18 @@ export function StoreAppearance({ store }: { store: any }) {
               </CardContent>
             </Card>
 
-            {/* 2. CARROSSEL */}
+            {/* 2. CARROSSEL & BIO */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <ImageIcon className="w-5 h-5 text-primary" />
-                        <CardTitle>Carrossel de Destaques</CardTitle>
+                        <CardTitle>Carrossel & Informações</CardTitle>
                     </div>
                     <span className="text-xs text-muted-foreground bg-slate-100 px-2 py-1 rounded-full">{items.length} fotos</span>
                 </div>
                 <CardDescription>
-                    Arraste para organizar. Adicione fotos novas e veja o preview instantâneo.
+                    Arraste para organizar as fotos. Edite a bio para aparecer no topo.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -272,7 +260,6 @@ export function StoreAppearance({ store }: { store: any }) {
                                 `}
                             >
                                 <img src={item.url} className="w-full h-full object-cover bg-slate-200" alt={`Banner ${index}`} />
-                                
                                 <button 
                                     type="button"
                                     onClick={() => removeBanner(index)}
@@ -280,34 +267,21 @@ export function StoreAppearance({ store }: { store: any }) {
                                 >
                                     <Trash2 className="w-3.5 h-3.5" />
                                 </button>
-
                                 {item.isNew && (
-                                    <div className="absolute top-1.5 left-1.5 bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold shadow-sm z-10">
-                                        NOVO
-                                    </div>
+                                    <div className="absolute top-1.5 left-1.5 bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold shadow-sm z-10">NOVO</div>
                                 )}
-
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10 pointer-events-none">
                                     <GripVertical className="text-white w-8 h-8 opacity-80" />
                                 </div>
-                                
                                 <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm z-10 shadow-sm">
                                     {index === 0 ? 'Capa' : `${index + 1}º`}
                                 </div>
                             </div>
                         ))}
-                        
-                        {/* Botão de Adicionar (Estilo Card) */}
                         <label className="aspect-[9/16] rounded-lg border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 cursor-pointer flex flex-col items-center justify-center gap-2 transition-colors text-muted-foreground hover:text-primary">
                             <Plus className="w-8 h-8" />
                             <span className="text-xs font-bold">Adicionar</span>
-                            <input 
-                                type="file" 
-                                accept="image/*" 
-                                multiple 
-                                className="hidden"
-                                onChange={handleFilesSelected}
-                            />
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFilesSelected} />
                         </label>
                     </div>
                 ) : (
@@ -315,33 +289,31 @@ export function StoreAppearance({ store }: { store: any }) {
                         <ImageIcon className="w-12 h-12 opacity-20" />
                         <div className="space-y-1">
                             <p className="font-medium">Nenhuma foto no carrossel.</p>
-                            <p className="text-xs">Comece adicionando imagens para atrair clientes.</p>
+                            <p className="text-xs">Adicione imagens para atrair clientes.</p>
                         </div>
                         <label className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2">
                             <Plus className="w-4 h-4" />
                             Selecionar Fotos
-                            <input 
-                                type="file" 
-                                accept="image/*" 
-                                multiple 
-                                className="hidden"
-                                onChange={handleFilesSelected}
-                            />
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFilesSelected} />
                         </label>
                     </div>
                 )}
 
                 <div className="space-y-2 pt-2">
-                  <Label>Bio / Descrição</Label>
+                  <Label>Bio / Descrição Curta</Label>
                   <Textarea 
                     name="bio" 
-                    defaultValue={store?.bio || ""}
-                    rows={2}
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Conte um pouco sobre sua loja..."
+                    rows={3}
                   />
+                  <p className="text-xs text-muted-foreground">Esta descrição aparece sobre a foto de capa.</p>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Feedback & Submit */}
             {state?.error && (
               <Alert variant="destructive">
                 <AlertDescription>{state.error}</AlertDescription>
@@ -360,10 +332,10 @@ export function StoreAppearance({ store }: { store: any }) {
             </Button>
           </div>
 
-          {/* COLUNA DIREITA: Preview */}
+          {/* --- COLUNA DIREITA: Preview --- */}
           <div className="space-y-4">
              <div className="sticky top-4">
-                <Label className="mb-3 block text-muted-foreground text-center font-medium">Visualização</Label>
+                <Label className="mb-3 block text-muted-foreground text-center font-medium">Pré-visualização do Cliente</Label>
                 
                 <div 
                     className="border-[8px] border-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl bg-white w-[300px] mx-auto h-[620px] flex flex-col relative ring-1 ring-slate-900/50"
@@ -382,6 +354,7 @@ export function StoreAppearance({ store }: { store: any }) {
                         
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
 
+                        {/* Infos da Loja (COM NOME e BIO em Tempo Real) */}
                         <div className="absolute bottom-6 left-5 right-5 z-20 flex items-end gap-3">
                             <div className="w-16 h-16 rounded-full border-2 border-white bg-white overflow-hidden shadow-sm shrink-0">
                                 {store?.logo_url ? (
@@ -393,7 +366,12 @@ export function StoreAppearance({ store }: { store: any }) {
                                 )}
                             </div>
                             <div className="text-white pb-1">
-                                <div className="text-xl font-bold leading-tight drop-shadow-sm">{store?.name || "Nome da Loja"}</div>
+                                <div className="text-xl font-bold leading-tight drop-shadow-sm">
+                                    {storeName || "Nome da Loja"}
+                                </div>
+                                <div className="text-[10px] opacity-90 line-clamp-2 mt-1 font-light leading-snug">
+                                    {bio || "A melhor comida da região."}
+                                </div>
                             </div>
                         </div>
 
@@ -408,7 +386,6 @@ export function StoreAppearance({ store }: { store: any }) {
 
                     {/* Corpo Mockup */}
                     <div className="flex-1 p-4 bg-white relative">
-                        {/* Simulação de conteúdo */}
                         <div className="space-y-3 pt-2">
                              <div className="h-4 w-1/2 bg-slate-100 rounded" />
                              <div className="h-20 w-full bg-slate-50 rounded-xl" />

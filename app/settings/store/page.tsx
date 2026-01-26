@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { StoreSettingsForm } from "./store-settings-form"
+import { AppearanceForm } from "@/components/settings/appearance-form" // Importação nova
 
 export default async function StoreSettingsPage() {
   const supabase = await createClient()
@@ -18,26 +19,35 @@ export default async function StoreSettingsPage() {
     .eq("owner_id", user.id)
     .maybeSingle()
 
-  // Se não tiver loja, volta para o dashboard (que abrirá o setup)
   if (!store) {
     redirect("/")
   }
 
-  // Garante que settings seja um objeto válido para não quebrar o front
+  // Garante que settings seja um objeto válido
   const safeStore = {
     ...store,
     settings: store.settings || {} 
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-10 max-w-5xl">
+      
+      {/* Cabeçalho da Página */}
       <div>
-        <h3 className="text-lg font-medium">Dados da Loja</h3>
-        <p className="text-sm text-muted-foreground">
-          Gerencie as informações principais do seu estabelecimento.
+        <h3 className="text-2xl font-bold tracking-tight">Configurações</h3>
+        <p className="text-muted-foreground">
+          Gerencie os dados do seu estabelecimento e suas preferências.
         </p>
       </div>
-      <StoreSettingsForm store={safeStore} />
+
+      <div className="grid gap-8">
+          {/* 1. Formulário de Dados da Loja (Nome, Logo, etc) */}
+          <StoreSettingsForm store={safeStore} />
+
+          {/* 2. Formulário de Aparência (O NOVO BLOCO EXPANDIDO) */}
+          <AppearanceForm />
+      </div>
+
     </div>
   )
 }
