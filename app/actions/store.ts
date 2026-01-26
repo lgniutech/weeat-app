@@ -147,3 +147,51 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   revalidatePath("/");
   return { success: "Dados atualizados com sucesso!" };
 }
+
+// NOVA FUNÇÃO: Atualiza apenas o visual (Design) da loja
+export async function updateStoreDesignAction(prevState: any, formData: FormData) {
+    const supabase = await createClient();
+    
+    const bio = formData.get("bio") as string;
+    const primaryColor = formData.get("primaryColor") as string;
+    const bannerFile = formData.get("banner") as File;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { error: "Sessão expirada." };
+  
+      let updateData: any = {
+        bio,
+        primary_color: primaryColor
+      };
+  
+      // Upload do Banner
+      if (bannerFile && bannerFile.size > 0) {
+        const fileExt = bannerFile.name.split('.').pop();
+        // Prefixo 'banner-' para diferenciar de logos
+        const fileName = `banner-${user.id}-${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+            .from('store-assets')
+            .upload(fileName, bannerFile, { upsert: true });
+            
+        if (!uploadError) {
+          const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
+          updateData.banner_url = data.publicUrl;
+        }
+      }
+  
+      const { error } = await supabase
+        .from("stores")
+        .update(updateData)
+        .eq("owner_id", user.id);
+  
+      if (error) throw new Error(translateError(error.message));
+  
+    } catch (error: any) {
+      return { error: "Erro ao atualizar aparência: " + error.message };
+    }
+  
+    revalidatePath("/");
+    return { success: "Aparência atualizada com sucesso!" };
+}
