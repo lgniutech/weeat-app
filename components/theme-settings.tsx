@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -21,39 +20,39 @@ export function ThemeSettings() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" className="relative">
-          <Palette className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all" />
+        <Button variant="outline" size="icon" className="relative h-9 w-9">
+          <Palette className="h-[1.2rem] w-[1.2rem] text-primary transition-colors" />
           <span className="sr-only">Alterar tema</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align="end" className="w-60 p-2">
         
-        {/* Escolha de MODO (Claro/Escuro) */}
-        <DropdownMenuLabel>Modo de Exibição</DropdownMenuLabel>
-        <div className="grid grid-cols-3 gap-2 p-2">
+        {/* Modo Claro/Escuro */}
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Modo</DropdownMenuLabel>
+        <div className="grid grid-cols-3 gap-2 mb-2">
           <Button 
-            variant={"outline"} 
+            variant="outline" 
             size="sm" 
             onClick={() => setTheme("light")}
-            className={cn(theme === "light" && "border-primary bg-primary/10")}
+            className={cn("justify-start px-2", theme === "light" && "border-primary bg-primary/10")}
           >
             <Sun className="h-4 w-4 mr-2" />
             Claro
           </Button>
           <Button 
-            variant={"outline"} 
+            variant="outline" 
             size="sm" 
             onClick={() => setTheme("dark")}
-            className={cn(theme === "dark" && "border-primary bg-primary/10")}
+            className={cn("justify-start px-2", theme === "dark" && "border-primary bg-primary/10")}
           >
             <Moon className="h-4 w-4 mr-2" />
             Escuro
           </Button>
           <Button 
-            variant={"outline"} 
+            variant="outline" 
             size="sm" 
             onClick={() => setTheme("system")}
-            className={cn(theme === "system" && "border-primary bg-primary/10")}
+            className={cn("justify-start px-2", theme === "system" && "border-primary bg-primary/10")}
           >
             <Monitor className="h-4 w-4 mr-2" />
             Auto
@@ -62,39 +61,14 @@ export function ThemeSettings() {
 
         <DropdownMenuSeparator />
 
-        {/* Escolha de COR DO SISTEMA */}
-        <DropdownMenuLabel>Cor do Sistema</DropdownMenuLabel>
-        <div className="grid grid-cols-5 gap-1 p-2">
-          <ColorButton 
-            color="theme-zinc" 
-            active={themeColor === "theme-zinc"} 
-            onClick={() => setThemeColor("theme-zinc")} 
-            bg="bg-zinc-900" 
-          />
-          <ColorButton 
-            color="theme-blue" 
-            active={themeColor === "theme-blue"} 
-            onClick={() => setThemeColor("theme-blue")} 
-            bg="bg-blue-600" 
-          />
-          <ColorButton 
-            color="theme-red" 
-            active={themeColor === "theme-red"} 
-            onClick={() => setThemeColor("theme-red")} 
-            bg="bg-red-600" 
-          />
-          <ColorButton 
-            color="theme-orange" 
-            active={themeColor === "theme-orange"} 
-            onClick={() => setThemeColor("theme-orange")} 
-            bg="bg-orange-500" 
-          />
-          <ColorButton 
-            color="theme-green" 
-            active={themeColor === "theme-green"} 
-            onClick={() => setThemeColor("theme-green")} 
-            bg="bg-green-600" 
-          />
+        {/* Cor de Destaque */}
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground mt-2">Cor do Painel</DropdownMenuLabel>
+        <div className="grid grid-cols-5 gap-2 pt-1 pb-2">
+          <ColorBtn color="theme-blue" bg="bg-[#02B5FF]" active={themeColor === "theme-blue"} onClick={() => setThemeColor("theme-blue")} label="Azul" />
+          <ColorBtn color="theme-zinc" bg="bg-zinc-800" active={themeColor === "theme-zinc"} onClick={() => setThemeColor("theme-zinc")} label="Zinco" />
+          <ColorBtn color="theme-red" bg="bg-red-600" active={themeColor === "theme-red"} onClick={() => setThemeColor("theme-red")} label="Vermelho" />
+          <ColorBtn color="theme-orange" bg="bg-orange-500" active={themeColor === "theme-orange"} onClick={() => setThemeColor("theme-orange")} label="Laranja" />
+          <ColorBtn color="theme-green" bg="bg-green-600" active={themeColor === "theme-green"} onClick={() => setThemeColor("theme-green")} label="Verde" />
         </div>
 
       </DropdownMenuContent>
@@ -102,17 +76,17 @@ export function ThemeSettings() {
   )
 }
 
-function ColorButton({ color, active, onClick, bg }: any) {
+function ColorBtn({ bg, active, onClick, label }: any) {
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all",
-        active ? "border-primary ring-2 ring-primary/20 scale-110" : "border-transparent hover:scale-105",
-        bg
-      )}
-    >
-      {active && <div className="h-2 w-2 rounded-full bg-white" />}
-    </button>
+    <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={onClick}>
+      <div className={cn(
+        "h-8 w-8 rounded-full shadow-sm flex items-center justify-center transition-all",
+        bg,
+        active ? "ring-2 ring-offset-2 ring-primary scale-110" : "hover:scale-105"
+      )}>
+        {active && <div className="h-2.5 w-2.5 bg-white rounded-full shadow-sm" />}
+      </div>
+      {/* <span className="text-[10px] text-muted-foreground group-hover:text-foreground">{label}</span> */}
+    </div>
   )
 }

@@ -4,8 +4,8 @@ import * as React from "react"
 import { ThemeProvider as NextThemesProvider } from "next-themes"
 import { type ThemeProviderProps } from "next-themes/dist/types"
 
-// Contexto para a Cor do Tema
-type ThemeColor = "theme-zinc" | "theme-red" | "theme-blue" | "theme-orange" | "theme-green"
+// Tipos de temas disponíveis
+type ThemeColor = "theme-blue" | "theme-zinc" | "theme-red" | "theme-orange" | "theme-green"
 
 interface ThemeColorContextType {
   themeColor: ThemeColor
@@ -13,7 +13,7 @@ interface ThemeColorContextType {
 }
 
 const ThemeColorContext = React.createContext<ThemeColorContextType>({
-  themeColor: "theme-zinc",
+  themeColor: "theme-blue",
   setThemeColor: () => null,
 })
 
@@ -22,10 +22,10 @@ export function useThemeColor() {
 }
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  const [themeColor, setThemeColor] = React.useState<ThemeColor>("theme-zinc")
+  const [themeColor, setThemeColor] = React.useState<ThemeColor>("theme-blue")
   const [mounted, setMounted] = React.useState(false)
 
-  // Carregar cor salva ao iniciar
+  // 1. Ao montar, pega a cor salva no navegador
   React.useEffect(() => {
     setMounted(true)
     const savedColor = localStorage.getItem("admin-theme-color") as ThemeColor
@@ -34,22 +34,22 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
     }
   }, [])
 
-  // Atualizar a cor no <body>
+  // 2. Quando a cor mudar, atualiza a classe do <body>
   React.useEffect(() => {
     if (!mounted) return
 
     const root = document.body
-    // Remove classes antigas
-    root.classList.remove("theme-zinc", "theme-red", "theme-blue", "theme-orange", "theme-green")
-    // Adiciona nova
+    // Remove qualquer tema antigo
+    root.classList.remove("theme-blue", "theme-zinc", "theme-red", "theme-orange", "theme-green")
+    // Adiciona o novo
     root.classList.add(themeColor)
-    // Salva preferência
+    // Salva para a próxima visita
     localStorage.setItem("admin-theme-color", themeColor)
   }, [themeColor, mounted])
 
-  // Evita flash de conteúdo não estilizado
+  // Evita piscar conteúdo incorreto no carregamento
   if (!mounted) {
-    return null 
+    return null // ou um loading skeleton se preferir
   }
 
   return (
