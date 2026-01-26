@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-// Função auxiliar para traduzir erros do Supabase/Postgres
+// Função auxiliar para traduzir erros
 function translateError(errorMsg: string) {
   if (errorMsg.includes("duplicate key")) {
      if (errorMsg.includes("stores_slug_key")) return "O nome/link desta loja já está em uso."
@@ -83,7 +83,6 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   redirect("/");
 }
 
-
 export async function updateStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
@@ -93,7 +92,6 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
   
-  // Senha (Opcional)
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
@@ -101,7 +99,7 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Sessão expirada. Recarregue a página." };
 
-    // 1. Atualizar Auth (Nome e Senha)
+    // 1. Atualizar Auth
     const authUpdates: any = {};
     if (fullName) authUpdates.data = { full_name: fullName };
     
@@ -148,16 +146,21 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
-// ATUALIZADO: Função que suporta Logo e Múltiplos Banners
+// --- ATUALIZADO: Lógica de Design Completa (Banners + Fonts) ---
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
     
     const bio = formData.get("bio") as string;
     const primaryColor = formData.get("primaryColor") as string;
+    const fontFamily = formData.get("fontFamily") as string;
     
-    // Arquivos
+    // Banners: "keptBanners" é um JSON string com a lista atual na ordem certa
+    const keptBannersJson = formData.get("keptBanners") as string;
+    // "newBanners" são os novos arquivos de upload
+    const newBannerFiles = formData.getAll("newBanners") as File[];
+    
+    // Logo
     const logoFile = formData.get("logo") as File;
-    const bannerFiles = formData.getAll("banners") as File[]; 
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -165,10 +168,11 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
   
       let updateData: any = {
         bio,
-        primary_color: primaryColor
+        primary_color: primaryColor,
+        font_family: fontFamily
       };
   
-      // 1. Upload do LOGO
+      // 1. Processar Logo
       if (logoFile && logoFile.size > 0) {
         const fileExt = logoFile.name.split('.').pop();
         const fileName = `${user.id}-${Date.now()}-logo.${fileExt}`;
@@ -179,11 +183,24 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
         }
       }
 
-      // 2. Upload dos BANNERS (Carrossel)
-      if (bannerFiles && bannerFiles.length > 0 && bannerFiles[0].size > 0) {
-        const uploadedUrls: string[] = [];
+      // 2. Processar Banners (Junção de Antigos Reordenados + Novos)
+      let finalBanners: string[] = [];
 
-        for (const file of bannerFiles) {
+      // A. Recupera os antigos na ordem que o usuário definiu no front
+      if (keptBannersJson) {
+        try {
+            const parsed = JSON.parse(keptBannersJson);
+            if (Array.isArray(parsed)) {
+                finalBanners = [...parsed];
+            }
+        } catch (e) {
+            console.error("Erro ao processar banners mantidos", e);
+        }
+      }
+
+      // B. Faz upload dos novos e adiciona ao final da lista
+      if (newBannerFiles && newBannerFiles.length > 0 && newBannerFiles[0].size > 0) {
+        for (const file of newBannerFiles) {
             const fileExt = file.name.split('.').pop();
             const fileName = `banner-${user.id}-${Date.now()}-${Math.random()}.${fileExt}`;
             
@@ -193,15 +210,16 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
                 
             if (!uploadError) {
                 const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
-                uploadedUrls.push(data.publicUrl);
+                finalBanners.push(data.publicUrl);
             }
         }
-        
-        if (uploadedUrls.length > 0) {
-            updateData.banners = uploadedUrls;
-            // Mantemos banner_url como fallback para a primeira imagem
-            updateData.banner_url = uploadedUrls[0]; 
-        }
+      }
+
+      // Se existir algum banner (antigo ou novo), atualiza o banco
+      if (keptBannersJson || (newBannerFiles && newBannerFiles.length > 0)) {
+         updateData.banners = finalBanners;
+         // Mantemos banner_url preenchido com a primeira foto para compatibilidade
+         updateData.banner_url = finalBanners.length > 0 ? finalBanners[0] : null;
       }
   
       const { error } = await supabase
