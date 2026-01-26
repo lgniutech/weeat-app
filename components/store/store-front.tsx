@@ -95,8 +95,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   return (
     <div className="min-h-screen bg-slate-50 pb-24" style={{ fontFamily: fontFamily }}>
       
-      {/* INJEÇÃO DINÂMICA DA FONTE (Google Fonts) */}
-      {/* Isso carrega a fonte escolhida pelo cliente em tempo real */}
+      {/* Fonte Google */}
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@300;400;500;700&display=swap');
       `}</style>
@@ -114,7 +113,9 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                         )}
                     >
                         <img src={img} alt={`Banner ${index}`} className="w-full h-full object-cover opacity-80" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                        
+                        {/* Overlay Escuro para Legibilidade */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
                     </div>
                 ))
             ) : (
@@ -139,7 +140,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
             )}
         </div>
 
-        {/* HEADER DA LOJA */}
+        {/* HEADER LOJA */}
         <div className="absolute bottom-0 left-0 w-full z-20 p-4 md:p-8 pb-6">
             <div className="flex items-end gap-4">
                 <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden shrink-0">
@@ -153,9 +154,12 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                 </div>
 
                 <div className="flex-1 text-white mb-1">
-                    <h1 className="text-3xl md:text-5xl font-bold drop-shadow-lg leading-none tracking-tight">{store.name}</h1>
+                    {/* Texto com Sombra */}
+                    <h1 className="text-3xl md:text-5xl font-bold drop-shadow-lg leading-none tracking-tight" style={{ textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
+                        {store.name}
+                    </h1>
                     {store.bio && (
-                        <p className="text-white/90 text-sm md:text-base line-clamp-2 mt-2 drop-shadow-md max-w-xl font-medium">
+                        <p className="text-white/95 text-sm md:text-base line-clamp-2 mt-2 drop-shadow-md max-w-xl font-medium" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}>
                             {store.bio}
                         </p>
                     )}
@@ -219,7 +223,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                             >
                                 <div className="flex-1 flex flex-col justify-between py-1">
                                     <div>
-                                        {/* Título com Hover na Cor da Loja */}
                                         <h3 className="font-bold text-slate-900 line-clamp-2 text-base group-hover:text-[var(--primary)] transition-colors" style={{ '--primary': primaryColor } as any}>
                                             {product.name}
                                         </h3>
@@ -278,7 +281,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                             <ShoppingBag className="w-10 h-10 opacity-20" />
                         </div>
                         <p className="font-medium text-lg">Sua sacola está vazia</p>
-                        <p className="text-sm max-w-[200px] text-center text-slate-400">Adicione itens deliciosos do cardápio para começar.</p>
                     </div>
                 ) : (
                     <div className="space-y-6">
