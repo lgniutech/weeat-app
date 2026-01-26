@@ -9,7 +9,7 @@ import { ThemeSettings } from "@/components/theme-settings"
 import { StoreSetupModal } from "@/components/modals/store-setup-modal"
 import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
 
-// IMPORTANTE: Importar os novos módulos que vamos criar
+// IMPORTANTE: Importar os novos módulos
 import { StoreAppearance } from "@/components/modules/store-appearance"
 import { MenuManager } from "@/components/modules/menu-manager"
 
@@ -41,17 +41,17 @@ export default function DashboardClient({
 
   const hasStore = !!store
 
-  // Função simples para renderizar o conteúdo baseado no módulo ativo
+  // Renderiza o conteúdo baseado no módulo ativo
   const renderContent = () => {
     switch (activeModule) {
       case 'tema':
         return <ThemeSettings />
-      case 'store-appearance':
+      case 'store-appearance': // Módulo Novo
         return <StoreAppearance store={store} />
-      case 'menu-products':
+      case 'menu-products':    // Módulo Novo
         return <MenuManager store={store} categories={categories} />
       case 'dashboard':
-        return <EmptyState moduleId="Dashboard (Em Breve)" />
+        return <EmptyState moduleId="Dashboard (Visão Geral em Breve)" />
       default:
         return <EmptyState moduleId={activeModule} />
     }
