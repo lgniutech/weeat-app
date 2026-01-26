@@ -1,179 +1,118 @@
 "use client"
 
-import * as React from "react"
 import { useTheme } from "next-themes"
-import { Check, Moon, Sun, Monitor, Palette } from "lucide-react"
+import { useThemeColor } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-
-// Cores predefinidas com suas variações para manter a harmonia do layout
-const themeColors = [
-  { 
-    name: "Azul (Padrão)", 
-    value: "#02B5FF", 
-    light: "#F0F9FF", // Sky-50 (Para fundos claros)
-    accent: "#8CDCFF" // Sky-300 (Para detalhes intermediários)
-  },
-  { 
-    name: "Verde", 
-    value: "#10B981", 
-    light: "#ECFDF5", // Emerald-50
-    accent: "#6EE7B7" // Emerald-300
-  },
-  { 
-    name: "Roxo", 
-    value: "#8B5CF6", 
-    light: "#F5F3FF", // Violet-50
-    accent: "#C4B5FD" // Violet-300
-  },
-  { 
-    name: "Laranja", 
-    value: "#F97316", 
-    light: "#FFF7ED", // Orange-50
-    accent: "#FDBA74" // Orange-300
-  },
-  { 
-    name: "Vermelho", 
-    value: "#EF4444", 
-    light: "#FEF2F2", // Red-50
-    accent: "#FCA5A5" // Red-300
-  },
-  { 
-    name: "Rosa", 
-    value: "#EC4899", 
-    light: "#FDF2F8", // Pink-50
-    accent: "#F9A8D4" // Pink-300
-  },
-]
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Palette, Moon, Sun, Monitor } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 export function ThemeSettings() {
-  const { theme, setTheme } = useTheme()
-  const [primaryColor, setPrimaryColor] = React.useState("#02B5FF")
-
-  // Carregar a cor salva ao iniciar
-  React.useEffect(() => {
-    const savedColor = localStorage.getItem("theme-primary-color")
-    if (savedColor) {
-      // Encontra o objeto de cor completo baseado no valor salvo
-      const colorObj = themeColors.find(c => c.value === savedColor) || themeColors[0]
-      updateThemeVariables(colorObj)
-    }
-  }, [])
-
-  // Função centralizada para atualizar todas as variáveis CSS
-  const updateThemeVariables = (colorObj: typeof themeColors[0]) => {
-    setPrimaryColor(colorObj.value)
-    localStorage.setItem("theme-primary-color", colorObj.value)
-    
-    const root = document.documentElement
-    
-    // --- 1. Cor Principal (Botões, Textos Fortes) ---
-    root.style.setProperty("--primary", colorObj.value)
-    root.style.setProperty("--ring", colorObj.value)
-    
-    // --- 2. Sidebar (Menu Lateral) ---
-    root.style.setProperty("--sidebar-primary", colorObj.value)
-    root.style.setProperty("--sidebar-ring", colorObj.value)
-    root.style.setProperty("--sidebar-accent-foreground", colorObj.value) // Texto do item ativo
-    root.style.setProperty("--sidebar-accent", colorObj.light) // Fundo do item ativo (Era o "azulzinho")
-    
-    // --- 3. Elementos Secundários e Acentos ---
-    root.style.setProperty("--secondary-foreground", colorObj.value)
-    root.style.setProperty("--secondary", colorObj.light) // Badges e fundos secundários
-    
-    root.style.setProperty("--accent-foreground", "#0F172A") // Mantém texto escuro para contraste
-    root.style.setProperty("--accent", colorObj.accent) // Hover e detalhes
-    
-    // --- 4. Gráficos (Para manter consistência visual) ---
-    root.style.setProperty("--chart-1", colorObj.value)
-    root.style.setProperty("--chart-2", colorObj.accent)
-  }
+  const { setTheme, theme } = useTheme()
+  const { themeColor, setThemeColor } = useThemeColor()
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Personalização</h2>
-      </div>
-      
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Cartão de Modo (Claro/Escuro) */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sun className="h-5 w-5" />
-              Aparência
-            </CardTitle>
-            <CardDescription>
-              Escolha como o DeliveryPro se apresenta para você.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <Button
-                variant="outline"
-                className={`flex flex-col items-center gap-2 h-24 ${theme === 'light' ? 'border-primary bg-primary/5' : ''}`}
-                onClick={() => setTheme("light")}
-              >
-                <Sun className="h-6 w-6" />
-                <span>Claro</span>
-              </Button>
-              <Button
-                variant="outline"
-                className={`flex flex-col items-center gap-2 h-24 ${theme === 'dark' ? 'border-primary bg-primary/5' : ''}`}
-                onClick={() => setTheme("dark")}
-              >
-                <Moon className="h-6 w-6" />
-                <span>Escuro</span>
-              </Button>
-              <Button
-                variant="outline"
-                className={`flex flex-col items-center gap-2 h-24 ${theme === 'system' ? 'border-primary bg-primary/5' : ''}`}
-                onClick={() => setTheme("system")}
-              >
-                <Monitor className="h-6 w-6" />
-                <span>Sistema</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" className="relative">
+          <Palette className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all" />
+          <span className="sr-only">Alterar tema</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        
+        {/* Escolha de MODO (Claro/Escuro) */}
+        <DropdownMenuLabel>Modo de Exibição</DropdownMenuLabel>
+        <div className="grid grid-cols-3 gap-2 p-2">
+          <Button 
+            variant={"outline"} 
+            size="sm" 
+            onClick={() => setTheme("light")}
+            className={cn(theme === "light" && "border-primary bg-primary/10")}
+          >
+            <Sun className="h-4 w-4 mr-2" />
+            Claro
+          </Button>
+          <Button 
+            variant={"outline"} 
+            size="sm" 
+            onClick={() => setTheme("dark")}
+            className={cn(theme === "dark" && "border-primary bg-primary/10")}
+          >
+            <Moon className="h-4 w-4 mr-2" />
+            Escuro
+          </Button>
+          <Button 
+            variant={"outline"} 
+            size="sm" 
+            onClick={() => setTheme("system")}
+            className={cn(theme === "system" && "border-primary bg-primary/10")}
+          >
+            <Monitor className="h-4 w-4 mr-2" />
+            Auto
+          </Button>
+        </div>
 
-        {/* Cartão de Cor Principal */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Palette className="h-5 w-5" />
-              Cor do Tema
-            </CardTitle>
-            <CardDescription>
-              Selecione a cor de destaque para botões e elementos ativos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
-              {themeColors.map((colorObj) => (
-                <button
-                  key={colorObj.value}
-                  onClick={() => updateThemeVariables(colorObj)}
-                  className="group relative flex h-12 w-12 items-center justify-center rounded-full border border-border transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  style={{ backgroundColor: colorObj.value }}
-                  title={colorObj.name}
-                >
-                  {primaryColor === colorObj.value && (
-                    <Check className="h-6 w-6 text-white drop-shadow-md" />
-                  )}
-                  <span className="sr-only">{colorObj.name}</span>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        <DropdownMenuSeparator />
+
+        {/* Escolha de COR DO SISTEMA */}
+        <DropdownMenuLabel>Cor do Sistema</DropdownMenuLabel>
+        <div className="grid grid-cols-5 gap-1 p-2">
+          <ColorButton 
+            color="theme-zinc" 
+            active={themeColor === "theme-zinc"} 
+            onClick={() => setThemeColor("theme-zinc")} 
+            bg="bg-zinc-900" 
+          />
+          <ColorButton 
+            color="theme-blue" 
+            active={themeColor === "theme-blue"} 
+            onClick={() => setThemeColor("theme-blue")} 
+            bg="bg-blue-600" 
+          />
+          <ColorButton 
+            color="theme-red" 
+            active={themeColor === "theme-red"} 
+            onClick={() => setThemeColor("theme-red")} 
+            bg="bg-red-600" 
+          />
+          <ColorButton 
+            color="theme-orange" 
+            active={themeColor === "theme-orange"} 
+            onClick={() => setThemeColor("theme-orange")} 
+            bg="bg-orange-500" 
+          />
+          <ColorButton 
+            color="theme-green" 
+            active={themeColor === "theme-green"} 
+            onClick={() => setThemeColor("theme-green")} 
+            bg="bg-green-600" 
+          />
+        </div>
+
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function ColorButton({ color, active, onClick, bg }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all",
+        active ? "border-primary ring-2 ring-primary/20 scale-110" : "border-transparent hover:scale-105",
+        bg
+      )}
+    >
+      {active && <div className="h-2 w-2 rounded-full bg-white" />}
+    </button>
   )
 }

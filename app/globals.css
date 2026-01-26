@@ -1,155 +1,137 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@custom-variant dark (&:is(.dark *));
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
-:root {
-  /* Paleta definida: 02B5FF, FEFEFE, 8CDCFF, 00B4FF */
-  
-  --background: #FEFEFE;
-  --foreground: #0F172A; /* Escuro para texto (Slate-900) para contraste com fundo branco */
-  
-  --card: #FFFFFF;
-  --card-foreground: #0F172A;
-  
-  --popover: #FFFFFF;
-  --popover-foreground: #0F172A;
-  
-  /* Azul Principal (#02B5FF) */
-  --primary: #02B5FF;
-  --primary-foreground: #FFFFFF;
-  
-  /* Azul Claro (#8CDCFF) */
-  --secondary: #F0F9FF; /* Um azul bem clarinho para fundos secundários */
-  --secondary-foreground: #02B5FF;
-  
-  --muted: #F1F5F9;
-  --muted-foreground: #64748B;
-  
-  /* Azul Acento (#00B4FF / #8CDCFF) */
-  --accent: #8CDCFF;
-  --accent-foreground: #00364D; /* Texto escuro para contraste no azul claro */
-  
-  --destructive: #EF4444;
-  --destructive-foreground: #FFFFFF;
-  
-  --border: #E2E8F0;
-  --input: #E2E8F0;
-  --ring: #02B5FF;
-  
-  --radius: 0.625rem;
-  
-  /* Cores de Gráficos e Sidebar mantendo harmonia */
-  --chart-1: #02B5FF;
-  --chart-2: #8CDCFF;
-  --chart-3: #00B4FF;
-  --chart-4: #38BDF8;
-  --chart-5: #7DD3FC;
-  
-  --sidebar: #FEFEFE;
-  --sidebar-foreground: #0F172A;
-  --sidebar-primary: #02B5FF;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F0F9FF;
-  --sidebar-accent-foreground: #02B5FF;
-  --sidebar-border: #E2E8F0;
-  --sidebar-ring: #02B5FF;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
 }
 
-.dark {
-  /* Trocado de Azul Profundo (#020817) para Cinza Neutro Escuro (#121212) */
-  --background: #121212; 
-  --foreground: #FAFAFA;
-  
-  --card: #1E1E1E; /* Cinza levemente mais claro para destacar cartões */
-  --card-foreground: #FAFAFA;
-  
-  --popover: #1E1E1E;
-  --popover-foreground: #FAFAFA;
-  
-  --primary: #02B5FF;
-  --primary-foreground: #FFFFFF;
-  
-  --secondary: #27272A; /* Zinco escuro para elementos secundários */
-  --secondary-foreground: #FAFAFA;
-  
-  --muted: #27272A;
-  --muted-foreground: #A1A1AA;
-  
-  --accent: #27272A;
-  --accent-foreground: #FAFAFA;
-  
-  --destructive: #7F1D1D;
-  --destructive-foreground: #FEFEFE;
-  
-  --border: #333333; /* Borda cinza neutra */
-  --input: #333333;
-  --ring: #00B4FF;
-  
-  --chart-1: #02B5FF;
-  --chart-2: #00B4FF;
-  --chart-3: #8CDCFF;
-  --chart-4: #38BDF8;
-  --chart-5: #7DD3FC;
-  
-  --sidebar: #121212;
-  --sidebar-foreground: #FAFAFA;
-  --sidebar-primary: #02B5FF;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #27272A;
-  --sidebar-accent-foreground: #FAFAFA;
-  --sidebar-border: #333333;
-  --sidebar-ring: #00B4FF;
-}
+/* --- TEMAS DE COR DO PAINEL --- */
+@layer base {
+  /* Zinc (Padrão) */
+  .theme-zinc {
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --ring: 240 5.9% 10%;
+  }
+  .dark .theme-zinc {
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --ring: 0 0% 98%;
+  }
 
-@theme inline {
-  --font-sans: var(--font-gate), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-poppins: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
-  
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+  /* Vermelho (Red) */
+  .theme-red {
+    --primary: 0 72.2% 50.6%;
+    --primary-foreground: 0 85.7% 97.3%;
+    --ring: 0 72.2% 50.6%;
+  }
+  .dark .theme-red {
+    --primary: 0 72.2% 50.6%;
+    --primary-foreground: 0 85.7% 97.3%;
+    --ring: 0 72.2% 50.6%;
+  }
+
+  /* Azul (Blue) */
+  .theme-blue {
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --ring: 221.2 83.2% 53.3%;
+  }
+  .dark .theme-blue {
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --ring: 217.2 91.2% 59.8%;
+  }
+
+  /* Laranja (Orange) */
+  .theme-orange {
+    --primary: 24.6 95% 53.1%;
+    --primary-foreground: 60 9.1% 97.8%;
+    --ring: 24.6 95% 53.1%;
+  }
+  .dark .theme-orange {
+    --primary: 20.5 90.2% 48.2%;
+    --primary-foreground: 60 9.1% 97.8%;
+    --ring: 24.6 95% 53.1%;
+  }
+
+  /* Verde (Green) */
+  .theme-green {
+    --primary: 142.1 76.2% 36.3%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --ring: 142.1 76.2% 36.3%;
+  }
+  .dark .theme-green {
+    --primary: 142.1 70.6% 45.3%;
+    --primary-foreground: 144.9 80.4% 10%;
+    --ring: 142.1 70.6% 45.3%;
+  }
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
