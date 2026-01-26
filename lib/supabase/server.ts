@@ -4,9 +4,22 @@ import { cookies } from 'next/headers'
 export async function createClient() {
   const cookieStore = await cookies()
 
+  // Tenta pegar a variável NEXT_PUBLIC (padrão) OU a SUPABASE (integração Vercel)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+
+  // Validação
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "ERRO DE CONFIGURAÇÃO: As variáveis do Supabase não foram encontradas. \n" +
+      "Certifique-se de ter adicionado NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY na Vercel \n" +
+      "e feito o REDEPLOY após adicionar."
+    )
+  }
+
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseKey,
     {
       cookies: {
         getAll() {
@@ -18,8 +31,7 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             )
           } catch {
-            // O método `setAll` foi chamado em um Server Component.
-            // Isso pode ser ignorado se você tiver um middleware atualizando a sessão.
+            // Ignora erro de setar cookie em Server Component (padrão do Next.js)
           }
         },
       },

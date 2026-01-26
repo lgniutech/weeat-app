@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-// Função auxiliar para traduzir erros do Supabase/Postgres
+// Função auxiliar para traduzir erros
 function translateError(errorMsg: string) {
   if (errorMsg.includes("duplicate key")) {
      if (errorMsg.includes("stores_slug_key")) return "O nome/link desta loja já está em uso."
@@ -36,7 +36,6 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       return { error: "Preencha todos os campos obrigatórios." };
     }
 
-    // Update User
     const userUpdates: any = { data: { full_name: fullName } };
     if (password) {
       if (password.length < 6) return { error: "A senha deve ter no mínimo 6 caracteres." };
@@ -46,11 +45,9 @@ export async function createStoreAction(prevState: any, formData: FormData) {
     const { error: userError } = await supabase.auth.updateUser(userUpdates);
     if (userError) throw new Error(translateError(userError.message));
 
-    // Slug
     const randomSuffix = Math.floor(Math.random() * 10000);
     const generatedSlug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + `-${randomSuffix}`;
 
-    // Upload Logo
     let logoUrl = "";
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
@@ -62,7 +59,6 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       }
     }
 
-    // Insert Store
     const { error } = await supabase.from("stores").insert({
       owner_id: user.id,
       name,
@@ -83,7 +79,6 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   redirect("/");
 }
 
-
 export async function updateStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
@@ -92,8 +87,6 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const whatsapp = formData.get("whatsapp") as string;
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
-  
-  // Senha (Opcional)
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
@@ -101,7 +94,6 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Sessão expirada. Recarregue a página." };
 
-    // 1. Atualizar Auth (Nome e Senha)
     const authUpdates: any = {};
     if (fullName) authUpdates.data = { full_name: fullName };
     
@@ -116,7 +108,6 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       if (userError) throw new Error(translateError(userError.message));
     }
 
-    // 2. Atualizar Store
     let updateData: any = {
       name,
       whatsapp: whatsapp.replace(/\D/g, ''),
@@ -146,4 +137,99 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
 
   revalidatePath("/");
   return { success: "Dados atualizados com sucesso!" };
+}
+
+// --- ATUALIZADO: Lógica Inteligente de Upload Misto ---
+export async function updateStoreDesignAction(prevState: any, formData: FormData) {
+    const supabase = await createClient();
+    
+    const bio = formData.get("bio") as string;
+    const primaryColor = formData.get("primaryColor") as string;
+    const fontFamily = formData.get("fontFamily") as string;
+    
+    // Lista de Ordem: Ex: ["https://...", "__NEW__", "https://...", "__NEW__"]
+    const bannerOrderJson = formData.get("bannerOrder") as string;
+    
+    // Arquivos novos (em ordem de aparição na lista visual)
+    const newBannerFiles = formData.getAll("newBanners") as File[];
+    
+    const logoFile = formData.get("logo") as File;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { error: "Sessão expirada." };
+  
+      let updateData: any = {
+        bio,
+        primary_color: primaryColor,
+        font_family: fontFamily
+      };
+  
+      // 1. Upload do LOGO
+      if (logoFile && logoFile.size > 0) {
+        const fileExt = logoFile.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}-logo.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('store-assets').upload(fileName, logoFile, { upsert: true });
+        if (!uploadError) {
+          const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
+          updateData.logo_url = data.publicUrl;
+        }
+      }
+
+      // 2. Processar Banners (Lógica Mista)
+      let finalBanners: string[] = [];
+      let newFileIndex = 0; // Cursor para pegar os arquivos novos na ordem certa
+
+      if (bannerOrderJson) {
+        try {
+            const orderList = JSON.parse(bannerOrderJson);
+            
+            for (const item of orderList) {
+                if (item === "__NEW__") {
+                    // É um arquivo novo que precisa ser upado
+                    const file = newBannerFiles[newFileIndex];
+                    newFileIndex++;
+
+                    if (file && file.size > 0) {
+                        const fileExt = file.name.split('.').pop();
+                        const fileName = `banner-${user.id}-${Date.now()}-${Math.random()}.${fileExt}`;
+                        
+                        const { error: uploadError } = await supabase.storage
+                            .from('store-assets')
+                            .upload(fileName, file, { upsert: true });
+                            
+                        if (!uploadError) {
+                            const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
+                            finalBanners.push(data.publicUrl);
+                        }
+                    }
+                } else {
+                    // É uma URL antiga, mantém
+                    finalBanners.push(item);
+                }
+            }
+        } catch (e) {
+            console.error("Erro ao processar ordem dos banners", e);
+        }
+      }
+
+      // Atualiza o banco
+      updateData.banners = finalBanners;
+      // Fallback
+      updateData.banner_url = finalBanners.length > 0 ? finalBanners[0] : null;
+  
+      const { error } = await supabase
+        .from("stores")
+        .update(updateData)
+        .eq("owner_id", user.id);
+  
+      if (error) throw new Error(error.message);
+  
+    } catch (error: any) {
+      console.error(error);
+      return { error: "Erro ao atualizar aparência: " + error.message };
+    }
+  
+    revalidatePath("/");
+    return { success: "Loja atualizada com sucesso!" };
 }

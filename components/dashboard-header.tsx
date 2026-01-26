@@ -1,88 +1,74 @@
 "use client"
 
-import { Bell } from "lucide-react"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-
-const moduleNames: Record<string, string> = {
-  dashboard: "Dashboard",
-  pedidos: "Pedidos",
-  cardapio: "Cardápio",
-  clientes: "Clientes",
-  financeiro: "Financeiro",
-  configuracoes: "Configurações",
-}
+import { Separator } from "@/components/ui/separator"
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "@/components/ui/breadcrumb"
+import { Button } from "@/components/ui/button"
+import { ExternalLink, Store } from "lucide-react"
+import Link from "next/link"
 
 interface DashboardHeaderProps {
   activeModule: string
   isStoreOpen: boolean
-  onStoreStatusChange: (open: boolean) => void
+  onStoreStatusChange: (isOpen: boolean) => void
+  storeName?: string
+  storeSlug?: string // Propriedade nova para o link
 }
 
-export function DashboardHeader({
-  activeModule,
-  isStoreOpen,
-  onStoreStatusChange,
+// Mapa para traduzir os IDs dos módulos para títulos bonitos
+const moduleNames: Record<string, string> = {
+  dashboard: "Visão Geral",
+  orders: "Gestão de Pedidos",
+  "menu-products": "Produtos & Categorias",
+  "store-appearance": "Aparência & Marca",
+  "store-settings": "Dados da Loja",
+  financeiro: "Financeiro",
+  tema: "Aparência do Painel"
+}
+
+export function DashboardHeader({ 
+  activeModule, 
+  // isStoreOpen e onStoreStatusChange podem ser usados para um toggle de "Loja Aberta/Fechada" no futuro
+  storeName,
+  storeSlug 
 }: DashboardHeaderProps) {
+  
   return (
-    // Removido border-b e adicionado shadow suave
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between bg-background px-6 shadow-[0_1px_2px_0_rgba(0,0,0,0.03)]">
-      <div className="flex items-center gap-4">
-        <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-primary" />
-        
-        {/* Removido Separator vertical, apenas o gap já separa bem */}
-        
+    <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+      {/* Lado Esquerdo: Breadcrumbs e Trigger do Menu */}
+      <div className="flex items-center gap-2 px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 h-4" />
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="#" className="text-muted-foreground hover:text-foreground">
-                Painel
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator className="text-muted-foreground/40" />
-            <BreadcrumbItem>
-              <BreadcrumbPage className="font-medium text-primary">
-                {moduleNames[activeModule] || "Dashboard"}
+              <BreadcrumbPage className="line-clamp-1 font-medium">
+                {moduleNames[activeModule] || activeModule}
               </BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3 rounded-full bg-secondary px-4 py-1.5 transition-colors">
-          <span className={`text-sm font-medium ${isStoreOpen ? 'text-primary' : 'text-muted-foreground'}`}>
-            {isStoreOpen ? "Loja Aberta" : "Loja Fechada"}
-          </span>
-          <Switch
-            checked={isStoreOpen}
-            onCheckedChange={onStoreStatusChange}
-            className="data-[state=checked]:bg-primary"
-          />
+      {/* Lado Direito: Botão Ver Loja */}
+      {storeSlug && (
+        <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="hidden md:flex gap-2 text-muted-foreground hover:text-primary border-dashed" asChild>
+                <Link href={`/${storeSlug}`} target="_blank" title="Abrir cardápio em nova aba">
+                    <Store className="w-4 h-4" />
+                    Ver Loja Online
+                    <ExternalLink className="w-3 h-3 ml-1 opacity-50" />
+                </Link>
+            </Button>
+            
+            {/* Versão Mobile (Apenas ícone) */}
+            <Button variant="ghost" size="icon" className="md:hidden text-muted-foreground" asChild>
+                <Link href={`/${storeSlug}`} target="_blank">
+                    <ExternalLink className="w-4 h-4" />
+                </Link>
+            </Button>
         </div>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative h-10 w-10 rounded-full hover:bg-muted text-muted-foreground hover:text-primary"
-        >
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-2 top-2 flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-destructive"></span>
-          </span>
-          <span className="sr-only">Notificações</span>
-        </Button>
-      </div>
+      )}
     </header>
   )
 }

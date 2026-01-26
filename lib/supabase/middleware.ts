@@ -7,9 +7,16 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
+  // ⚠️ PREVENÇÃO DE ERRO 500:
+  // Se as variáveis não existirem, não tenta criar o cliente para não quebrar o server
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error("ERRO CRÍTICO: Variáveis de ambiente do Supabase não encontradas.")
+    return supabaseResponse
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
         getAll() {
@@ -30,38 +37,52 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Verifica se o usuário já tem sessão
+  // Verifica usuário
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   const url = request.nextUrl.clone()
-  
-  // Rotas públicas que não precisam de login
-  // IMPORTANTE: '/auth' deve ser pública para o callback funcionar
-  const publicRoutes = ['/login', '/forgot-password', '/auth', '/update-password']
-  const isPublicRoute = publicRoutes.some(route => url.pathname.startsWith(route))
-  
-  // Verifica se há um código na URL (típico de convites/recuperação)
-  const hasCode = url.searchParams.has('code')
+  const path = url.pathname
 
-  // REGRA 1: Se tiver código (convite) ou for rota de auth, deixa passar!
-  // Isso impede que o usuário seja jogado para o login antes de validar o convite.
-  if (hasCode || url.pathname.startsWith('/auth')) {
+  // 1. Definição de Rotas
+  
+  // Rotas de Autenticação (Sempre Públicas)
+  const isAuthRoute = 
+    path.startsWith('/login') || 
+    path.startsWith('/auth') || 
+    path.startsWith('/forgot-password') || 
+    path.startsWith('/register') ||
+    path.startsWith('/verify');
+
+  // Rotas Protegidas (Exigem Login)
+  // O Dashboard fica na raiz '/', o Setup e as Configurações
+  const isProtectedRoute = 
+    path === '/' || 
+    path.startsWith('/setup') || 
+    path.startsWith('/settings') ||
+    path.startsWith('/dashboard'); // Caso adicione prefixo no futuro
+
+  // 2. LÓGICA DE PROTEÇÃO
+
+  // CASO A: Usuário NÃO Logado
+  if (!user) {
+    // Se tentar acessar rota protegida (Dashboard, Settings, Setup) -> Login
+    if (isProtectedRoute) {
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+    // Se for Auth ou qualquer outra coisa (LOJA PÚBLICA /slug) -> Libera
     return supabaseResponse
   }
 
-  // REGRA 2: Se NÃO estiver logado e tentar acessar rota privada -> Login
-  if (!user && !isPublicRoute) {
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
-
-  // REGRA 3: Se JÁ estiver logado e tentar acessar Login/Recuperação -> Dashboard
-  // Mas permitimos '/update-password' para quem acabou de entrar via convite
-  if (user && (url.pathname.startsWith('/login') || url.pathname.startsWith('/forgot-password'))) {
-    url.pathname = '/'
-    return NextResponse.redirect(url)
+  // CASO B: Usuário JÁ Logado
+  if (user) {
+    // Se tentar entrar no Login ou Cadastro -> Manda pro Dashboard
+    if (isAuthRoute && !path.startsWith('/auth')) { // Deixa /auth passar para callbacks
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse
