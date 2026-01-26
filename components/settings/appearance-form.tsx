@@ -5,17 +5,17 @@ import { useThemeColor } from "@/components/theme-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { Moon, Sun, Monitor, Check, Palette, Laptop } from "lucide-react"
+import { Moon, Sun, Monitor, Check, Palette, Laptop, PaintBucket } from "lucide-react"
 
 export function AppearanceForm() {
   const { setTheme, theme } = useTheme()
   const { themeColor, setThemeColor } = useThemeColor()
 
   return (
-    <Card className="border-border">
-      <CardHeader>
+    <Card className="border-border shadow-sm">
+      <CardHeader className="pb-4">
         <div className="flex items-center gap-2">
-          <Palette className="w-5 h-5 text-primary" />
+          <PaintBucket className="w-5 h-5 text-primary" />
           <CardTitle>Aparência do Sistema</CardTitle>
         </div>
         <CardDescription>
@@ -103,28 +103,29 @@ export function AppearanceForm() {
   )
 }
 
-// Sub-componente: Cartão de Modo (Claro/Escuro)
+// --- SUB-COMPONENTES PARA ORGANIZAÇÃO ---
+
 function ThemeModeCard({ label, description, icon, active, onClick }: any) {
     return (
         <button 
             type="button"
             onClick={onClick}
             className={cn(
-                "relative flex flex-col items-start p-4 rounded-xl border-2 transition-all duration-200 text-left hover:bg-muted/30",
+                "relative flex flex-col items-start p-4 rounded-xl border-2 transition-all duration-200 text-left hover:bg-muted/30 outline-none focus:ring-2 focus:ring-primary/20",
                 active 
                   ? "border-primary bg-primary/5 ring-1 ring-primary/20" 
                   : "border-muted hover:border-primary/50"
             )}
         >
-            <div className={cn("mb-3 p-2 rounded-lg", active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+            <div className={cn("mb-3 p-2 rounded-lg transition-colors", active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
                 {icon}
             </div>
             <span className="font-semibold text-sm">{label}</span>
             <span className="text-xs text-muted-foreground mt-1">{description}</span>
             
             {active && (
-                <div className="absolute top-3 right-3 text-primary">
-                    <div className="bg-primary rounded-full p-0.5">
+                <div className="absolute top-3 right-3 text-primary animate-in fade-in zoom-in duration-300">
+                    <div className="bg-primary rounded-full p-0.5 shadow-sm">
                         <Check className="w-3 h-3 text-primary-foreground" strokeWidth={3} />
                     </div>
                 </div>
@@ -133,14 +134,13 @@ function ThemeModeCard({ label, description, icon, active, onClick }: any) {
     )
 }
 
-// Sub-componente: Cartão de Cor
 function ThemeColorCard({ hex, label, active, onClick }: any) {
     return (
         <button 
             type="button"
             onClick={onClick}
             className={cn(
-                "group relative flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all duration-200 hover:bg-muted/30",
+                "group relative flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all duration-200 hover:bg-muted/30 outline-none focus:ring-2 focus:ring-primary/20",
                 active ? "border-primary bg-primary/5" : "border-muted hover:border-primary/50"
             )}
         >
@@ -154,7 +154,7 @@ function ThemeColorCard({ hex, label, active, onClick }: any) {
               {active && <Check className="text-white w-5 h-5 drop-shadow-md" strokeWidth={3} />}
             </div>
             
-            <span className={cn("text-xs font-medium", active ? "text-primary font-bold" : "text-muted-foreground")}>
+            <span className={cn("text-xs font-medium transition-colors", active ? "text-primary font-bold" : "text-muted-foreground")}>
               {label}
             </span>
         </button>
