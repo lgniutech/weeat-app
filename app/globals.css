@@ -3,7 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* --- CONFIGURAÇÃO PADRÃO (AZUL - WEEAT) --- */
+/* --- CONFIGURAÇÃO ORIGINAL (AZUL - WEEAT) --- */
 :root {
   /* Paleta definida: 02B5FF, FEFEFE, 8CDCFF, 00B4FF */
   
@@ -27,7 +27,6 @@
   --muted: #F1F5F9;
   --muted-foreground: #64748B;
   
-  /* Azul Acento */
   --accent: #8CDCFF;
   --accent-foreground: #00364D;
   
@@ -40,13 +39,14 @@
   
   --radius: 0.625rem;
   
-  /* Cores de Gráficos e Sidebar */
+  /* Cores de Gráficos */
   --chart-1: #02B5FF;
   --chart-2: #8CDCFF;
   --chart-3: #00B4FF;
   --chart-4: #38BDF8;
   --chart-5: #7DD3FC;
   
+  /* SIDEBAR ORIGINAL */
   --sidebar: #FEFEFE;
   --sidebar-foreground: #0F172A;
   --sidebar-primary: #02B5FF;
@@ -92,6 +92,7 @@
   --chart-4: #38BDF8;
   --chart-5: #7DD3FC;
   
+  /* SIDEBAR DARK */
   --sidebar: #121212;
   --sidebar-foreground: #FAFAFA;
   --sidebar-primary: #02B5FF;
@@ -102,67 +103,84 @@
   --sidebar-ring: #00B4FF;
 }
 
-/* --- TEMAS PERSONALIZADOS (ADMIN) --- */
-/* Estes sobrescrevem as variáveis acima quando a classe é adicionada ao body */
+/* --- TEMAS DO PAINEL ADMIN (ADMIN THEMES) --- */
+/* Aqui forçamos a troca das variáveis --primary E --sidebar-primary */
 
-/* Tema Zinco (Preto e Branco) */
+/* 1. ZINCO (Preto/Branco) */
 body.theme-zinc {
   --primary: #18181B;
-  --primary-foreground: #FAFAFA;
   --ring: #18181B;
   --sidebar-primary: #18181B;
   --sidebar-ring: #18181B;
+  --sidebar-accent-foreground: #18181B; /* Ícones ativos ficam pretos */
 }
 .dark body.theme-zinc {
   --primary: #FAFAFA;
   --primary-foreground: #18181B;
   --ring: #FAFAFA;
   --sidebar-primary: #FAFAFA;
+  --sidebar-primary-foreground: #18181B;
   --sidebar-ring: #FAFAFA;
+  --sidebar-accent-foreground: #FAFAFA;
 }
 
-/* Tema Vermelho (iFood vibes) */
+/* 2. VERMELHO (Red) */
 body.theme-red {
   --primary: #EA1D2C;
-  --primary-foreground: #FFFFFF;
   --ring: #EA1D2C;
   --sidebar-primary: #EA1D2C;
   --sidebar-ring: #EA1D2C;
+  --sidebar-accent-foreground: #EA1D2C;
 }
+/* No Dark mode vermelho, mantemos o vermelho vibrante */
 .dark body.theme-red {
   --primary: #EA1D2C;
-  --primary-foreground: #FFFFFF;
+  --ring: #EA1D2C;
+  --sidebar-primary: #EA1D2C;
+  --sidebar-ring: #EA1D2C;
+  --sidebar-accent-foreground: #EA1D2C;
 }
 
-/* Tema Laranja */
+/* 3. LARANJA (Orange) */
 body.theme-orange {
   --primary: #F97316;
-  --primary-foreground: #FFFFFF;
   --ring: #F97316;
   --sidebar-primary: #F97316;
   --sidebar-ring: #F97316;
+  --sidebar-accent-foreground: #F97316;
 }
 .dark body.theme-orange {
   --primary: #FB923C;
+  --ring: #FB923C;
+  --sidebar-primary: #FB923C;
+  --sidebar-ring: #FB923C;
+  --sidebar-accent-foreground: #FB923C;
 }
 
-/* Tema Verde */
+/* 4. VERDE (Green) */
 body.theme-green {
   --primary: #16A34A;
-  --primary-foreground: #FFFFFF;
   --ring: #16A34A;
   --sidebar-primary: #16A34A;
   --sidebar-ring: #16A34A;
+  --sidebar-accent-foreground: #16A34A;
 }
 .dark body.theme-green {
   --primary: #22C55E;
+  --ring: #22C55E;
+  --sidebar-primary: #22C55E;
+  --sidebar-ring: #22C55E;
+  --sidebar-accent-foreground: #22C55E;
 }
 
-/* Tema Azul (Padrão - apenas reforço) */
+/* 5. AZUL (Blue - Padrão) */
 body.theme-blue {
+  /* Não precisa sobrescrever muito pois já é o default, mas garante consistência */
   --primary: #02B5FF;
-  --primary-foreground: #FFFFFF;
   --ring: #02B5FF;
+  --sidebar-primary: #02B5FF;
+  --sidebar-ring: #02B5FF;
+  --sidebar-accent-foreground: #02B5FF;
 }
 
 

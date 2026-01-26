@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Palette, Moon, Sun, Monitor } from "lucide-react"
+import { Palette, Moon, Sun, Monitor, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export function ThemeSettings() {
@@ -20,55 +20,90 @@ export function ThemeSettings() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" className="relative h-9 w-9">
-          <Palette className="h-[1.2rem] w-[1.2rem] text-primary transition-colors" />
+        <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-primary">
+          <Palette className="h-5 w-5" />
           <span className="sr-only">Alterar tema</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60 p-2">
+      <DropdownMenuContent align="end" className="w-56">
         
-        {/* Modo Claro/Escuro */}
-        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Modo</DropdownMenuLabel>
-        <div className="grid grid-cols-3 gap-2 mb-2">
+        {/* Seção de MODO (Claro/Escuro) */}
+        <DropdownMenuLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+            Modo
+        </DropdownMenuLabel>
+        <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-lg mb-2">
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="sm" 
             onClick={() => setTheme("light")}
-            className={cn("justify-start px-2", theme === "light" && "border-primary bg-primary/10")}
+            className={cn("flex-1 h-8 rounded-md hover:bg-background hover:text-primary transition-all", theme === "light" && "bg-white text-primary shadow-sm")}
           >
-            <Sun className="h-4 w-4 mr-2" />
-            Claro
+            <Sun className="h-4 w-4 mr-1.5" />
+            <span className="text-xs font-medium">Claro</span>
           </Button>
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="sm" 
             onClick={() => setTheme("dark")}
-            className={cn("justify-start px-2", theme === "dark" && "border-primary bg-primary/10")}
+            className={cn("flex-1 h-8 rounded-md hover:bg-background hover:text-primary transition-all", theme === "dark" && "bg-black text-white shadow-sm")}
           >
-            <Moon className="h-4 w-4 mr-2" />
-            Escuro
+            <Moon className="h-4 w-4 mr-1.5" />
+            <span className="text-xs font-medium">Escuro</span>
           </Button>
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="sm" 
             onClick={() => setTheme("system")}
-            className={cn("justify-start px-2", theme === "system" && "border-primary bg-primary/10")}
+            className={cn("h-8 px-2 rounded-md hover:bg-background transition-all", theme === "system" && "bg-background shadow-sm")}
+            title="Automático"
           >
-            <Monitor className="h-4 w-4 mr-2" />
-            Auto
+            <Monitor className="h-4 w-4" />
           </Button>
         </div>
 
         <DropdownMenuSeparator />
 
-        {/* Cor de Destaque */}
-        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground mt-2">Cor do Painel</DropdownMenuLabel>
-        <div className="grid grid-cols-5 gap-2 pt-1 pb-2">
-          <ColorBtn color="theme-blue" bg="bg-[#02B5FF]" active={themeColor === "theme-blue"} onClick={() => setThemeColor("theme-blue")} label="Azul" />
-          <ColorBtn color="theme-zinc" bg="bg-zinc-800" active={themeColor === "theme-zinc"} onClick={() => setThemeColor("theme-zinc")} label="Zinco" />
-          <ColorBtn color="theme-red" bg="bg-red-600" active={themeColor === "theme-red"} onClick={() => setThemeColor("theme-red")} label="Vermelho" />
-          <ColorBtn color="theme-orange" bg="bg-orange-500" active={themeColor === "theme-orange"} onClick={() => setThemeColor("theme-orange")} label="Laranja" />
-          <ColorBtn color="theme-green" bg="bg-green-600" active={themeColor === "theme-green"} onClick={() => setThemeColor("theme-green")} label="Verde" />
+        {/* Seção de COR DE DESTAQUE */}
+        <DropdownMenuLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 mt-2">
+            Cor do Painel
+        </DropdownMenuLabel>
+        
+        <div className="grid grid-cols-5 gap-2 px-1 pb-2">
+           <ColorOption 
+             color="theme-blue" 
+             hex="#02B5FF" 
+             label="Azul" 
+             active={themeColor === "theme-blue"} 
+             onClick={() => setThemeColor("theme-blue")} 
+           />
+           <ColorOption 
+             color="theme-zinc" 
+             hex="#18181B" 
+             label="Zinco" 
+             active={themeColor === "theme-zinc"} 
+             onClick={() => setThemeColor("theme-zinc")} 
+           />
+           <ColorOption 
+             color="theme-red" 
+             hex="#EA1D2C" 
+             label="Red" 
+             active={themeColor === "theme-red"} 
+             onClick={() => setThemeColor("theme-red")} 
+           />
+           <ColorOption 
+             color="theme-orange" 
+             hex="#F97316" 
+             label="Orange" 
+             active={themeColor === "theme-orange"} 
+             onClick={() => setThemeColor("theme-orange")} 
+           />
+           <ColorOption 
+             color="theme-green" 
+             hex="#16A34A" 
+             label="Green" 
+             active={themeColor === "theme-green"} 
+             onClick={() => setThemeColor("theme-green")} 
+           />
         </div>
 
       </DropdownMenuContent>
@@ -76,17 +111,25 @@ export function ThemeSettings() {
   )
 }
 
-function ColorBtn({ bg, active, onClick, label }: any) {
-  return (
-    <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={onClick}>
-      <div className={cn(
-        "h-8 w-8 rounded-full shadow-sm flex items-center justify-center transition-all",
-        bg,
-        active ? "ring-2 ring-offset-2 ring-primary scale-110" : "hover:scale-105"
-      )}>
-        {active && <div className="h-2.5 w-2.5 bg-white rounded-full shadow-sm" />}
-      </div>
-      {/* <span className="text-[10px] text-muted-foreground group-hover:text-foreground">{label}</span> */}
-    </div>
-  )
+function ColorOption({ hex, active, onClick, label }: any) {
+    return (
+        <button 
+            onClick={onClick}
+            className={cn(
+                "group relative flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 border-2",
+                active ? "border-primary scale-110 shadow-sm" : "border-transparent hover:scale-110 hover:border-muted-foreground/30"
+            )}
+            title={label}
+        >
+            <div 
+                className="w-full h-full rounded-full border-2 border-white dark:border-zinc-900" 
+                style={{ backgroundColor: hex }}
+            />
+            {active && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 text-white drop-shadow-md" strokeWidth={3} />
+                </div>
+            )}
+        </button>
+    )
 }
