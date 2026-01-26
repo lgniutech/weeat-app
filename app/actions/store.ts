@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-// Função auxiliar para traduzir erros
+// Função auxiliar para traduzir erros do banco de dados para português amigável
 function translateError(errorMsg: string) {
   if (errorMsg.includes("duplicate key")) {
      if (errorMsg.includes("stores_slug_key")) return "O nome/link desta loja já está em uso."
@@ -16,6 +16,7 @@ function translateError(errorMsg: string) {
   return errorMsg;
 }
 
+// --- 1. CRIAÇÃO DE LOJA (Setup Inicial) ---
 export async function createStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
@@ -36,6 +37,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       return { error: "Preencha todos os campos obrigatórios." };
     }
 
+    // Atualiza dados do Usuário (Dono)
     const userUpdates: any = { data: { full_name: fullName } };
     if (password) {
       if (password.length < 6) return { error: "A senha deve ter no mínimo 6 caracteres." };
@@ -45,9 +47,11 @@ export async function createStoreAction(prevState: any, formData: FormData) {
     const { error: userError } = await supabase.auth.updateUser(userUpdates);
     if (userError) throw new Error(translateError(userError.message));
 
+    // Gera Slug (Link da loja)
     const randomSuffix = Math.floor(Math.random() * 10000);
     const generatedSlug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + `-${randomSuffix}`;
 
+    // Upload do Logo (Server-side para o setup inicial é seguro pois é só 1 arquivo)
     let logoUrl = "";
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
@@ -59,6 +63,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       }
     }
 
+    // Cria a Loja
     const { error } = await supabase.from("stores").insert({
       owner_id: user.id,
       name,
@@ -79,6 +84,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   redirect("/");
 }
 
+// --- 2. ATUALIZAÇÃO BÁSICA (Dados da Loja - Modal) ---
 export async function updateStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
@@ -94,6 +100,7 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Sessão expirada. Recarregue a página." };
 
+    // Atualiza Usuário
     const authUpdates: any = {};
     if (fullName) authUpdates.data = { full_name: fullName };
     
@@ -108,12 +115,14 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       if (userError) throw new Error(translateError(userError.message));
     }
 
+    // Prepara dados da Loja
     let updateData: any = {
       name,
       whatsapp: whatsapp.replace(/\D/g, ''),
       settings: { business_hours: JSON.parse(businessHours) }
     };
 
+    // Upload Logo (Mantido server-side aqui por ser edição leve)
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
@@ -139,17 +148,19 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
-// --- Atualização de Design da Loja (Banner, Bio, Cores) ---
+// --- 3. ATUALIZAÇÃO DE DESIGN E APARÊNCIA (Otimizada para Client-Side Upload) ---
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
     
+    // Captura campos de texto
     const name = formData.get("name") as string;
     const bio = formData.get("bio") as string;
     const primaryColor = formData.get("primaryColor") as string;
     const fontFamily = formData.get("fontFamily") as string;
-    const bannerOrderJson = formData.get("bannerOrder") as string;
-    const newBannerFiles = formData.getAll("newBanners") as File[];
-    const logoFile = formData.get("logo") as File;
+    
+    // Captura URLs (Já processadas no Front-end)
+    const logoUrl = formData.get("logoUrl") as string;
+    const bannersJson = formData.get("bannersJson") as string;
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -162,62 +173,36 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
         font_family: fontFamily
       };
   
-      // 1. Upload do LOGO
-      if (logoFile && logoFile.size > 0) {
-        const fileExt = logoFile.name.split('.').pop();
-        const fileName = `${user.id}-${Date.now()}-logo.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('store-assets').upload(fileName, logoFile, { upsert: true });
-        if (!uploadError) {
-          const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
-          updateData.logo_url = data.publicUrl;
-        }
+      // Se veio URL de logo nova, atualiza
+      if (logoUrl) {
+        updateData.logo_url = logoUrl;
       }
 
-      // 2. Processar Banners
-      let finalBanners: string[] = [];
-      let newFileIndex = 0;
-
-      if (bannerOrderJson) {
-        try {
-            const orderList = JSON.parse(bannerOrderJson);
-            for (const item of orderList) {
-                if (item === "__NEW__") {
-                    const file = newBannerFiles[newFileIndex];
-                    newFileIndex++;
-                    if (file && file.size > 0) {
-                        const fileExt = file.name.split('.').pop();
-                        const fileName = `banner-${user.id}-${Date.now()}-${Math.random()}.${fileExt}`;
-                        const { error: uploadError } = await supabase.storage
-                            .from('store-assets')
-                            .upload(fileName, file, { upsert: true });
-                        if (!uploadError) {
-                            const { data } = supabase.storage.from('store-assets').getPublicUrl(fileName);
-                            finalBanners.push(data.publicUrl);
-                        }
-                    }
-                } else {
-                    finalBanners.push(item);
-                }
-            }
-        } catch (e) {
-            console.error("Erro ordem banners", e);
-        }
-      }
-
-      if (bannerOrderJson || (newBannerFiles && newBannerFiles.length > 0)) {
-         updateData.banners = finalBanners;
-         updateData.banner_url = finalBanners.length > 0 ? finalBanners[0] : null;
+      // Se vieram banners, processa e atualiza
+      if (bannersJson) {
+         try {
+             const banners = JSON.parse(bannersJson);
+             updateData.banners = banners;
+             // Define o primeiro banner como capa principal
+             updateData.banner_url = banners.length > 0 ? banners[0] : null;
+         } catch (e) {
+             console.error("Erro ao processar JSON de banners", e);
+         }
       }
   
+      // Atualiza no banco
       const { error } = await supabase
         .from("stores")
         .update(updateData)
         .eq("owner_id", user.id);
   
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("Erro Supabase update:", error);
+        throw new Error(error.message);
+      }
   
     } catch (error: any) {
-      console.error(error);
+      console.error("Erro updateStoreDesignAction:", error);
       return { error: "Erro ao atualizar: " + error.message };
     }
   
@@ -225,7 +210,7 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
     return { success: "Loja atualizada com sucesso!" };
 }
 
-// --- NOVO: Função para Salvar Preferências de Aparência (Tema/Cor) ---
+// --- 4. PREFERÊNCIAS DE TEMA (Modo Escuro/Claro) ---
 export async function updateStoreSettings(storeId: string, settings: { theme_mode?: string, theme_color?: string }) {
   const supabase = await createClient();
   
@@ -237,7 +222,7 @@ export async function updateStoreSettings(storeId: string, settings: { theme_mod
       .from("stores")
       .update(settings)
       .eq("id", storeId)
-      .eq("owner_id", user.id);
+      .eq("owner_id", user.id); // Garante segurança (só o dono altera)
 
     if (error) throw new Error(error.message);
     
