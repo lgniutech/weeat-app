@@ -139,11 +139,11 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
-// --- ATUALIZADO: Inclui Edição de NOME ---
+// --- Atualização de Design da Loja (Banner, Bio, Cores) ---
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
     
-    const name = formData.get("name") as string; // NOVO: Captura o nome
+    const name = formData.get("name") as string;
     const bio = formData.get("bio") as string;
     const primaryColor = formData.get("primaryColor") as string;
     const fontFamily = formData.get("fontFamily") as string;
@@ -156,7 +156,7 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
       if (!user) return { error: "Sessão expirada." };
   
       let updateData: any = {
-        name, // NOVO: Atualiza o nome
+        name,
         bio,
         primary_color: primaryColor,
         font_family: fontFamily
@@ -223,4 +223,29 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
   
     revalidatePath("/");
     return { success: "Loja atualizada com sucesso!" };
+}
+
+// --- NOVO: Função para Salvar Preferências de Aparência (Tema/Cor) ---
+export async function updateStoreSettings(storeId: string, settings: { theme_mode?: string, theme_color?: string }) {
+  const supabase = await createClient();
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Não autorizado" };
+
+    const { error } = await supabase
+      .from("stores")
+      .update(settings)
+      .eq("id", storeId)
+      .eq("owner_id", user.id);
+
+    if (error) throw new Error(error.message);
+    
+    revalidatePath("/");
+    return { success: true };
+
+  } catch (error: any) {
+    console.error("Erro ao salvar tema:", error);
+    return { error: error.message };
+  }
 }

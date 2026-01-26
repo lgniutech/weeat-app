@@ -1,18 +1,19 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useTheme } from "next-themes"
+import { useThemeColor } from "@/components/theme-provider"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { EmptyState } from "@/components/empty-state"
-// import { ThemeSettings } from "@/components/theme-settings" // REMOVIDO: Não usaremos mais o dropdown
 import { StoreSetupModal } from "@/components/modals/store-setup-modal"
 import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
 
 // Importação dos Módulos
 import { StoreAppearance } from "@/components/modules/store-appearance"
 import { MenuManager } from "@/components/modules/menu-manager"
-import { AppearanceForm } from "@/components/settings/appearance-form" // ADICIONADO: O formulário completo
+import { AppearanceForm } from "@/components/settings/appearance-form"
 
 interface DashboardClientProps {
   store: any
@@ -29,10 +30,21 @@ export default function DashboardClient({
 }: DashboardClientProps) {
   const [activeModule, setActiveModule] = useState("dashboard")
   const [isStoreOpen, setIsStoreOpen] = useState(true)
-  
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
 
-  // Efeito para interceptar o clique em "Dados da Loja" e abrir o modal
+  // Hooks de Tema para Sincronização
+  const { setTheme } = useTheme()
+  const { setThemeColor } = useThemeColor()
+
+  // 1. Sincronizar Tema do Banco de Dados ao Carregar
+  useEffect(() => {
+    if (store) {
+      if (store.theme_mode) setTheme(store.theme_mode)
+      if (store.theme_color) setThemeColor(store.theme_color)
+    }
+  }, [store, setTheme, setThemeColor])
+
+  // 2. Interceptar clique em "Dados da Loja" e abrir o modal
   useEffect(() => {
     if (activeModule === 'store-settings') {
       setIsSettingsModalOpen(true)
@@ -46,8 +58,8 @@ export default function DashboardClient({
   const renderContent = () => {
     switch (activeModule) {
       case 'tema':
-        // ALTERADO: Agora renderiza a página completa de Aparência em vez do Dropdown
-        return <AppearanceForm />
+        // Passamos o ID da loja para salvar as alterações
+        return <AppearanceForm storeId={store?.id} />
       case 'store-appearance':
         return <StoreAppearance store={store} />
       case 'menu-products':

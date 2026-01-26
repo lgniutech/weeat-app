@@ -5,11 +5,34 @@ import { useThemeColor } from "@/components/theme-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { Moon, Sun, Monitor, Check, Palette, Laptop, PaintBucket } from "lucide-react"
+import { Moon, Sun, Laptop, Check, PaintBucket } from "lucide-react"
+import { updateStoreSettings } from "@/app/actions/store"
 
-export function AppearanceForm() {
+interface AppearanceFormProps {
+  storeId?: string
+}
+
+export function AppearanceForm({ storeId }: AppearanceFormProps) {
   const { setTheme, theme } = useTheme()
   const { themeColor, setThemeColor } = useThemeColor()
+
+  // Função para salvar o TEMA (Claro/Escuro)
+  const handleModeChange = async (mode: string) => {
+    setTheme(mode) // Atualiza visualmente na hora
+    
+    if (storeId) {
+      await updateStoreSettings(storeId, { theme_mode: mode })
+    }
+  }
+
+  // Função para salvar a COR
+  const handleColorChange = async (color: string) => {
+    setThemeColor(color as any) // Atualiza visualmente na hora
+    
+    if (storeId) {
+       await updateStoreSettings(storeId, { theme_color: color })
+    }
+  }
 
   return (
     <Card className="border-border shadow-sm">
@@ -35,21 +58,21 @@ export function AppearanceForm() {
                     description="Visual limpo e iluminado"
                     icon={<Sun className="w-6 h-6" />} 
                     active={theme === 'light'} 
-                    onClick={() => setTheme("light")} 
+                    onClick={() => handleModeChange("light")} 
                 />
                 <ThemeModeCard 
                     label="Escuro" 
                     description="Confortável para pouca luz"
                     icon={<Moon className="w-6 h-6" />} 
                     active={theme === 'dark'} 
-                    onClick={() => setTheme("dark")} 
+                    onClick={() => handleModeChange("dark")} 
                 />
                 <ThemeModeCard 
                     label="Automático" 
                     description="Segue o sistema operacional"
                     icon={<Laptop className="w-6 h-6" />} 
                     active={theme === 'system'} 
-                    onClick={() => setTheme("system")} 
+                    onClick={() => handleModeChange("system")} 
                 />
             </div>
         </div>
@@ -61,39 +84,34 @@ export function AppearanceForm() {
             </Label>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <ThemeColorCard 
-                  color="theme-blue" 
                   hex="#02B5FF" 
                   label="Azul WeEat" 
                   active={themeColor === 'theme-blue'} 
-                  onClick={() => setThemeColor('theme-blue')} 
+                  onClick={() => handleColorChange('theme-blue')} 
                 />
                 <ThemeColorCard 
-                  color="theme-zinc" 
                   hex="#18181B" 
                   label="Zinco" 
                   active={themeColor === 'theme-zinc'} 
-                  onClick={() => setThemeColor('theme-zinc')} 
+                  onClick={() => handleColorChange('theme-zinc')} 
                 />
                 <ThemeColorCard 
-                  color="theme-red" 
                   hex="#EA1D2C" 
                   label="Vermelho" 
                   active={themeColor === 'theme-red'} 
-                  onClick={() => setThemeColor('theme-red')} 
+                  onClick={() => handleColorChange('theme-red')} 
                 />
                 <ThemeColorCard 
-                  color="theme-orange" 
                   hex="#F97316" 
                   label="Laranja" 
                   active={themeColor === 'theme-orange'} 
-                  onClick={() => setThemeColor('theme-orange')} 
+                  onClick={() => handleColorChange('theme-orange')} 
                 />
                 <ThemeColorCard 
-                  color="theme-green" 
                   hex="#16A34A" 
                   label="Verde" 
                   active={themeColor === 'theme-green'} 
-                  onClick={() => setThemeColor('theme-green')} 
+                  onClick={() => handleColorChange('theme-green')} 
                 />
             </div>
         </div>
@@ -102,8 +120,6 @@ export function AppearanceForm() {
     </Card>
   )
 }
-
-// --- SUB-COMPONENTES PARA ORGANIZAÇÃO ---
 
 function ThemeModeCard({ label, description, icon, active, onClick }: any) {
     return (
