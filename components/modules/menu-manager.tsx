@@ -1,8 +1,17 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { useActionState } from "react" // Nota: em Next 15 pode ser useActionState, em 14 useFormState. Ajuste conforme sua versão.
-import { createCategoryAction, deleteCategoryAction, createProductAction, deleteProductAction, toggleProductAvailabilityAction, getStoreIngredientsAction, createIngredientAction } from "@/app/actions/menu"
+import { useState, useEffect } from "react"
+import { useActionState } from "react"
+import { 
+    createCategoryAction, 
+    deleteCategoryAction, 
+    createProductAction, 
+    updateProductAction, 
+    deleteProductAction, 
+    toggleProductAvailabilityAction, 
+    getStoreIngredientsAction, 
+    createIngredientAction 
+} from "@/app/actions/menu"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,17 +20,17 @@ import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2, X, Check } from "lucide-react"
+import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2, X, Pencil, Search } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // --- COMPONENTE DE SELEÇÃO DE INGREDIENTES ---
-function IngredientSelector({ storeId, onSelectionChange }: { storeId: string, onSelectionChange: (ids: string[]) => void }) {
+function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] }: { storeId: string, onSelectionChange: (ids: string[]) => void, initialSelection?: string[] }) {
     const [input, setInput] = useState("")
     const [allIngredients, setAllIngredients] = useState<any[]>([])
-    const [selectedIds, setSelectedIds] = useState<string[]>([])
+    const [selectedIds, setSelectedIds] = useState<string[]>(initialSelection)
     const [loading, setLoading] = useState(false)
 
-    // Carrega ingredientes existentes ao montar
+    // Carrega ingredientes
     useEffect(() => {
         getStoreIngredientsAction(storeId).then(setAllIngredients)
     }, [storeId])
@@ -30,6 +39,9 @@ function IngredientSelector({ storeId, onSelectionChange }: { storeId: string, o
     useEffect(() => {
         onSelectionChange(selectedIds)
     }, [selectedIds, onSelectionChange])
+
+    // Normaliza strings para busca (remove acentos e lowercase)
+    const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 
     const handleKeyDown = async (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
@@ -43,7 +55,7 @@ function IngredientSelector({ storeId, onSelectionChange }: { storeId: string, o
         const name = input.trim()
         
         // Verifica se já existe na lista (local)
-        const existing = allIngredients.find(i => i.name.toLowerCase() === name.toLowerCase())
+        const existing = allIngredients.find(i => normalize(i.name) === normalize(name))
         
         if (existing) {
             if (!selectedIds.includes(existing.id)) {
@@ -56,7 +68,7 @@ function IngredientSelector({ storeId, onSelectionChange }: { storeId: string, o
             try {
                 const newIng = await createIngredientAction(storeId, name)
                 if (newIng) {
-                    setAllIngredients([...allIngredients, newIng])
+                    setAllIngredients(prev => [...prev, newIng].sort((a,b) => a.name.localeCompare(b.name)))
                     setSelectedIds([...selectedIds, newIng.id])
                     setInput("")
                 }
@@ -76,18 +88,25 @@ function IngredientSelector({ storeId, onSelectionChange }: { storeId: string, o
         }
     }
 
+    // Filtra sugestões baseado no input
+    const filteredIngredients = allIngredients.filter(i => 
+        !selectedIds.includes(i.id) && // Não mostrar os já selecionados
+        (input === "" || normalize(i.name).includes(normalize(input))) // Filtro por texto
+    )
+
     return (
         <div className="space-y-3">
             <Label>Ingredientes (Composição)</Label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 relative">
                 <Input 
-                    placeholder="Digite e tecle Enter (Ex: Bacon)" 
+                    placeholder="Digite e tecle Enter para criar..." 
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     disabled={loading}
+                    className="pr-10"
                 />
-                <Button type="button" onClick={addIngredient} disabled={loading || !input.trim()} size="icon" variant="secondary">
+                <Button type="button" onClick={addIngredient} disabled={loading || !input.trim()} size="icon" variant="secondary" className="absolute right-0 top-0 h-full rounded-l-none">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 </Button>
             </div>
@@ -105,30 +124,35 @@ function IngredientSelector({ storeId, onSelectionChange }: { storeId: string, o
                 ))}
             </div>
             
-            {/* Sugestões (Não selecionados) */}
-            {allIngredients.length > selectedIds.length && (
-                <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Sugestões:</p>
-                    <div className="flex flex-wrap gap-2">
-                        {allIngredients.filter(i => !selectedIds.includes(i.id)).map(ing => (
-                            <Badge 
-                                key={ing.id} 
-                                variant="outline" 
-                                className="cursor-pointer hover:bg-muted hover:border-primary/50 transition-all"
-                                onClick={() => toggleSelection(ing.id)}
-                            >
-                                <Plus className="h-3 w-3 mr-1 opacity-50" />
-                                {ing.name}
-                            </Badge>
-                        ))}
-                    </div>
+            {/* Lista Filtrada (Ingredientes Cadastrados) */}
+            <div className="space-y-2 pt-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                    <Search className="w-3 h-3" /> Ingredientes Cadastrados
+                </p>
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
+                    {filteredIngredients.length === 0 && (
+                        <span className="text-xs text-muted-foreground italic">
+                            {input ? "Nenhum ingrediente encontrado." : "Nenhum outro ingrediente disponível."}
+                        </span>
+                    )}
+                    {filteredIngredients.map(ing => (
+                        <Badge 
+                            key={ing.id} 
+                            variant="outline" 
+                            className="cursor-pointer hover:bg-muted hover:border-primary/50 transition-all active:scale-95"
+                            onClick={() => toggleSelection(ing.id)}
+                        >
+                            <Plus className="h-3 w-3 mr-1 opacity-50" />
+                            {ing.name}
+                        </Badge>
+                    ))}
                 </div>
-            )}
+            </div>
         </div>
     )
 }
 
-// --- FORMULÁRIOS WRAPPERS ---
+// --- FORMULÁRIOS ---
 
 function AddCategoryForm({ storeId }: { storeId: string }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -148,7 +172,6 @@ function AddCategoryForm({ storeId }: { storeId: string }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Nova Categoria</DialogTitle>
-          <DialogDescription>Ex: Lanches, Bebidas, Sobremesas</DialogDescription>
         </DialogHeader>
         <form action={action} className="space-y-4 py-2">
             <input type="hidden" name="storeId" value={storeId} />
@@ -174,7 +197,7 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
     useEffect(() => {
         if (state?.success) {
             setIsOpen(false)
-            setSelectedIngredients([]) // Reset
+            setSelectedIngredients([]) 
         }
     }, [state])
 
@@ -191,13 +214,12 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
                 </DialogHeader>
                 <form action={action} className="space-y-6">
                     <input type="hidden" name="storeId" value={storeId} />
-                    {/* Campo oculto para enviar o JSON dos ingredientes */}
                     <input type="hidden" name="ingredients" value={JSON.stringify(selectedIngredients)} />
                     
                     <div className="grid grid-cols-2 gap-4">
                          <div className="space-y-2">
                             <Label>Categoria</Label>
-                            <select name="categoryId" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" required>
+                            <select name="categoryId" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
                                 {categories.map(c => (
                                     <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
@@ -219,7 +241,6 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
                         <Textarea name="description" placeholder="Uma breve descrição..." rows={2} />
                     </div>
 
-                    {/* SELETOR DE INGREDIENTES */}
                     <div className="p-4 bg-slate-50 rounded-lg border">
                         <IngredientSelector storeId={storeId} onSelectionChange={setSelectedIngredients} />
                     </div>
@@ -233,6 +254,94 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
                     
                     <Button type="submit" className="w-full" disabled={isPending}>
                         {isPending ? <Loader2 className="animate-spin" /> : "Salvar Produto"}
+                    </Button>
+                </form>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function EditProductForm({ product, categories, storeId }: { product: any, categories: any[], storeId: string }) {
+    const [state, action, isPending] = useActionState(updateProductAction, null)
+    const [isOpen, setIsOpen] = useState(false)
+    const [selectedIngredients, setSelectedIngredients] = useState<string[]>(product.ingredients?.map((i: any) => i.id) || [])
+
+    useEffect(() => {
+        if (state?.success) {
+            setIsOpen(false)
+        }
+    }, [state])
+
+    // Reseta o estado quando o modal abre (para garantir dados frescos se mudarem externamente)
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedIngredients(product.ingredients?.map((i: any) => i.id) || [])
+        }
+    }, [isOpen, product])
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">
+                    <Pencil className="h-4 w-4" />
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Editar Produto</DialogTitle>
+                </DialogHeader>
+                <form action={action} className="space-y-6">
+                    <input type="hidden" name="productId" value={product.id} />
+                    <input type="hidden" name="ingredients" value={JSON.stringify(selectedIngredients)} />
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <Label>Categoria</Label>
+                            <select 
+                                name="categoryId" 
+                                defaultValue={product.category_id}
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" 
+                                required
+                            >
+                                {categories.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                         </div>
+                         <div className="space-y-2">
+                            <Label>Preço (R$)</Label>
+                            <Input name="price" defaultValue={product.price} required />
+                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Nome do Produto</Label>
+                        <Input name="name" defaultValue={product.name} required />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Descrição</Label>
+                        <Textarea name="description" defaultValue={product.description || ""} rows={2} />
+                    </div>
+
+                    <div className="p-4 bg-slate-50 rounded-lg border">
+                        <IngredientSelector 
+                            storeId={storeId} 
+                            onSelectionChange={setSelectedIngredients} 
+                            initialSelection={selectedIngredients}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Alterar Foto (Opcional)</Label>
+                        <Input type="file" name="image" accept="image/*" />
+                        {product.image_url && <p className="text-xs text-muted-foreground mt-1">Já possui imagem cadastrada.</p>}
+                    </div>
+
+                    {state?.error && <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>}
+                    
+                    <Button type="submit" className="w-full" disabled={isPending}>
+                        {isPending ? <Loader2 className="animate-spin" /> : "Salvar Alterações"}
                     </Button>
                 </form>
             </DialogContent>
@@ -332,7 +441,6 @@ export function MenuManager({ store, categories }: { store: any, categories: any
                                             </div>
                                             <p className="text-xs text-muted-foreground truncate">{product.description || "Sem descrição"}</p>
                                             
-                                            {/* Exibição dos Ingredientes no Card do Admin */}
                                             {product.ingredients && product.ingredients.length > 0 && (
                                                 <div className="flex flex-wrap gap-1 mt-1">
                                                     {product.ingredients.slice(0, 3).map((i: any) => (
@@ -347,9 +455,13 @@ export function MenuManager({ store, categories }: { store: any, categories: any
                                             </p>
                                         </div>
 
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1">
                                             <ProductToggle id={product.id} isAvailable={product.is_available} />
                                             <div className="h-8 w-[1px] bg-border mx-1" />
+                                            
+                                            {/* BOTÃO EDITAR */}
+                                            <EditProductForm product={product} categories={categories} storeId={store.id} />
+                                            
                                             <DeleteProductBtn id={product.id} />
                                         </div>
                                     </Card>

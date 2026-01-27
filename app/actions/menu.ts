@@ -43,7 +43,7 @@ export async function deleteCategoryAction(categoryId: string) {
   return { success: true };
 }
 
-// --- INGREDIENTES (Novo) ---
+// --- INGREDIENTES ---
 
 export async function getStoreIngredientsAction(storeId: string) {
     const supabase = await createClient();
@@ -65,6 +65,7 @@ export async function createIngredientAction(storeId: string, name: string) {
 
 // --- PRODUTOS ---
 
+// CRIAÇÃO
 export async function createProductAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
 
@@ -72,7 +73,7 @@ export async function createProductAction(prevState: any, formData: FormData) {
   const categoryId = formData.get("categoryId") as string;
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
-  const ingredientsJson = formData.get("ingredients") as string; // Recebe JSON de IDs
+  const ingredientsJson = formData.get("ingredients") as string;
   
   const rawPrice = formData.get("price") as string;
   const price = parseFloat(rawPrice.replace("R$", "").replace(/\./g, "").replace(",", "."));
@@ -95,7 +96,6 @@ export async function createProductAction(prevState: any, formData: FormData) {
     }
   }
 
-  // 1. Cria o Produto
   const { data: product, error } = await supabase.from("products").insert({
     store_id: storeId,
     category_id: categoryId,
@@ -110,7 +110,6 @@ export async function createProductAction(prevState: any, formData: FormData) {
     return { error: "Erro ao criar produto." };
   }
 
-  // 2. Vincula Ingredientes (se houver)
   if (ingredientsJson) {
       try {
           const ingredientIds = JSON.parse(ingredientsJson);
@@ -119,9 +118,7 @@ export async function createProductAction(prevState: any, formData: FormData) {
                   product_id: product.id,
                   ingredient_id: id
               }));
-              
-              const { error: ingError } = await supabase.from("product_ingredients").insert(relationData);
-              if (ingError) console.error("Erro ao vincular ingredientes:", ingError);
+              await supabase.from("product_ingredients").insert(relationData);
           }
       } catch (e) {
           console.error("Erro ao processar JSON de ingredientes", e);
@@ -130,6 +127,78 @@ export async function createProductAction(prevState: any, formData: FormData) {
 
   revalidatePath("/");
   return { success: true };
+}
+
+// EDIÇÃO (NOVO)
+export async function updateProductAction(prevState: any, formData: FormData) {
+    const supabase = await createClient();
+  
+    const productId = formData.get("productId") as string;
+    const categoryId = formData.get("categoryId") as string;
+    const name = formData.get("name") as string;
+    const description = formData.get("description") as string;
+    const ingredientsJson = formData.get("ingredients") as string;
+    
+    const rawPrice = formData.get("price") as string;
+    const price = parseFloat(rawPrice.replace("R$", "").replace(/\./g, "").replace(",", "."));
+    
+    const imageFile = formData.get("image") as File;
+  
+    // Prepara objeto de atualização
+    const updates: any = {
+      category_id: categoryId,
+      name,
+      description,
+      price,
+      updated_at: new Date().toISOString()
+    };
+  
+    // Se enviou nova imagem, faz upload
+    if (imageFile && imageFile.size > 0) {
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `${productId}-${Date.now()}.${fileExt}`; // Usando ID do produto no nome
+      
+      const { error: uploadError } = await supabase.storage
+        .from('menu-assets')
+        .upload(fileName, imageFile);
+        
+      if (!uploadError) {
+        const { data } = supabase.storage.from('menu-assets').getPublicUrl(fileName);
+        updates.image_url = data.publicUrl;
+      }
+    }
+  
+    // Atualiza tabela products
+    const { error } = await supabase.from("products").update(updates).eq("id", productId);
+  
+    if (error) {
+      console.error("Erro ao atualizar produto:", error);
+      return { error: "Erro ao atualizar produto." };
+    }
+  
+    // Atualiza Ingredientes (Remove todos e insere os novos selecionados)
+    if (ingredientsJson) {
+        try {
+            const ingredientIds = JSON.parse(ingredientsJson);
+            
+            // 1. Remove atuais
+            await supabase.from("product_ingredients").delete().eq("product_id", productId);
+            
+            // 2. Insere novos
+            if (Array.isArray(ingredientIds) && ingredientIds.length > 0) {
+                const relationData = ingredientIds.map((id: string) => ({
+                    product_id: productId,
+                    ingredient_id: id
+                }));
+                await supabase.from("product_ingredients").insert(relationData);
+            }
+        } catch (e) {
+            console.error("Erro ao processar JSON de ingredientes na edição", e);
+        }
+    }
+  
+    revalidatePath("/");
+    return { success: true };
 }
 
 export async function deleteProductAction(productId: string) {

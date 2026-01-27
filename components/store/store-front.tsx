@@ -1,20 +1,17 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { ShoppingBag, Plus, Minus, Search, X, Check, MessageSquare } from "lucide-react"
+import { ShoppingBag, Search, X, Check, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Separator } from "@/components/ui/separator"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
-// Interfaces Atualizadas
+// Interfaces
 interface Ingredient {
   id: string
   name: string
@@ -42,7 +39,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const [searchTerm, setSearchTerm] = useState("")
   const [currentSlide, setCurrentSlide] = useState(0)
   
-  // Estado para o Modal de Produto (Personalização)
+  // Estado para o Modal de Produto
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [tempObservation, setTempObservation] = useState("")
   const [tempRemovedIngredients, setTempRemovedIngredients] = useState<string[]>([])
@@ -69,7 +66,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
   }
 
-  // Abre modal de customização
   const handleProductClick = (product: Product) => {
       setSelectedProduct(product)
       setTempObservation("")
@@ -77,7 +73,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       setItemQuantity(1)
   }
 
-  // Adiciona ao carrinho (final)
   const confirmAddToCart = () => {
     if (!selectedProduct) return
 
@@ -110,10 +105,8 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
   const toggleIngredient = (ingId: string) => {
       if (tempRemovedIngredients.includes(ingId)) {
-          // Adicionar de volta (remover da lista de removidos)
           setTempRemovedIngredients(prev => prev.filter(id => id !== ingId))
       } else {
-          // Remover (adicionar à lista de removidos)
           setTempRemovedIngredients(prev => [...prev, ingId])
       }
   }
@@ -252,7 +245,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                         <p className="text-sm text-slate-500 line-clamp-2 mt-1 leading-relaxed">
                                             {product.description}
                                         </p>
-                                        {/* Badge visual de ingredientes */}
                                         {product.ingredients && product.ingredients.length > 0 && (
                                             <p className="text-xs text-muted-foreground mt-2 line-clamp-1">
                                                 <span className="font-medium">Contém:</span> {product.ingredients.map(i => i.name).join(", ")}
@@ -321,7 +313,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                         <p className="text-sm font-medium text-slate-900">{formatPrice(item.price * item.quantity)}</p>
                                     </div>
                                     
-                                    {/* Exibição das Customizações no Carrinho */}
                                     <div className="text-xs text-muted-foreground mt-1 space-y-1">
                                         {item.removedIngredients.length > 0 && (
                                             <p className="text-red-500/80">
@@ -369,7 +360,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         <DialogContent className="max-w-md p-0 overflow-hidden gap-0 border-none sm:rounded-2xl">
             {selectedProduct && (
                 <>
-                    {/* Header com Imagem */}
                     <div className="relative h-48 w-full bg-slate-100">
                         {selectedProduct.image_url ? (
                             <img src={selectedProduct.image_url} alt={selectedProduct.name} className="w-full h-full object-cover" />
@@ -395,7 +385,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 <DialogDescription className="text-base text-slate-500 mt-2">{selectedProduct.description}</DialogDescription>
                             </div>
 
-                            {/* Seção de Ingredientes (Customização) */}
+                            {/* SEÇÃO DE INGREDIENTES */}
                             {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && (
                                 <div className="space-y-3">
                                     <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -410,19 +400,24 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                                     onClick={() => toggleIngredient(ing.id)}
                                                     className={cn(
                                                         "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer",
-                                                        isRemoved ? "bg-slate-50 border-slate-100 opacity-60" : "bg-white border-primary/20 shadow-sm"
+                                                        isRemoved ? "bg-slate-50 border-slate-100 opacity-60" : "bg-white shadow-sm"
                                                     )}
+                                                    style={{ borderColor: !isRemoved ? `${primaryColor}40` : undefined }} // Borda suave na cor do tema
                                                 >
                                                     <div className="flex items-center gap-3">
-                                                        <div className={cn(
-                                                            "w-5 h-5 rounded flex items-center justify-center transition-colors",
-                                                            isRemoved ? "bg-slate-200" : "bg-green-500 text-white"
-                                                        )}>
+                                                        {/* O Checkbox/Botão em si */}
+                                                        <div 
+                                                            className={cn(
+                                                                "w-5 h-5 rounded flex items-center justify-center transition-colors text-white",
+                                                                isRemoved ? "bg-slate-200" : "" // Se não removido, a cor vem do style abaixo
+                                                            )}
+                                                            style={{ backgroundColor: !isRemoved ? primaryColor : undefined }}
+                                                        >
                                                             {!isRemoved && <Check className="w-3.5 h-3.5" />}
                                                         </div>
                                                         <span className={cn("font-medium", isRemoved && "text-slate-500 line-through decoration-slate-400")}>{ing.name}</span>
                                                     </div>
-                                                    {!isRemoved && <span className="text-xs text-green-600 font-medium">Incluso</span>}
+                                                    {!isRemoved && <span className="text-xs font-medium" style={{ color: primaryColor }}>Incluso</span>}
                                                     {isRemoved && <span className="text-xs text-slate-400">Removido</span>}
                                                 </div>
                                             )
@@ -431,7 +426,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 </div>
                             )}
 
-                            {/* Observações */}
                             <div className="space-y-3">
                                 <Label className="flex items-center gap-2">
                                     <MessageSquare className="w-4 h-4" /> Alguma observação?
@@ -446,7 +440,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                         </div>
                     </ScrollArea>
 
-                    {/* Footer de Ação */}
                     <div className="p-4 border-t bg-slate-50 flex items-center gap-4">
                         <div className="flex items-center border rounded-lg bg-white h-12 shadow-sm">
                             <button onClick={() => setItemQuantity(q => Math.max(1, q - 1))} className="px-4 h-full hover:bg-slate-50 text-slate-500">-</button>
