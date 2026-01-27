@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 
 // --- CATEGORIAS ---
 
-// Ajustado para receber prevState e formData
 export async function createCategoryAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
@@ -34,11 +33,9 @@ export async function createCategoryAction(prevState: any, formData: FormData) {
 
 export async function deleteCategoryAction(categoryId: string) {
   const supabase = await createClient();
-
   const { error } = await supabase.from("categories").delete().eq("id", categoryId);
 
   if (error) {
-    console.error("Erro ao excluir categoria:", error);
     return { error: "Não é possível excluir categoria com produtos." };
   }
 
@@ -46,9 +43,28 @@ export async function deleteCategoryAction(categoryId: string) {
   return { success: true };
 }
 
+// --- INGREDIENTES (Novo) ---
+
+export async function getStoreIngredientsAction(storeId: string) {
+    const supabase = await createClient();
+    const { data } = await supabase.from("ingredients").select("*").eq("store_id", storeId).order('name');
+    return data || [];
+}
+
+export async function createIngredientAction(storeId: string, name: string) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("ingredients")
+        .insert({ store_id: storeId, name })
+        .select()
+        .single();
+    
+    if (error) throw new Error(error.message);
+    return data;
+}
+
 // --- PRODUTOS ---
 
-// Ajustado para receber prevState e formData (assinatura padrão)
 export async function createProductAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
 
@@ -56,6 +72,7 @@ export async function createProductAction(prevState: any, formData: FormData) {
   const categoryId = formData.get("categoryId") as string;
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
+  const ingredientsJson = formData.get("ingredients") as string; // Recebe JSON de IDs
   
   const rawPrice = formData.get("price") as string;
   const price = parseFloat(rawPrice.replace("R$", "").replace(/\./g, "").replace(",", "."));
@@ -75,23 +92,40 @@ export async function createProductAction(prevState: any, formData: FormData) {
     if (!uploadError) {
       const { data } = supabase.storage.from('menu-assets').getPublicUrl(fileName);
       imageUrl = data.publicUrl;
-    } else {
-        console.error("Erro upload imagem:", uploadError);
     }
   }
 
-  const { error } = await supabase.from("products").insert({
+  // 1. Cria o Produto
+  const { data: product, error } = await supabase.from("products").insert({
     store_id: storeId,
     category_id: categoryId,
     name,
     description,
     price,
     image_url: imageUrl
-  });
+  }).select().single();
 
   if (error) {
     console.error("Erro ao criar produto:", error);
     return { error: "Erro ao criar produto." };
+  }
+
+  // 2. Vincula Ingredientes (se houver)
+  if (ingredientsJson) {
+      try {
+          const ingredientIds = JSON.parse(ingredientsJson);
+          if (Array.isArray(ingredientIds) && ingredientIds.length > 0) {
+              const relationData = ingredientIds.map((id: string) => ({
+                  product_id: product.id,
+                  ingredient_id: id
+              }));
+              
+              const { error: ingError } = await supabase.from("product_ingredients").insert(relationData);
+              if (ingError) console.error("Erro ao vincular ingredientes:", ingError);
+          }
+      } catch (e) {
+          console.error("Erro ao processar JSON de ingredientes", e);
+      }
   }
 
   revalidatePath("/");

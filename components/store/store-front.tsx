@@ -1,27 +1,39 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { ShoppingBag, Plus, Minus, Search } from "lucide-react"
+import { ShoppingBag, Plus, Minus, Search, X, Check, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
-// Interfaces
+// Interfaces Atualizadas
+interface Ingredient {
+  id: string
+  name: string
+}
+
 interface Product {
   id: string
   name: string
   description: string
   price: number
   image_url: string
+  ingredients?: Ingredient[]
 }
 
 interface CartItem extends Product {
   quantity: number
   cartId: string
+  removedIngredients: string[] // IDs dos ingredientes removidos
+  observation: string
 }
 
 export function StoreFront({ store, categories }: { store: any, categories: any[] }) {
@@ -29,8 +41,13 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [currentSlide, setCurrentSlide] = useState(0)
+  
+  // Estado para o Modal de Produto (Personalização)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [tempObservation, setTempObservation] = useState("")
+  const [tempRemovedIngredients, setTempRemovedIngredients] = useState<string[]>([])
+  const [itemQuantity, setItemQuantity] = useState(1)
 
-  // Recupera as configurações
   const banners = (store.banners && store.banners.length > 0) 
     ? store.banners 
     : (store.banner_url ? [store.banner_url] : [])
@@ -52,14 +69,28 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
   }
 
-  const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id)
-      if (existing) {
-        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
-      }
-      return [...prev, { ...product, quantity: 1, cartId: Math.random().toString() }]
-    })
+  // Abre modal de customização
+  const handleProductClick = (product: Product) => {
+      setSelectedProduct(product)
+      setTempObservation("")
+      setTempRemovedIngredients([])
+      setItemQuantity(1)
+  }
+
+  // Adiciona ao carrinho (final)
+  const confirmAddToCart = () => {
+    if (!selectedProduct) return
+
+    const newItem: CartItem = {
+        ...selectedProduct,
+        quantity: itemQuantity,
+        cartId: Math.random().toString(),
+        removedIngredients: tempRemovedIngredients,
+        observation: tempObservation
+    }
+
+    setCart(prev => [...prev, newItem])
+    setSelectedProduct(null)
     setIsCartOpen(true)
   }
 
@@ -75,6 +106,16 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       }
       return item
     }))
+  }
+
+  const toggleIngredient = (ingId: string) => {
+      if (tempRemovedIngredients.includes(ingId)) {
+          // Adicionar de volta (remover da lista de removidos)
+          setTempRemovedIngredients(prev => prev.filter(id => id !== ingId))
+      } else {
+          // Remover (adicionar à lista de removidos)
+          setTempRemovedIngredients(prev => [...prev, ingId])
+      }
   }
 
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
@@ -113,29 +154,12 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                         )}
                     >
                         <img src={img} alt={`Banner ${index}`} className="w-full h-full object-cover opacity-80" />
-                        
-                        {/* Overlay Escuro para Legibilidade */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
                     </div>
                 ))
             ) : (
                 <div className="w-full h-full flex items-center justify-center bg-slate-800">
                      <span className="text-white/30 text-sm font-medium tracking-widest uppercase">Sem Imagens</span>
-                </div>
-            )}
-
-            {/* Dots */}
-            {banners.length > 1 && (
-                <div className="absolute bottom-28 left-0 right-0 z-20 flex justify-center gap-1.5">
-                    {banners.map((_: any, idx: number) => (
-                        <div 
-                            key={idx} 
-                            className={cn(
-                                "h-1 rounded-full transition-all duration-300 shadow-sm", 
-                                idx === currentSlide ? "w-6 bg-white" : "w-1.5 bg-white/40"
-                            )} 
-                        />
-                    ))}
                 </div>
             )}
         </div>
@@ -154,7 +178,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                 </div>
 
                 <div className="flex-1 text-white mb-1">
-                    {/* Texto com Sombra */}
                     <h1 className="text-3xl md:text-5xl font-bold drop-shadow-lg leading-none tracking-tight" style={{ textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
                         {store.name}
                     </h1>
@@ -219,7 +242,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                             <div 
                                 key={product.id} 
                                 className="flex bg-white rounded-2xl border border-slate-100 shadow-sm p-3 gap-4 hover:border-slate-300 hover:shadow-md transition-all cursor-pointer group"
-                                onClick={() => addToCart(product)}
+                                onClick={() => handleProductClick(product)}
                             >
                                 <div className="flex-1 flex flex-col justify-between py-1">
                                     <div>
@@ -229,6 +252,12 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                         <p className="text-sm text-slate-500 line-clamp-2 mt-1 leading-relaxed">
                                             {product.description}
                                         </p>
+                                        {/* Badge visual de ingredientes */}
+                                        {product.ingredients && product.ingredients.length > 0 && (
+                                            <p className="text-xs text-muted-foreground mt-2 line-clamp-1">
+                                                <span className="font-medium">Contém:</span> {product.ingredients.map(i => i.name).join(", ")}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="mt-3 font-bold text-lg text-slate-900">
                                         {formatPrice(product.price)}
@@ -287,13 +316,30 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                         {cart.map((item) => (
                             <div key={item.cartId} className="flex gap-4 items-start">
                                 <div className="flex-1">
-                                    <p className="font-bold text-slate-900 text-base">{item.name}</p>
-                                    <p className="text-sm text-muted-foreground mt-0.5">{formatPrice(item.price)}</p>
+                                    <div className="flex justify-between">
+                                        <p className="font-bold text-slate-900 text-base">{item.name}</p>
+                                        <p className="text-sm font-medium text-slate-900">{formatPrice(item.price * item.quantity)}</p>
+                                    </div>
+                                    
+                                    {/* Exibição das Customizações no Carrinho */}
+                                    <div className="text-xs text-muted-foreground mt-1 space-y-1">
+                                        {item.removedIngredients.length > 0 && (
+                                            <p className="text-red-500/80">
+                                                <span className="font-medium text-red-600">Sem:</span> {item.ingredients?.filter(i => item.removedIngredients.includes(i.id)).map(i => i.name).join(", ")}
+                                            </p>
+                                        )}
+                                        {item.observation && (
+                                            <p className="italic">"{item.observation}"</p>
+                                        )}
+                                    </div>
+
                                 </div>
-                                <div className="flex items-center border-2 border-slate-100 rounded-xl h-9 bg-white shadow-sm">
-                                    <button onClick={() => item.quantity > 1 ? updateQuantity(item.cartId, -1) : removeFromCart(item.cartId)} className="w-9 h-full flex items-center justify-center hover:bg-slate-50 text-slate-500 hover:text-red-500 transition-colors">-</button>
-                                    <span className="w-8 text-center text-sm font-bold text-slate-900">{item.quantity}</span>
-                                    <button onClick={() => updateQuantity(item.cartId, 1)} className="w-9 h-full flex items-center justify-center hover:bg-slate-50 text-slate-500 hover:text-green-600 transition-colors">+</button>
+                                <div className="flex flex-col items-center gap-2">
+                                    <div className="flex items-center border-2 border-slate-100 rounded-lg h-8 bg-white shadow-sm">
+                                        <button onClick={() => item.quantity > 1 ? updateQuantity(item.cartId, -1) : removeFromCart(item.cartId)} className="w-8 h-full flex items-center justify-center hover:bg-slate-50 text-slate-500 hover:text-red-500 transition-colors">-</button>
+                                        <span className="w-6 text-center text-xs font-bold text-slate-900">{item.quantity}</span>
+                                        <button onClick={() => updateQuantity(item.cartId, 1)} className="w-8 h-full flex items-center justify-center hover:bg-slate-50 text-slate-500 hover:text-green-600 transition-colors">+</button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -318,6 +364,107 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         </SheetContent>
       </Sheet>
 
+      {/* 6. MODAL DE DETALHES/PERSONALIZAÇÃO DO PRODUTO */}
+      <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
+        <DialogContent className="max-w-md p-0 overflow-hidden gap-0 border-none sm:rounded-2xl">
+            {selectedProduct && (
+                <>
+                    {/* Header com Imagem */}
+                    <div className="relative h-48 w-full bg-slate-100">
+                        {selectedProduct.image_url ? (
+                            <img src={selectedProduct.image_url} alt={selectedProduct.name} className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="flex h-full items-center justify-center bg-slate-100 text-slate-300">
+                                <Search className="h-12 w-12" />
+                            </div>
+                        )}
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="absolute top-2 right-2 rounded-full bg-white/80 hover:bg-white text-black backdrop-blur-sm"
+                            onClick={() => setSelectedProduct(null)}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </div>
+
+                    <ScrollArea className="max-h-[60vh]">
+                        <div className="p-6 space-y-6">
+                            <div>
+                                <DialogTitle className="text-2xl font-bold">{selectedProduct.name}</DialogTitle>
+                                <DialogDescription className="text-base text-slate-500 mt-2">{selectedProduct.description}</DialogDescription>
+                            </div>
+
+                            {/* Seção de Ingredientes (Customização) */}
+                            {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && (
+                                <div className="space-y-3">
+                                    <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        Ingredientes <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full lowercase">Remova o que não quiser</span>
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {selectedProduct.ingredients.map(ing => {
+                                            const isRemoved = tempRemovedIngredients.includes(ing.id);
+                                            return (
+                                                <div 
+                                                    key={ing.id} 
+                                                    onClick={() => toggleIngredient(ing.id)}
+                                                    className={cn(
+                                                        "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer",
+                                                        isRemoved ? "bg-slate-50 border-slate-100 opacity-60" : "bg-white border-primary/20 shadow-sm"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={cn(
+                                                            "w-5 h-5 rounded flex items-center justify-center transition-colors",
+                                                            isRemoved ? "bg-slate-200" : "bg-green-500 text-white"
+                                                        )}>
+                                                            {!isRemoved && <Check className="w-3.5 h-3.5" />}
+                                                        </div>
+                                                        <span className={cn("font-medium", isRemoved && "text-slate-500 line-through decoration-slate-400")}>{ing.name}</span>
+                                                    </div>
+                                                    {!isRemoved && <span className="text-xs text-green-600 font-medium">Incluso</span>}
+                                                    {isRemoved && <span className="text-xs text-slate-400">Removido</span>}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Observações */}
+                            <div className="space-y-3">
+                                <Label className="flex items-center gap-2">
+                                    <MessageSquare className="w-4 h-4" /> Alguma observação?
+                                </Label>
+                                <Textarea 
+                                    placeholder="Ex: Tocar a campainha, caprichar no molho..." 
+                                    className="resize-none"
+                                    value={tempObservation}
+                                    onChange={e => setTempObservation(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </ScrollArea>
+
+                    {/* Footer de Ação */}
+                    <div className="p-4 border-t bg-slate-50 flex items-center gap-4">
+                        <div className="flex items-center border rounded-lg bg-white h-12 shadow-sm">
+                            <button onClick={() => setItemQuantity(q => Math.max(1, q - 1))} className="px-4 h-full hover:bg-slate-50 text-slate-500">-</button>
+                            <span className="w-8 text-center font-bold">{itemQuantity}</span>
+                            <button onClick={() => setItemQuantity(q => q + 1)} className="px-4 h-full hover:bg-slate-50 text-slate-500">+</button>
+                        </div>
+                        <Button 
+                            className="flex-1 h-12 text-lg font-bold text-white shadow-md hover:brightness-110"
+                            style={{ backgroundColor: primaryColor }}
+                            onClick={confirmAddToCart}
+                        >
+                            Adicionar {formatPrice(selectedProduct.price * itemQuantity)}
+                        </Button>
+                    </div>
+                </>
+            )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

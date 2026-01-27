@@ -48,22 +48,26 @@ export default async function StorePage({ params }: Props) {
     return notFound()
   }
 
-  // Busca Categorias e Produtos dessa loja
+  // Busca Categorias, Produtos e os Ingredientes (através da tabela de ligação)
   const { data: categoriesData } = await supabase
       .from("categories")
       .select(`
         *,
         products (
-          *
+          *,
+          product_ingredients (
+            ingredient:ingredients (*)
+          )
         )
       `)
       .eq("store_id", store.id)
       .order("index", { ascending: true }) // Tenta ordenar por índice
   
   // Processa os dados:
-  // - Filtra produtos indisponíveis (is_available = false)
-  // - Ordena produtos por data de criação
-  // - Remove categorias que ficaram vazias
+  // - Filtra produtos indisponíveis
+  // - Ordena produtos por data
+  // - Remove categorias vazias
+  // - "Achata" (flatten) a estrutura de ingredientes para facilitar no front
   let categories: any[] = []
   if (categoriesData) {
     categories = categoriesData.map(cat => ({
@@ -71,6 +75,11 @@ export default async function StorePage({ params }: Props) {
       products: cat.products
         ?.filter((p: any) => p.is_available)
         .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        .map((p: any) => ({
+            ...p,
+            // Transforma: [{ingredient: {id: 1, name: "Bacon"}}] -> [{id: 1, name: "Bacon"}]
+            ingredients: p.product_ingredients?.map((pi: any) => pi.ingredient) || []
+        }))
     })).filter(cat => cat.products.length > 0)
   }
 
