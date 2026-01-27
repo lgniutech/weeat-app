@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, ChangeEvent } from "react"
 import { useActionState } from "react"
 import { 
     createCategoryAction, 
@@ -20,7 +20,7 @@ import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2, X, Pencil, Search } from "lucide-react"
+import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2, X, Pencil, Search, UploadCloud } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // --- COMPONENTE DE SELEÇÃO DE INGREDIENTES ---
@@ -35,12 +35,16 @@ function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] 
         getStoreIngredientsAction(storeId).then(setAllIngredients)
     }, [storeId])
 
+    // CORREÇÃO: Sincroniza o estado local quando a prop initialSelection mudar (ao abrir o modal de edição)
+    useEffect(() => {
+        setSelectedIds(initialSelection)
+    }, [initialSelection])
+
     // Notifica o pai quando a seleção muda
     useEffect(() => {
         onSelectionChange(selectedIds)
     }, [selectedIds, onSelectionChange])
 
-    // Normaliza strings para busca (remove acentos e lowercase)
     const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 
     const handleKeyDown = async (e: React.KeyboardEvent) => {
@@ -54,7 +58,6 @@ function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] 
         if (!input.trim()) return
         const name = input.trim()
         
-        // Verifica se já existe na lista (local)
         const existing = allIngredients.find(i => normalize(i.name) === normalize(name))
         
         if (existing) {
@@ -63,7 +66,6 @@ function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] 
             }
             setInput("")
         } else {
-            // Cria novo ingrediente
             setLoading(true)
             try {
                 const newIng = await createIngredientAction(storeId, name)
@@ -88,10 +90,9 @@ function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] 
         }
     }
 
-    // Filtra sugestões baseado no input
     const filteredIngredients = allIngredients.filter(i => 
-        !selectedIds.includes(i.id) && // Não mostrar os já selecionados
-        (input === "" || normalize(i.name).includes(normalize(input))) // Filtro por texto
+        !selectedIds.includes(i.id) && 
+        (input === "" || normalize(i.name).includes(normalize(input)))
     )
 
     return (
@@ -111,7 +112,6 @@ function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] 
                 </Button>
             </div>
 
-            {/* Lista de Selecionados */}
             <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-muted/30 rounded-md border border-dashed">
                 {selectedIds.length === 0 && <span className="text-xs text-muted-foreground w-full text-center py-2">Nenhum ingrediente selecionado</span>}
                 {allIngredients.filter(i => selectedIds.includes(i.id)).map(ing => (
@@ -124,7 +124,6 @@ function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] 
                 ))}
             </div>
             
-            {/* Lista Filtrada (Ingredientes Cadastrados) */}
             <div className="space-y-2 pt-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                     <Search className="w-3 h-3" /> Ingredientes Cadastrados
@@ -146,6 +145,44 @@ function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] 
                             {ing.name}
                         </Badge>
                     ))}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// --- COMPONENTE DE UPLOAD DE IMAGEM COM PREVIEW ---
+function ImageUploadPreview({ initialImage, name }: { initialImage?: string, name: string }) {
+    const [preview, setPreview] = useState<string | null>(initialImage || null)
+
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            const objectUrl = URL.createObjectURL(file)
+            setPreview(objectUrl)
+        }
+    }
+
+    return (
+        <div className="space-y-2">
+            <Label>Foto do Prato</Label>
+            <div className="flex items-center gap-4">
+                <div className="h-24 w-24 rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 relative">
+                    {preview ? (
+                        <img src={preview} alt="Preview" className="h-full w-full object-cover" />
+                    ) : (
+                        <ImageIcon className="h-8 w-8 text-slate-300" />
+                    )}
+                </div>
+                <div className="flex-1">
+                    <Input 
+                        type="file" 
+                        name={name} 
+                        accept="image/*" 
+                        onChange={handleFileChange} 
+                        className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Recomendado: 800x800px (JPG, PNG)</p>
                 </div>
             </div>
         </div>
@@ -245,10 +282,8 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
                         <IngredientSelector storeId={storeId} onSelectionChange={setSelectedIngredients} />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Foto do Prato</Label>
-                        <Input type="file" name="image" accept="image/*" />
-                    </div>
+                    {/* Componente de Upload com Preview */}
+                    <ImageUploadPreview name="image" />
 
                     {state?.error && <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>}
                     
@@ -272,7 +307,7 @@ function EditProductForm({ product, categories, storeId }: { product: any, categ
         }
     }, [state])
 
-    // Reseta o estado quando o modal abre (para garantir dados frescos se mudarem externamente)
+    // Reseta/Sincroniza quando o modal abre
     useEffect(() => {
         if (isOpen) {
             setSelectedIngredients(product.ingredients?.map((i: any) => i.id) || [])
@@ -332,11 +367,8 @@ function EditProductForm({ product, categories, storeId }: { product: any, categ
                         />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Alterar Foto (Opcional)</Label>
-                        <Input type="file" name="image" accept="image/*" />
-                        {product.image_url && <p className="text-xs text-muted-foreground mt-1">Já possui imagem cadastrada.</p>}
-                    </div>
+                    {/* Componente de Upload com Preview - Iniciando com a imagem atual */}
+                    <ImageUploadPreview name="image" initialImage={product.image_url} />
 
                     {state?.error && <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>}
                     
