@@ -129,7 +129,7 @@ export async function createProductAction(prevState: any, formData: FormData) {
   return { success: true };
 }
 
-// EDIÇÃO (NOVO)
+// EDIÇÃO
 export async function updateProductAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
   
@@ -144,19 +144,18 @@ export async function updateProductAction(prevState: any, formData: FormData) {
     
     const imageFile = formData.get("image") as File;
   
-    // Prepara objeto de atualização
+    // Prepara objeto de atualização (Removido updated_at para evitar erro)
     const updates: any = {
       category_id: categoryId,
       name,
       description,
-      price,
-      updated_at: new Date().toISOString()
+      price
     };
   
     // Se enviou nova imagem, faz upload
     if (imageFile && imageFile.size > 0) {
       const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${productId}-${Date.now()}.${fileExt}`; // Usando ID do produto no nome
+      const fileName = `${productId}-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
         .from('menu-assets')
