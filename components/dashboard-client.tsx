@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useSearchParams, useRouter, usePathname } from "next/navigation" // IMPORTADO
 import { useTheme } from "next-themes"
 import { useThemeColor } from "@/components/theme-provider"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
@@ -28,37 +29,58 @@ export default function DashboardClient({
   userName, 
   userEmail 
 }: DashboardClientProps) {
-  const [activeModule, setActiveModule] = useState("dashboard")
+  // Hooks de Navegação (Agora controlamos via URL)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  // 1. O módulo ativo vem da URL (?tab=...) ou padrão 'dashboard'
+  const activeModule = searchParams.get("tab") || "dashboard"
+
+  // 2. Função para trocar de módulo (Atualiza a URL)
+  const handleModuleChange = (moduleId: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("tab", moduleId)
+    
+    // push: adiciona no histórico (botão voltar funciona)
+    // scroll: false evita que a página pule para o topo
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
   const [isStoreOpen, setIsStoreOpen] = useState(true)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
 
-  // Hooks de Tema para Sincronização
+  // Hooks de Tema
   const { setTheme } = useTheme()
   const { setThemeColor } = useThemeColor()
+  
+  // Controle para evitar "Piscada" do tema (Lag)
+  const isThemeInitialized = useRef(false)
 
-  // 1. Sincronizar Tema do Banco de Dados ao Carregar
+  // Sincronizar Tema do Banco (Apenas uma vez na inicialização)
   useEffect(() => {
-    if (store) {
+    if (store && !isThemeInitialized.current) {
       if (store.theme_mode) setTheme(store.theme_mode)
       if (store.theme_color) setThemeColor(store.theme_color)
+      isThemeInitialized.current = true
     }
   }, [store, setTheme, setThemeColor])
 
-  // 2. Interceptar clique em "Dados da Loja" e abrir o modal
+  // Interceptar clique em "Dados da Loja" para abrir Modal
   useEffect(() => {
     if (activeModule === 'store-settings') {
       setIsSettingsModalOpen(true)
-      setActiveModule('dashboard') // Mantém o usuário na tela atual ao fundo
+      // Volta a URL para dashboard para não ficar presa em 'store-settings'
+      // mas mantém o modal aberto
+      handleModuleChange('dashboard')
     }
   }, [activeModule])
 
   const hasStore = !!store
 
-  // Função que decide qual componente renderizar na área principal
   const renderContent = () => {
     switch (activeModule) {
       case 'tema':
-        // Passamos o ID da loja para salvar as alterações
         return <AppearanceForm storeId={store?.id} />
       case 'store-appearance':
         return <StoreAppearance store={store} />
@@ -73,10 +95,8 @@ export default function DashboardClient({
 
   return (
     <SidebarProvider>
-      {/* 1. Modal de Setup Inicial (Se não tiver loja) */}
       {!hasStore && <StoreSetupModal />}
       
-      {/* 2. Modal de Configurações da Loja (Edição) */}
       {hasStore && (
         <StoreSettingsModal 
           store={store} 
@@ -86,17 +106,15 @@ export default function DashboardClient({
         />
       )}
       
-      {/* 3. Barra Lateral */}
       <AppSidebar 
         activeModule={activeModule} 
-        onModuleChange={setActiveModule}
+        onModuleChange={handleModuleChange} // Passamos a nova função de URL
         storeName={store?.name}
         storeLogo={store?.logo_url}
         userName={userName}
         userEmail={userEmail}
       />
       
-      {/* 4. Área Principal */}
       <SidebarInset>
         <DashboardHeader
           activeModule={activeModule}

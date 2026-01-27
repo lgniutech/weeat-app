@@ -85,7 +85,7 @@ export function AppearanceForm({ storeId }: AppearanceFormProps) {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <ThemeColorCard 
                   hex="#02B5FF" 
-                  label="Azul WeEat" 
+                  label="Azul" 
                   active={themeColor === 'theme-blue'} 
                   onClick={() => handleColorChange('theme-blue')} 
                 />
