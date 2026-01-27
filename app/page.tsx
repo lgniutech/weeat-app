@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     .eq("owner_id", user.id) 
     .maybeSingle()
 
-  // 2. Busca o Cardápio (Categorias + Produtos) se a loja existir
+  // 2. Busca o Cardápio Completo (Categorias + Produtos + Ingredientes + Adicionais)
   let categories: any[] = []
   
   if (store) {
@@ -27,19 +27,35 @@ export default async function DashboardPage() {
       .select(`
         *,
         products (
-          *
+          *,
+          product_ingredients (
+             ingredient:ingredients(*)
+          ),
+          product_addons (
+             price,
+             addon:addons(*)
+          )
         )
       `)
       .eq("store_id", store.id)
       .order("created_at", { ascending: true }) // Ordena categorias por criação
       
     if (data) {
-      // Ordena os produtos dentro das categorias (opcional, aqui por data)
       categories = data.map(cat => ({
         ...cat,
-        products: cat.products?.sort((a: any, b: any) => 
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        )
+        products: cat.products
+          ?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          .map((product: any) => ({
+             ...product,
+             // Formata Ingredientes: Remove a camada extra da tabela de ligação
+             ingredients: product.product_ingredients?.map((pi: any) => pi.ingredient) || [],
+             
+             // Formata Adicionais: Junta os dados do addon com o preço que está na relação
+             addons: product.product_addons?.map((pa: any) => ({
+                 ...pa.addon,
+                 price: pa.price 
+             })) || []
+          }))
       }))
     }
   }
@@ -50,7 +66,7 @@ export default async function DashboardPage() {
   return (
     <DashboardClient 
       store={store} 
-      categories={categories} // Passamos o cardápio
+      categories={categories} 
       userName={userName}
       userEmail={userEmail}
     />

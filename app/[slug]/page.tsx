@@ -7,63 +7,39 @@ type Props = {
   params: Promise<{ slug: string }>
 }
 
-// 1. Gera o título da página dinamicamente para o Google/Navegador (SEO)
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const supabase = await createClient()
   
-  const { data: store } = await supabase
-    .from("stores")
-    .select("name, bio")
-    .eq("slug", slug)
-    .maybeSingle()
+  const { data: store } = await supabase.from("stores").select("name, bio").eq("slug", slug).maybeSingle()
   
-  if (!store) {
-    return { 
-      title: "Loja não encontrada | WeEat",
-      description: "A loja que você procura não foi encontrada."
-    }
-  }
+  if (!store) return { title: "Loja não encontrada | WeEat", description: "A loja que você procura não foi encontrada." }
   
-  return {
-    title: `${store.name} | Cardápio Digital`,
-    description: store.bio || `Peça online em ${store.name}`,
-  }
+  return { title: `${store.name} | Cardápio Digital`, description: store.bio || `Peça online em ${store.name}` }
 }
 
-// 2. A página principal que carrega os dados
 export default async function StorePage({ params }: Props) {
   const { slug } = await params
   const supabase = await createClient()
 
-  // Busca a loja pelo Slug (o texto na URL)
-  const { data: store } = await supabase
-    .from("stores")
-    .select("*") 
-    .eq("slug", slug) 
-    .maybeSingle()
+  const { data: store } = await supabase.from("stores").select("*").eq("slug", slug).maybeSingle()
 
-  // Se não achar a loja, mostra página 404
-  if (!store) {
-    return notFound()
-  }
+  if (!store) return notFound()
 
-  // Busca Categorias e Produtos dessa loja
+  // Busca turbinada
   const { data: categoriesData } = await supabase
       .from("categories")
       .select(`
         *,
         products (
-          *
+          *,
+          product_ingredients ( ingredient:ingredients (*) ),
+          product_addons ( price, addon:addons (*) ) 
         )
       `)
       .eq("store_id", store.id)
-      .order("index", { ascending: true }) // Tenta ordenar por índice
+      .order("index", { ascending: true })
   
-  // Processa os dados:
-  // - Filtra produtos indisponíveis (is_available = false)
-  // - Ordena produtos por data de criação
-  // - Remove categorias que ficaram vazias
   let categories: any[] = []
   if (categoriesData) {
     categories = categoriesData.map(cat => ({
@@ -71,11 +47,17 @@ export default async function StorePage({ params }: Props) {
       products: cat.products
         ?.filter((p: any) => p.is_available)
         .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        .map((p: any) => ({
+            ...p,
+            ingredients: p.product_ingredients?.map((pi: any) => pi.ingredient) || [],
+            // Mapeia o addon e injeta o preço da relação (product_addons.price)
+            addons: p.product_addons?.map((pa: any) => ({
+                ...pa.addon,
+                price: pa.price 
+            })) || []
+        }))
     })).filter(cat => cat.products.length > 0)
   }
 
-  // Entrega tudo para o componente visual (Front-end)
-  return (
-    <StoreFront store={store} categories={categories} />
-  )
+  return (<StoreFront store={store} categories={categories} />)
 }
