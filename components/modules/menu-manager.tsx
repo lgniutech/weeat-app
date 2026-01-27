@@ -22,10 +22,10 @@ import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2, X, Pencil, Search, CircleDollarSign } from "lucide-react"
+import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2, X, Pencil, Search, DollarSign } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
-// --- SELETOR DE INGREDIENTES (Já existente) ---
+// --- SELETOR DE INGREDIENTES (Layout Melhorado) ---
 function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] }: { storeId: string, onSelectionChange: (ids: string[]) => void, initialSelection?: string[] }) {
     const [input, setInput] = useState("")
     const [allIngredients, setAllIngredients] = useState<any[]>([])
@@ -37,10 +37,6 @@ function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] 
     useEffect(() => { onSelectionChange(selectedIds) }, [selectedIds, onSelectionChange])
 
     const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-
-    const handleKeyDown = async (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') { e.preventDefault(); addIngredient() }
-    }
 
     const addIngredient = async () => {
         if (!input.trim()) return
@@ -71,124 +67,171 @@ function IngredientSelector({ storeId, onSelectionChange, initialSelection = [] 
 
     return (
         <div className="space-y-3">
-            <Label>Ingredientes (Composição)</Label>
-            <div className="flex gap-2 relative">
-                <Input placeholder="Digite e tecle Enter..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} disabled={loading} className="pr-10" />
-                <Button type="button" onClick={addIngredient} disabled={loading || !input.trim()} size="icon" variant="secondary" className="absolute right-0 top-0 h-full rounded-l-none">
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                </Button>
-            </div>
-            <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-muted/30 rounded-md border border-dashed">
-                {selectedIds.length === 0 && <span className="text-xs text-muted-foreground w-full text-center py-2">Nada selecionado</span>}
-                {allIngredients.filter(i => selectedIds.includes(i.id)).map(ing => (
-                    <Badge key={ing.id} variant="secondary" className="pl-2 pr-1 py-1 flex gap-1 items-center border-primary/20 bg-primary/5">
-                        {ing.name}
-                        <button type="button" onClick={() => toggleSelection(ing.id)} className="hover:bg-destructive/10 rounded-full p-0.5"><X className="h-3 w-3" /></button>
-                    </Badge>
-                ))}
-            </div>
-            <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-1">
-                {filtered.map(ing => (
-                    <Badge key={ing.id} variant="outline" className="cursor-pointer hover:bg-muted" onClick={() => toggleSelection(ing.id)}><Plus className="h-3 w-3 mr-1 opacity-50" />{ing.name}</Badge>
-                ))}
-            </div>
-        </div>
-    )
-}
-
-// --- SELETOR DE ACRÉSCIMOS (NOVO) ---
-function AddonSelector({ storeId, onSelectionChange, initialSelection = [] }: { storeId: string, onSelectionChange: (ids: string[]) => void, initialSelection?: string[] }) {
-    const [nameInput, setNameInput] = useState("")
-    const [priceInput, setPriceInput] = useState("")
-    const [allAddons, setAllAddons] = useState<any[]>([])
-    const [selectedIds, setSelectedIds] = useState<string[]>(initialSelection)
-    const [loading, setLoading] = useState(false)
-
-    useEffect(() => { getStoreAddonsAction(storeId).then(setAllAddons) }, [storeId])
-    useEffect(() => { setSelectedIds(initialSelection) }, [initialSelection])
-    useEffect(() => { onSelectionChange(selectedIds) }, [selectedIds, onSelectionChange])
-
-    const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-
-    const addAddon = async () => {
-        if (!nameInput.trim()) return
-        const name = nameInput.trim()
-        
-        const existing = allAddons.find(i => normalize(i.name) === normalize(name))
-        
-        if (existing) {
-            // Se já existe, seleciona
-            if (!selectedIds.includes(existing.id)) setSelectedIds([...selectedIds, existing.id])
-            setNameInput("")
-            setPriceInput("")
-        } else {
-            // Se não existe, cria (precisa do preço)
-            if (!priceInput) return // Bloqueia se não tiver preço
+            <Label className="text-sm font-semibold">Ingredientes (Composição)</Label>
             
-            const price = parseFloat(priceInput.replace("R$", "").replace(/\./g, "").replace(",", "."))
-            if (isNaN(price)) return
-
-            setLoading(true)
-            try {
-                const newAddon = await createAddonAction(storeId, name, price)
-                if (newAddon) {
-                    setAllAddons(prev => [...prev, newAddon].sort((a,b) => a.name.localeCompare(b.name)))
-                    setSelectedIds([...selectedIds, newAddon.id])
-                    setNameInput("")
-                    setPriceInput("")
-                }
-            } finally { setLoading(false) }
-        }
-    }
-
-    const toggleSelection = (id: string) => {
-        selectedIds.includes(id) ? setSelectedIds(selectedIds.filter(sid => sid !== id)) : setSelectedIds([...selectedIds, id])
-    }
-
-    // Filtra para autocomplete
-    const filtered = allAddons.filter(i => !selectedIds.includes(i.id) && (nameInput === "" || normalize(i.name).includes(normalize(nameInput))))
-    const exists = allAddons.some(i => normalize(i.name) === normalize(nameInput.trim()))
-
-    return (
-        <div className="space-y-3">
-            <Label>Adicionais (Opcionais Pagos)</Label>
-            <div className="flex gap-2 items-end">
-                <div className="flex-1 space-y-1">
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold">Nome</span>
-                    <Input placeholder="Ex: Bacon Extra" value={nameInput} onChange={e => setNameInput(e.target.value)} disabled={loading} />
+            {/* Input Full Width para não quebrar layout */}
+            <div className="flex gap-2 w-full">
+                <div className="relative flex-1">
+                    <Input 
+                        placeholder="Digite o ingrediente..." 
+                        value={input} 
+                        onChange={e => setInput(e.target.value)} 
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addIngredient())} 
+                        disabled={loading} 
+                    />
                 </div>
-                {/* Mostra input de preço apenas se for criar novo */}
-                {!exists && nameInput.length > 0 && (
-                     <div className="w-24 space-y-1 animate-in fade-in slide-in-from-left-2">
-                        <span className="text-[10px] text-muted-foreground uppercase font-bold">Preço</span>
-                        <Input placeholder="0,00" value={priceInput} onChange={e => setPriceInput(e.target.value)} />
-                    </div>
-                )}
-                <Button type="button" onClick={addAddon} disabled={loading || !nameInput.trim() || (!exists && !priceInput)} size="icon" variant="secondary">
+                <Button type="button" onClick={addIngredient} disabled={loading || !input.trim()} variant="secondary">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 </Button>
             </div>
 
             {/* Selecionados */}
-            <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-muted/30 rounded-md border border-dashed">
-                {selectedIds.length === 0 && <span className="text-xs text-muted-foreground w-full text-center py-2">Nenhum adicional selecionado</span>}
-                {allAddons.filter(i => selectedIds.includes(i.id)).map(adon => (
-                    <Badge key={adon.id} variant="secondary" className="pl-2 pr-1 py-1 flex gap-1 items-center border-yellow-500/20 bg-yellow-500/5 text-yellow-700">
-                        {adon.name} <span className="opacity-50 mx-1">|</span> {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(adon.price)}
-                        <button type="button" onClick={() => toggleSelection(adon.id)} className="hover:bg-destructive/10 rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+            <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-lg border min-h-[50px]">
+                {selectedIds.length === 0 && <span className="text-sm text-muted-foreground w-full text-center self-center">Nenhum ingrediente.</span>}
+                {allIngredients.filter(i => selectedIds.includes(i.id)).map(ing => (
+                    <Badge key={ing.id} variant="secondary" className="pl-2 pr-1 py-1 gap-1 border-primary/20 bg-white">
+                        {ing.name}
+                        <button type="button" onClick={() => toggleSelection(ing.id)} className="hover:bg-red-100 rounded-full p-0.5 text-slate-400 hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
                     </Badge>
                 ))}
+            </div>
+            
+            {/* Sugestões */}
+            {filtered.length > 0 && (
+                <div className="space-y-2">
+                    <span className="text-xs text-muted-foreground font-medium uppercase">Sugestões</span>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
+                        {filtered.map(ing => (
+                            <Badge key={ing.id} variant="outline" className="cursor-pointer hover:bg-slate-100 hover:border-slate-300 transition-all" onClick={() => toggleSelection(ing.id)}>
+                                <Plus className="h-3 w-3 mr-1 opacity-50" />{ing.name}
+                            </Badge>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// --- SELETOR DE ACRÉSCIMOS (Nova Lógica de Preço por Produto) ---
+function AddonSelector({ storeId, onSelectionChange, initialSelection = [] }: { storeId: string, onSelectionChange: (addons: any[]) => void, initialSelection?: any[] }) {
+    const [nameInput, setNameInput] = useState("")
+    const [allAddons, setAllAddons] = useState<any[]>([])
+    // Estado agora guarda objetos: { id, price }
+    const [selectedAddons, setSelectedAddons] = useState<{id: string, price: number}[]>(initialSelection)
+    const [loading, setLoading] = useState(false)
+
+    useEffect(() => { getStoreAddonsAction(storeId).then(setAllAddons) }, [storeId])
+    useEffect(() => { setSelectedAddons(initialSelection) }, [initialSelection])
+    
+    // Notifica pai (envia array de objetos)
+    useEffect(() => { onSelectionChange(selectedAddons) }, [selectedAddons, onSelectionChange])
+
+    const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+
+    const handleCreateOrAdd = async () => {
+        if (!nameInput.trim()) return
+        const name = nameInput.trim()
+        
+        // Verifica se já existe na biblioteca global
+        const existing = allAddons.find(i => normalize(i.name) === normalize(name))
+        
+        if (existing) {
+            addAddonToProduct(existing.id)
+        } else {
+            // Cria novo na biblioteca (sem preço global)
+            setLoading(true)
+            try {
+                const newAddon = await createAddonAction(storeId, name)
+                if (newAddon) {
+                    setAllAddons(prev => [...prev, newAddon].sort((a,b) => a.name.localeCompare(b.name)))
+                    addAddonToProduct(newAddon.id)
+                }
+            } finally { setLoading(false) }
+        }
+        setNameInput("")
+    }
+
+    const addAddonToProduct = (id: string) => {
+        // Se já está selecionado, ignora
+        if (selectedAddons.find(s => s.id === id)) return
+        // Adiciona com preço padrão 0
+        setSelectedAddons(prev => [...prev, { id, price: 0 }])
+    }
+
+    const removeAddon = (id: string) => {
+        setSelectedAddons(prev => prev.filter(s => s.id !== id))
+    }
+
+    const updatePrice = (id: string, newPrice: string) => {
+        const price = parseFloat(newPrice.replace(",", "."))
+        if (isNaN(price)) return
+        setSelectedAddons(prev => prev.map(item => item.id === id ? { ...item, price } : item))
+    }
+
+    const filteredLibrary = allAddons.filter(i => !selectedAddons.find(s => s.id === i.id) && (nameInput === "" || normalize(i.name).includes(normalize(nameInput))))
+
+    return (
+        <div className="space-y-4">
+            <Label className="text-sm font-semibold">Adicionais (Opcionais Pagos)</Label>
+            
+            {/* 1. Área de Busca/Criação */}
+            <div className="flex gap-2 w-full">
+                <Input 
+                    placeholder="Nome do adicional (Ex: Bacon)" 
+                    value={nameInput} 
+                    onChange={e => setNameInput(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCreateOrAdd())}
+                    disabled={loading}
+                />
+                <Button type="button" onClick={handleCreateOrAdd} disabled={loading || !nameInput.trim()} variant="secondary">
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                </Button>
             </div>
 
-            {/* Sugestões */}
-            <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-1">
-                {filtered.map(adon => (
-                    <Badge key={adon.id} variant="outline" className="cursor-pointer hover:bg-muted" onClick={() => toggleSelection(adon.id)}>
-                        <CircleDollarSign className="h-3 w-3 mr-1 opacity-50" />
-                        {adon.name} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(adon.price)})
-                    </Badge>
-                ))}
+            {/* 2. Lista de Selecionados (Com Input de Preço) */}
+            <div className="space-y-2">
+                {selectedAddons.length > 0 && <span className="text-xs font-semibold text-muted-foreground uppercase">Ativos neste produto</span>}
+                <div className="grid gap-2">
+                    {selectedAddons.map(item => {
+                        const addonData = allAddons.find(a => a.id === item.id)
+                        if (!addonData) return null
+                        return (
+                            <div key={item.id} className="flex items-center gap-2 bg-yellow-50/50 border border-yellow-100 p-2 rounded-md animate-in slide-in-from-left-2">
+                                <span className="flex-1 font-medium text-sm text-yellow-900">{addonData.name}</span>
+                                <div className="flex items-center gap-1 bg-white border rounded px-2 h-8 w-28">
+                                    <span className="text-xs text-muted-foreground">R$</span>
+                                    <input 
+                                        type="number" 
+                                        step="0.50"
+                                        min="0"
+                                        className="w-full text-sm outline-none bg-transparent"
+                                        value={item.price}
+                                        onChange={e => updatePrice(item.id, e.target.value)}
+                                    />
+                                </div>
+                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-red-500" onClick={() => removeAddon(item.id)}>
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )
+                    })}
+                </div>
             </div>
+
+            {/* 3. Biblioteca (Disponíveis para adicionar) */}
+            {filteredLibrary.length > 0 && (
+                <div className="space-y-2">
+                    <span className="text-xs text-muted-foreground font-medium uppercase">Biblioteca (Clique para adicionar)</span>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
+                        {filteredLibrary.map(addon => (
+                            <Badge key={addon.id} variant="outline" className="cursor-pointer hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-700 transition-all" onClick={() => addAddonToProduct(addon.id)}>
+                                <Plus className="h-3 w-3 mr-1 opacity-50" />{addon.name}
+                            </Badge>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -221,7 +264,8 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
     const [state, action, isPending] = useActionState(createProductAction, null)
     const [isOpen, setIsOpen] = useState(false)
     const [selectedIngredients, setSelectedIngredients] = useState<string[]>([])
-    const [selectedAddons, setSelectedAddons] = useState<string[]>([])
+    // Estado agora é objeto {id, price}
+    const [selectedAddons, setSelectedAddons] = useState<any[]>([])
 
     useEffect(() => {
         if (state?.success) {
@@ -236,7 +280,7 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
             <DialogTrigger asChild>
                 <Button><Plus className="mr-2 h-4 w-4" /> Novo Produto</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] rounded-lg">
                 <DialogHeader><DialogTitle>Adicionar Produto</DialogTitle></DialogHeader>
                 <form action={action} className="space-y-6">
                     <input type="hidden" name="storeId" value={storeId} />
@@ -266,11 +310,11 @@ function AddProductForm({ storeId, categories }: { storeId: string, categories: 
                         <Textarea name="description" placeholder="Uma breve descrição..." rows={2} />
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-slate-50 rounded-lg border">
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="p-4 bg-slate-50/50 rounded-lg border">
                             <IngredientSelector storeId={storeId} onSelectionChange={setSelectedIngredients} />
                         </div>
-                        <div className="p-4 bg-yellow-50/50 rounded-lg border border-yellow-100">
+                        <div className="p-4 bg-yellow-50/30 rounded-lg border border-yellow-100/50">
                             <AddonSelector storeId={storeId} onSelectionChange={setSelectedAddons} />
                         </div>
                     </div>
@@ -292,14 +336,15 @@ function EditProductForm({ product, categories, storeId }: { product: any, categ
     const [state, action, isPending] = useActionState(updateProductAction, null)
     const [isOpen, setIsOpen] = useState(false)
     const [selectedIngredients, setSelectedIngredients] = useState<string[]>([])
-    const [selectedAddons, setSelectedAddons] = useState<string[]>([])
+    const [selectedAddons, setSelectedAddons] = useState<any[]>([])
 
     useEffect(() => { if (state?.success) setIsOpen(false) }, [state])
 
     useEffect(() => {
         if (isOpen) {
             setSelectedIngredients(product.ingredients?.map((i: any) => i.id) || [])
-            setSelectedAddons(product.addons?.map((a: any) => a.id) || [])
+            // Mapeia os addons atuais com seus preços
+            setSelectedAddons(product.addons?.map((a: any) => ({ id: a.id, price: a.price })) || [])
         }
     }, [isOpen, product])
 
@@ -308,7 +353,7 @@ function EditProductForm({ product, categories, storeId }: { product: any, categ
             <DialogTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary"><Pencil className="h-4 w-4" /></Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] rounded-lg">
                 <DialogHeader><DialogTitle>Editar Produto</DialogTitle></DialogHeader>
                 <form action={action} className="space-y-6">
                     <input type="hidden" name="productId" value={product.id} />
@@ -338,11 +383,11 @@ function EditProductForm({ product, categories, storeId }: { product: any, categ
                         <Textarea name="description" defaultValue={product.description || ""} rows={2} />
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-slate-50 rounded-lg border">
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="p-4 bg-slate-50/50 rounded-lg border">
                             <IngredientSelector storeId={storeId} onSelectionChange={setSelectedIngredients} initialSelection={selectedIngredients} />
                         </div>
-                        <div className="p-4 bg-yellow-50/50 rounded-lg border border-yellow-100">
+                        <div className="p-4 bg-yellow-50/30 rounded-lg border border-yellow-100/50">
                             <AddonSelector storeId={storeId} onSelectionChange={setSelectedAddons} initialSelection={selectedAddons} />
                         </div>
                     </div>
@@ -447,7 +492,6 @@ export function MenuManager({ store, categories }: { store: any, categories: any
                                             </div>
                                             <p className="text-xs text-muted-foreground truncate">{product.description || "Sem descrição"}</p>
                                             
-                                            {/* Labels de Ingredientes e Adicionais */}
                                             <div className="flex flex-wrap gap-1 mt-1">
                                                 {product.ingredients?.map((i: any) => (<span key={i.id} className="text-[10px] bg-slate-100 px-1 rounded text-slate-500">{i.name}</span>))}
                                                 {product.addons?.length > 0 && <span className="text-[10px] bg-yellow-50 text-yellow-700 px-1 rounded border border-yellow-200">+{product.addons.length} adds</span>}
