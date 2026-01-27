@@ -3,9 +3,9 @@
 import { useState, useMemo, useEffect } from "react"
 import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet"
-import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" // Mantido para o menu horizontal de categorias
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -141,14 +141,11 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
     setIsSubmitting(true)
 
-    // Formata os itens para o formato que a Server Action espera
     const formattedItems = cart.map(item => {
-        // Resolve nomes e preços dos addons selecionados
         const resolvedAddons = item.addons
             ?.filter(a => item.selectedAddons.includes(a.id))
             .map(a => ({ name: a.name, price: a.price })) || []
 
-        // Resolve nomes dos ingredientes removidos
         const resolvedRemoved = item.ingredients
             ?.filter(i => item.removedIngredients.includes(i.id))
             .map(i => i.name) || []
@@ -156,7 +153,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         return {
             product_name: item.name,
             quantity: item.quantity,
-            unit_price: item.totalPrice, // Já inclui addons no preço unitário visual, mas podemos separar se quiser lógica mais complexa. Aqui mandamos o total unitário.
+            unit_price: item.totalPrice,
             observation: item.observation,
             removed_ingredients: resolvedRemoved,
             selected_addons: resolvedAddons
@@ -283,13 +280,17 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
       {/* SHEET: CARRINHO E CHECKOUT */}
       <Sheet open={isCartOpen} onOpenChange={(open) => { setIsCartOpen(open); if(!open) setTimeout(() => setStep("cart"), 300); }}>
-        <SheetContent className="w-full sm:max-w-md flex flex-col h-full bg-slate-50 p-0 font-sans" style={{ fontFamily: fontFamily }}>
+        {/* CORREÇÃO CRÍTICA: gap-0, flex-col, h-[100dvh] e overflow-hidden no container principal */}
+        <SheetContent className="w-full sm:max-w-md bg-slate-50 p-0 font-sans gap-0 flex flex-col h-[100dvh] overflow-hidden" style={{ fontFamily: fontFamily }}>
             
             {/* ETAPA 1: CARRINHO */}
             {step === "cart" && (
                 <>
-                    <SheetHeader className="p-5 border-b bg-white"><SheetTitle className="flex items-center gap-3 text-xl"><ShoppingBag className="w-6 h-6" style={{ color: primaryColor }} />Sua Sacola</SheetTitle></SheetHeader>
-                    <ScrollArea className="flex-1 p-5">
+                    {/* Header: shrink-0 para não amassar */}
+                    <SheetHeader className="p-5 border-b bg-white shrink-0"><SheetTitle className="flex items-center gap-3 text-xl"><ShoppingBag className="w-6 h-6" style={{ color: primaryColor }} />Sua Sacola</SheetTitle></SheetHeader>
+                    
+                    {/* Body: flex-1, min-h-0 (CRUCIAL PARA SCROLL) e overflow-y-auto */}
+                    <div className="flex-1 overflow-y-auto min-h-0 p-5 bg-slate-50">
                         {cart.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4"><div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center"><ShoppingBag className="w-10 h-10 opacity-20" /></div><p className="font-medium text-lg">Sua sacola está vazia</p></div>
                         ) : (
@@ -315,8 +316,9 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 ))}
                             </div>
                         )}
-                    </ScrollArea>
-                    <div className="p-5 bg-white border-t space-y-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    </div>
+                    {/* Footer: shrink-0 e z-index alto */}
+                    <div className="p-5 bg-white border-t space-y-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0 z-20">
                         <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(cartTotal)}</span></div>
                         <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 transition-all shadow-lg active:scale-[0.98]" style={{ backgroundColor: primaryColor }} disabled={cart.length === 0} onClick={() => setStep("checkout")}>Continuar</Button>
                     </div>
@@ -326,18 +328,16 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
             {/* ETAPA 2: CHECKOUT */}
             {step === "checkout" && (
                 <>
-                    <SheetHeader className="p-5 border-b bg-white flex flex-row items-center gap-3 space-y-0">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 -ml-2" onClick={() => setStep("cart")}><X className="h-4 w-4" /></Button>
-                        <SheetTitle className="text-xl">Finalizar Pedido</SheetTitle>
-                    </SheetHeader>
-                    <ScrollArea className="flex-1 p-5 bg-white">
-                        <div className="space-y-6">
+                    <SheetHeader className="p-5 border-b bg-white flex flex-row items-center gap-3 space-y-0 shrink-0"><Button variant="ghost" size="icon" className="h-8 w-8 -ml-2" onClick={() => setStep("cart")}><X className="h-4 w-4" /></Button><SheetTitle className="text-xl">Finalizar Pedido</SheetTitle></SheetHeader>
+                    
+                    <div className="flex-1 overflow-y-auto min-h-0 p-5 bg-white">
+                        <div className="space-y-6 pb-4">
                             {/* Identificação */}
                             <div className="space-y-3">
                                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">1</div> Seus Dados</h3>
                                 <div className="grid gap-3 pl-8">
                                     <div><Label>Seu Nome</Label><Input placeholder="Como te chamamos?" value={checkoutData.name} onChange={e => setCheckoutData({...checkoutData, name: e.target.value})} /></div>
-                                    <div><Label>WhatsApp / Telefone</Label><Input placeholder="(00) 00000-0000" value={checkoutData.phone} onChange={e => setCheckoutData({...checkoutData, phone: e.target.value})} /></div>
+                                    <div><Label>WhatsApp / Telefone</Label><Input placeholder="(00) 00000-0000" type="tel" value={checkoutData.phone} onChange={e => setCheckoutData({...checkoutData, phone: e.target.value})} /></div>
                                 </div>
                             </div>
 
@@ -382,8 +382,9 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 </div>
                             </div>
                         </div>
-                    </ScrollArea>
-                    <div className="p-5 bg-white border-t space-y-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    </div>
+                    {/* Footer */}
+                    <div className="p-5 bg-white border-t space-y-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0 z-20">
                         <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(cartTotal)}</span></div>
                         <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 transition-all shadow-lg" style={{ backgroundColor: primaryColor }} onClick={handleFinishOrder} disabled={isSubmitting}>
                             {isSubmitting ? <Loader2 className="animate-spin" /> : "Enviar Pedido"}
