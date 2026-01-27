@@ -43,7 +43,7 @@ export async function createIngredientAction(storeId: string, name: string) {
     return data;
 }
 
-// --- ADICIONAIS (Alterado) ---
+// --- ADICIONAIS ---
 
 export async function getStoreAddonsAction(storeId: string) {
     const supabase = await createClient();
@@ -51,7 +51,6 @@ export async function getStoreAddonsAction(storeId: string) {
     return data || [];
 }
 
-// Agora cria APENAS com nome (sem preço global)
 export async function createAddonAction(storeId: string, name: string) {
     const supabase = await createClient();
     const { data, error } = await supabase.from("addons").insert({ store_id: storeId, name }).select().single();
@@ -61,7 +60,6 @@ export async function createAddonAction(storeId: string, name: string) {
 
 // --- PRODUTOS ---
 
-// Função auxiliar para processar imagem
 async function handleImageUpload(supabase: any, imageFile: File, prefix: string) {
     if (!imageFile || imageFile.size === 0) return null;
     const fileExt = imageFile.name.split('.').pop();
@@ -72,17 +70,50 @@ async function handleImageUpload(supabase: any, imageFile: File, prefix: string)
     return data.publicUrl;
 }
 
+// Função CENTRALIZADA para salvar relacionamentos (Onde estava o erro)
+async function saveRelations(supabase: any, productId: string, ingredientsJson: string, addonsJson: string) {
+    // 1. Ingredientes (Lista de IDs simples: ["uuid1", "uuid2"])
+    if (ingredientsJson) {
+        try {
+            const ids = JSON.parse(ingredientsJson);
+            await supabase.from("product_ingredients").delete().eq("product_id", productId);
+            if (Array.isArray(ids) && ids.length > 0) {
+                // Aqui 'id' é uma string, então passamos direto
+                await supabase.from("product_ingredients").insert(ids.map((id: string) => ({ 
+                    product_id: productId, 
+                    ingredient_id: id 
+                })));
+            }
+        } catch (e) { console.error("Erro ing:", e); }
+    }
+
+    // 2. Adicionais (Lista de Objetos: [{id: "uuid", price: 2.0}, ...])
+    if (addonsJson) {
+        try {
+            const addons = JSON.parse(addonsJson); 
+            await supabase.from("product_addons").delete().eq("product_id", productId);
+            if (Array.isArray(addons) && addons.length > 0) {
+                // CORREÇÃO CRÍTICA AQUI:
+                // O map recebe um 'item' (objeto), e pegamos item.id e item.price
+                await supabase.from("product_addons").insert(addons.map((item: any) => ({
+                    product_id: productId,
+                    addon_id: item.id,   // <--- O ID vem daqui
+                    price: item.price    // <--- O Preço vem daqui
+                })));
+            }
+        } catch (e) { console.error("Erro addons:", e); }
+    }
+}
+
 export async function createProductAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   const storeId = formData.get("storeId") as string;
   
-  // Tratamento de valores monetários
   const rawPrice = formData.get("price") as string;
   const price = parseFloat(rawPrice.replace("R$", "").replace(/\./g, "").replace(",", "."));
 
   const imageUrl = await handleImageUpload(supabase, formData.get("image") as File, storeId);
 
-  // Cria Produto
   const { data: product, error } = await supabase.from("products").insert({
     store_id: storeId,
     category_id: formData.get("categoryId"),
@@ -94,7 +125,6 @@ export async function createProductAction(prevState: any, formData: FormData) {
 
   if (error) return { error: "Erro ao criar produto." };
 
-  // Vínculos
   await saveRelations(supabase, product.id, formData.get("ingredients") as string, formData.get("addons") as string);
 
   revalidatePath("/");
@@ -121,40 +151,10 @@ export async function updateProductAction(prevState: any, formData: FormData) {
     const { error } = await supabase.from("products").update(updates).eq("id", productId);
     if (error) return { error: "Erro ao atualizar produto." };
   
-    // Atualiza Vínculos
     await saveRelations(supabase, productId, formData.get("ingredients") as string, formData.get("addons") as string);
   
     revalidatePath("/");
     return { success: true };
-}
-
-// Lógica de salvar Ingredientes e Adicionais (Centralizada)
-async function saveRelations(supabase: any, productId: string, ingredientsJson: string, addonsJson: string) {
-    // 1. Ingredientes (Simples IDs)
-    if (ingredientsJson) {
-        try {
-            const ids = JSON.parse(ingredientsJson);
-            await supabase.from("product_ingredients").delete().eq("product_id", productId);
-            if (Array.isArray(ids) && ids.length > 0) {
-                await supabase.from("product_ingredients").insert(ids.map((id: string) => ({ product_id: productId, ingredient_id: id })));
-            }
-        } catch (e) { console.error("Erro ing:", e); }
-    }
-
-    // 2. Adicionais (Objeto com Preço: [{id, price}, ...])
-    if (addonsJson) {
-        try {
-            const addons = JSON.parse(addonsJson); // Espera: [{id: "...", price: 1.50}, ...]
-            await supabase.from("product_addons").delete().eq("product_id", productId);
-            if (Array.isArray(addons) && addons.length > 0) {
-                await supabase.from("product_addons").insert(addons.map((item: any) => ({
-                    product_id: productId,
-                    addon_id: item.id,
-                    price: item.price // Salva o preço na relação!
-                })));
-            }
-        } catch (e) { console.error("Erro addons:", e); }
-    }
 }
 
 export async function deleteProductAction(productId: string) {
