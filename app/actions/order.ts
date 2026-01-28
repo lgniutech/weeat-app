@@ -24,7 +24,7 @@ interface OrderInput {
   items: OrderItemInput[];
 }
 
-// CRIAR PEDIDO (Loja)
+// CRIAR PEDIDO
 export async function createOrderAction(order: OrderInput) {
   const supabase = await createClient();
 
@@ -78,8 +78,7 @@ export async function createOrderAction(order: OrderInput) {
   return { success: true, orderId: newOrder.id };
 }
 
-// BUSCAR PEDIDOS (COM FILTRO DE DATA)
-// dateFilter deve vir no formato "YYYY-MM-DD"
+// BUSCAR PEDIDOS
 export async function getStoreOrdersAction(storeId: string, dateFilter?: string) {
     const supabase = await createClient();
     
@@ -92,7 +91,6 @@ export async function getStoreOrdersAction(storeId: string, dateFilter?: string)
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
 
-    // Se tiver data, aplica o filtro do dia (00:00 até 23:59)
     if (dateFilter) {
         query = query
             .gte('created_at', `${dateFilter}T00:00:00`)
@@ -105,8 +103,8 @@ export async function getStoreOrdersAction(storeId: string, dateFilter?: string)
     return data || [];
 }
 
-// ATUALIZAR STATUS
-export async function updateOrderStatusAction(orderId: string, newStatus: string) {
+// ATUALIZAR STATUS (AGORA COM MOTIVO)
+export async function updateOrderStatusAction(orderId: string, newStatus: string, reason?: string) {
     const supabase = await createClient();
 
     const { data: currentOrder } = await supabase
@@ -118,12 +116,20 @@ export async function updateOrderStatusAction(orderId: string, newStatus: string
     if (!currentOrder) return { error: "Pedido não encontrado" };
     const previousStatus = currentOrder.status;
 
+    // Objeto de atualização dinâmica
+    const updateData: any = { 
+        status: newStatus,
+        last_status_change: new Date().toISOString() 
+    };
+
+    // Se tiver motivo, salva
+    if (reason) {
+        updateData.cancellation_reason = reason;
+    }
+
     const { error: updateError } = await supabase
         .from("orders")
-        .update({ 
-            status: newStatus,
-            last_status_change: new Date().toISOString() 
-        })
+        .update(updateData)
         .eq("id", orderId);
     
     if (updateError) return { error: "Erro ao atualizar status" };

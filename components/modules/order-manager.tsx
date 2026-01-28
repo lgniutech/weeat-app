@@ -6,16 +6,19 @@ import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/ord
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-// ADICIONADO: ArrowLeft na importação
-import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft, MessageSquareWarning } from "lucide-react"
 import { format, differenceInMinutes, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 
 const BASE_COLUMNS = [
   { id: 'pendente', label: 'Pendente', color: 'bg-yellow-500', text: 'text-yellow-700', icon: AlertCircle },
@@ -33,12 +36,14 @@ export function OrderManager({ store }: { store: any }) {
   const [showCanceled, setShowCanceled] = useState(false)
   const [now, setNow] = useState(new Date())
   
-  // ESTADO DA DATA (Padrão: Hoje)
+  // ESTADOS DO MODAL DE CANCELAMENTO
+  const [isCancelOpen, setIsCancelOpen] = useState(false)
+  const [orderToCancel, setOrderToCancel] = useState<string | null>(null)
+  const [cancelReason, setCancelReason] = useState("")
+  
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Função para buscar pedidos (com filtro de data)
   const fetchOrders = async () => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd')
     const data = await getStoreOrdersAction(store.id, dateStr)
@@ -53,23 +58,19 @@ export function OrderManager({ store }: { store: any }) {
     }
   }
 
-  // Timer para atualizar minutos do "há quanto tempo"
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 60000)
     return () => clearInterval(interval)
   }, [])
 
-  // Timer 2: Auto-Refresh dos Pedidos (Backup do Realtime) - A cada 30s
   useEffect(() => {
     const interval = setInterval(() => {
         console.log("Auto-refreshing orders...")
         fetchOrders()
-    }, 30000) // 30 segundos
-
+    }, 30000) 
     return () => clearInterval(interval)
   }, [selectedDate, store.id])
 
-  // Efeito principal: Realtime + Carga Inicial
   useEffect(() => {
     fetchOrders()
     audioRef.current = new Audio("https://hebbkx1anhila5yf.public.blob.vercel-storage.com/call-bell-ding-mYDJlF6XtEMcaiRvPr22v5Te9d2Rdm.mp3")
@@ -81,7 +82,6 @@ export function OrderManager({ store }: { store: any }) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
         (payload) => {
-          // Só toca som e atualiza se o filtro for "Hoje"
           if (isToday(selectedDate)) {
              playNotificationSound()
              fetchOrders()
@@ -100,12 +100,37 @@ export function OrderManager({ store }: { store: any }) {
     return () => { supabase.removeChannel(channel) }
   }, [store.id, soundEnabled, selectedDate])
 
+  // Função genérica de mover (sem motivo)
   const moveOrder = async (orderId: string, nextStatus: string) => {
     const nowISO = new Date().toISOString()
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus, last_status_change: nowISO } : o))
     
     const res = await updateOrderStatusAction(orderId, nextStatus)
     if (res?.error) fetchOrders()
+  }
+
+  // Abre o modal de cancelamento
+  const handleCancelClick = (orderId: string) => {
+      setOrderToCancel(orderId)
+      setCancelReason("") // Reseta o motivo
+      setIsCancelOpen(true)
+  }
+
+  // Confirma o cancelamento com motivo
+  const confirmCancel = async () => {
+      if (!orderToCancel) return
+
+      // Atualização Otimista
+      const nowISO = new Date().toISOString()
+      setOrders(prev => prev.map(o => o.id === orderToCancel ? { ...o, status: 'cancelado', last_status_change: nowISO, cancellation_reason: cancelReason } : o))
+      setIsCancelOpen(false)
+
+      // Server Action
+      const res = await updateOrderStatusAction(orderToCancel, 'cancelado', cancelReason)
+      if (res?.error) {
+          alert("Erro ao cancelar pedido.")
+          fetchOrders()
+      }
   }
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -142,10 +167,8 @@ export function OrderManager({ store }: { store: any }) {
       return format(dateRef, "HH:mm")
   }
 
-  // Handlers de Data
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if(e.target.valueAsDate) {
-          // Ajuste de fuso horário simples
           const date = new Date(e.target.value + 'T00:00:00')
           setSelectedDate(date)
       }
@@ -157,7 +180,6 @@ export function OrderManager({ store }: { store: any }) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-slate-50">
-      {/* CSS TRICK: Expande o clique do calendário */}
       <style jsx global>{`
         .full-picker-input::-webkit-calendar-picker-indicator {
             position: absolute;
@@ -182,7 +204,6 @@ export function OrderManager({ store }: { store: any }) {
             </span>
           </h2>
 
-          {/* CONTROLE DE DATA */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
              <Button 
                 size="sm" 
@@ -193,14 +214,11 @@ export function OrderManager({ store }: { store: any }) {
                 Hoje
              </Button>
              
-             {/* CONTAINER RELATIVO */}
              <div className="relative group">
-                 {/* Visual Text */}
                  <div className={cn("h-7 px-3 flex items-center justify-center text-xs font-bold text-slate-700 rounded cursor-pointer transition-colors min-w-[90px] pointer-events-none select-none", !isFilterToday && "bg-white shadow-sm border border-slate-200/50 group-hover:bg-slate-50")}>
                     {format(selectedDate, 'dd/MM/yyyy')}
                  </div>
                  
-                 {/* Input Nativo Invisível */}
                  <input 
                     type="date" 
                     className="full-picker-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -266,12 +284,10 @@ export function OrderManager({ store }: { store: any }) {
                                         </div>
                                         
                                         <div className="flex items-center gap-1.5 shrink-0">
-                                            {/* Tempo Criação (Fixo) */}
                                             <div className="flex items-center gap-0.5 text-[9px] text-slate-400" title="Criado às">
                                                 <Clock className="w-2.5 h-2.5" /> {format(new Date(order.created_at), "HH:mm")}
                                             </div>
 
-                                            {/* Tempo na Etapa (Dinâmico) */}
                                             <div className={cn("flex items-center gap-0.5 text-[9px] font-bold px-1 rounded border", 
                                                 isLongWait ? "bg-red-50 text-red-600 border-red-100 animate-pulse" : "bg-white text-slate-600 border-slate-100")} 
                                                 title={order.status === 'entregue' ? "Finalizado às" : "Tempo nesta etapa"}>
@@ -279,26 +295,29 @@ export function OrderManager({ store }: { store: any }) {
                                                 {timeInStage}
                                             </div>
                                             
-                                            {/* Dropdown Cancelar (Hover) */}
+                                            {/* Botão de Cancelar (Abre Modal) */}
                                             {['pendente', 'preparando', 'enviado'].includes(order.status) && (
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <button className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 ml-0.5">
-                                                            <Trash2 className="w-3 h-3" />
-                                                        </button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="w-32">
-                                                        <DropdownMenuItem onClick={() => moveOrder(order.id, 'cancelado')} className="text-red-600 text-xs py-1">
-                                                            Confirmar
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                <button 
+                                                    className="text-slate-300 hover:text-red-500 transition-colors ml-0.5" 
+                                                    onClick={() => handleCancelClick(order.id)}
+                                                    title="Cancelar Pedido"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
                                             )}
                                         </div>
                                     </div>
 
                                     {/* Conteúdo: Itens Compactos */}
                                     <div className="px-2 py-1.5 space-y-0.5">
+                                        {/* MOSTRAR MOTIVO DO CANCELAMENTO (Só se estiver cancelado) */}
+                                        {order.status === 'cancelado' && order.cancellation_reason && (
+                                            <div className="bg-red-50 text-red-700 p-1 rounded text-[10px] mb-1 flex items-start gap-1">
+                                                <MessageSquareWarning className="w-3 h-3 shrink-0 mt-0.5" />
+                                                <span className="font-medium leading-tight">{order.cancellation_reason}</span>
+                                            </div>
+                                        )}
+
                                         {order.items.map((item: any, idx: number) => {
                                             const removed = parseJson(item.removed_ingredients);
                                             const addons = parseJson(item.selected_addons);
@@ -322,7 +341,6 @@ export function OrderManager({ store }: { store: any }) {
                                             )
                                         })}
                                         
-                                        {/* Footer Info: Preço e Endereço */}
                                         <div className="flex justify-between items-center pt-1.5 mt-0.5 border-t border-dashed border-slate-100">
                                             <div className="flex items-center gap-1 text-[9px] text-slate-400 max-w-[60%]">
                                                 {order.delivery_type === 'entrega' ? <Bike className="w-2.5 h-2.5 shrink-0" /> : <Store className="w-2.5 h-2.5 shrink-0" />}
@@ -335,7 +353,7 @@ export function OrderManager({ store }: { store: any }) {
                                     {/* Botões de Ação */}
                                     {col.id === 'pendente' && (
                                         <div className="grid grid-cols-2 h-6 mt-px">
-                                            <button onClick={() => moveOrder(order.id, 'cancelado')} className="bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 text-[10px] font-bold border-t border-r border-slate-100 transition-colors">RECUSAR</button>
+                                            <button onClick={() => handleCancelClick(order.id)} className="bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 text-[10px] font-bold border-t border-r border-slate-100 transition-colors">RECUSAR</button>
                                             <button onClick={() => moveOrder(order.id, 'preparando')} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors">ACEITAR</button>
                                         </div>
                                     )}
@@ -373,6 +391,31 @@ export function OrderManager({ store }: { store: any }) {
             })}
         </div>
       </div>
+
+      {/* MODAL DE CANCELAMENTO */}
+      <Dialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Cancelar Pedido</DialogTitle>
+                <DialogDescription>
+                    Por que você está cancelando este pedido? Essa informação é importante para o seu controle.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-2">
+                <Label htmlFor="reason">Motivo</Label>
+                <Textarea 
+                    id="reason" 
+                    placeholder="Ex: Cliente desistiu, Falta de ingrediente, Trote..." 
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                />
+            </div>
+            <DialogFooter className="flex flex-row justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsCancelOpen(false)}>Voltar</Button>
+                <Button variant="destructive" onClick={confirmCancel}>Confirmar Cancelamento</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
