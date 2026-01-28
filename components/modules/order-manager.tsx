@@ -134,7 +134,7 @@ export function OrderManager({ store }: { store: any }) {
   // Handlers de Data
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if(e.target.valueAsDate) {
-          // Ajuste de fuso horário para garantir a data local correta
+          // Ajuste de fuso horário simples
           const date = new Date(e.target.value + 'T00:00:00')
           setSelectedDate(date)
       }
@@ -146,6 +146,21 @@ export function OrderManager({ store }: { store: any }) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-slate-50">
+      {/* CSS TRICK: Expande o clique do calendário para o input inteiro */}
+      <style jsx global>{`
+        .full-picker-input::-webkit-calendar-picker-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+      `}</style>
+
       {/* HEADER KDS */}
       <div className="flex items-center justify-between px-3 py-2 shrink-0 bg-white border-b shadow-sm h-14">
         <div className="flex items-center gap-4">
@@ -156,7 +171,7 @@ export function OrderManager({ store }: { store: any }) {
             </span>
           </h2>
 
-          {/* CONTROLE DE DATA (DESIGN LIMPO) */}
+          {/* CONTROLE DE DATA (DESIGN LIMPO E FUNCIONAL) */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
              <Button 
                 size="sm" 
@@ -167,26 +182,22 @@ export function OrderManager({ store }: { store: any }) {
                 Hoje
              </Button>
              
-             {/* CONTAINER RELATIVO: Texto visual + Input Invisível por cima */}
-             <div className="relative">
-                 {/* O texto bonito que aparece para o usuário */}
-                 <div className={cn("h-7 px-3 flex items-center justify-center text-xs font-bold text-slate-700 rounded cursor-pointer transition-colors min-w-[90px]", !isFilterToday && "bg-white shadow-sm border border-slate-200/50")}>
+             {/* CONTAINER RELATIVO */}
+             <div className="relative group">
+                 {/* Visual Text (Inerte, apenas visual) */}
+                 <div className={cn("h-7 px-3 flex items-center justify-center text-xs font-bold text-slate-700 rounded cursor-pointer transition-colors min-w-[90px] pointer-events-none select-none", !isFilterToday && "bg-white shadow-sm border border-slate-200/50 group-hover:bg-slate-50")}>
                     {format(selectedDate, 'dd/MM/yyyy')}
                  </div>
                  
-                 {/* O Input Nativo que recebe o clique real (Invisível) */}
+                 {/* Input Nativo Invisível (Recebe o clique real) */}
                  <input 
                     type="date" 
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    className="full-picker-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     value={format(selectedDate, 'yyyy-MM-dd')}
                     onChange={handleDateChange}
                     onClick={(e) => {
-                        try {
-                            // Força a abertura do picker nativo no clique
-                            e.currentTarget.showPicker() 
-                        } catch(err) {
-                            // Fallback silencioso para browsers antigos
-                        }
+                        // Tenta forçar a abertura via API (suporte moderno)
+                        try { e.currentTarget.showPicker() } catch(err) {}
                     }}
                  />
              </div>
