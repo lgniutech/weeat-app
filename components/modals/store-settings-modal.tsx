@@ -31,19 +31,28 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
   const [phone, setPhone] = useState("")
   const [hours, setHours] = useState<any[]>([])
 
-  // States de Endereço
-  const [cep, setCep] = useState("")
+  // States de Endereço Completo
+  const [zipCode, setZipCode] = useState("")
+  const [street, setStreet] = useState("")
+  const [number, setNumber] = useState("")
+  const [neighborhood, setNeighborhood] = useState("")
+  const [complement, setComplement] = useState("")
   const [city, setCity] = useState("")
   const [uf, setUf] = useState("")
   const [isLoadingCep, setIsLoadingCep] = useState(false)
 
-  // Sincroniza dados
+  // Sincroniza dados ao abrir
   useEffect(() => {
     if (store) {
       setCnpj(store.cnpj || "")
       setPhone(store.whatsapp || "")
       
-      // Carrega Cidade e Estado já salvos
+      // Carrega endereço
+      setZipCode(store.zip_code || "")
+      setStreet(store.street || "")
+      setNumber(store.number || "")
+      setNeighborhood(store.neighborhood || "")
+      setComplement(store.complement || "")
       setCity(store.city || "")
       setUf(store.state || "")
       
@@ -59,13 +68,6 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
       setHours(store.settings?.business_hours || defaultHours)
     }
   }, [store, isOpen])
-
-  // Fecha modal após sucesso (Opcional, removido para permitir ver o feedback de sucesso)
-  /* useEffect(() => {
-    if(state?.success) {
-      // onOpenChange(false)
-    }
-  }, [state]) */
 
   // Máscaras
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,24 +88,28 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     setPhone(value)
   }
 
-  // Lógica de CEP
+  // BUSCA INTELIGENTE DE CEP
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
      let value = e.target.value.replace(/\D/g, "")
      if (value.length > 8) value = value.slice(0, 8)
      value = value.replace(/^(\d{5})(\d)/, "$1-$2")
-     setCep(value)
+     setZipCode(value)
   }
 
   const handleCepBlur = async () => {
-    const cleanCep = cep.replace(/\D/g, "")
+    const cleanCep = zipCode.replace(/\D/g, "")
     if (cleanCep.length === 8) {
       setIsLoadingCep(true)
       try {
         const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
         const data = await response.json()
         if (!data.erro) {
+          setStreet(data.logradouro)
+          setNeighborhood(data.bairro)
           setCity(data.localidade)
           setUf(data.uf)
+          // Foca no campo de número após carregar (ux)
+          document.getElementById("number")?.focus()
         }
       } catch (error) {
         console.error("Erro ao buscar CEP", error)
@@ -134,17 +140,17 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           </div>
           <DialogTitle className="text-center">Configurações & Perfil</DialogTitle>
           <DialogDescription className="text-center">
-            Gerencie seus dados e informações da loja.
+            Mantenha os dados da sua loja sempre atualizados.
           </DialogDescription>
         </DialogHeader>
 
         <form action={action} className="space-y-6 mt-2">
           
-          {/* SEÇÃO 1: PESSOAL & SEGURANÇA */}
+          {/* SEÇÃO 1: PESSOAL */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
               <User className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Perfil e Segurança</h3>
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Acesso</h3>
             </div>
             <div className="space-y-2">
               <Label htmlFor="fullName">Seu Nome</Label>
@@ -156,24 +162,24 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                 <Label htmlFor="password">Nova Senha (Opcional)</Label>
                 <div className="relative">
                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                   <Input id="password" name="password" type="password" placeholder="Mudar senha..." className="pl-9"/>
+                   <Input id="password" name="password" type="password" placeholder="********" className="pl-9"/>
                 </div>
                </div>
                <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
                 <div className="relative">
                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                   <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="Repita a senha" className="pl-9"/>
+                   <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="********" className="pl-9"/>
                 </div>
                </div>
             </div>
           </div>
 
-          {/* SEÇÃO 2: LOJA */}
+          {/* SEÇÃO 2: DADOS DA LOJA */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
               <Store className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Informações da Loja</h3>
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Dados Básicos</h3>
             </div>
 
             <div className="space-y-2">
@@ -186,14 +192,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                 <Label htmlFor="cnpj">CNPJ</Label>
                 <div className="relative">
                   <FileText className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="cnpj" 
-                    name="cnpj" 
-                    value={cnpj} 
-                    onChange={handleCnpjChange}
-                    className="pl-9"
-                    disabled
-                  />
+                  <Input id="cnpj" name="cnpj" value={cnpj} onChange={handleCnpjChange} className="pl-9" disabled />
                 </div>
               </div>
 
@@ -201,51 +200,75 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                 <Label htmlFor="whatsapp">WhatsApp</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="whatsapp" 
-                    name="whatsapp" 
-                    value={phone} 
-                    onChange={handlePhoneChange}
-                    className="pl-9"
-                    required
-                  />
+                  <Input id="whatsapp" name="whatsapp" value={phone} onChange={handlePhoneChange} className="pl-9" required />
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* SEÇÃO DE ENDEREÇO (NOVO) */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-3 rounded-lg border">
+          {/* SEÇÃO 3: ENDEREÇO DA LOJA (COMPLETO) */}
+          <div className="space-y-4">
+             <div className="flex items-center gap-2 pb-2 border-b">
+              <MapPin className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Endereço da Loja</h3>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-4 rounded-lg border">
+                {/* LINHA 1: CEP */}
                 <div className="col-span-2 md:col-span-1 space-y-2">
-                    <Label htmlFor="cep">Atualizar CEP</Label>
+                    <Label htmlFor="zipCode">CEP</Label>
                     <div className="relative">
-                        <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            id="cep" 
-                            value={cep} 
+                         <Input 
+                            id="zipCode" 
+                            name="zipCode"
+                            value={zipCode} 
                             onChange={handleCepChange} 
                             onBlur={handleCepBlur} 
-                            placeholder="Buscar..." 
-                            className="pl-8"
+                            placeholder="00000-000" 
+                            required
                         />
+                         {isLoadingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-primary" />}
                     </div>
                 </div>
+                
+                {/* LINHA 1: CIDADE/UF (Read Only) */}
                 <div className="col-span-2 md:col-span-2 space-y-2">
-                     <Label htmlFor="city">Cidade {isLoadingCep && <Loader2 className="inline w-3 h-3 animate-spin"/>}</Label>
-                     <Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} placeholder="Cidade" required readOnly={isLoadingCep}/>
+                     <Label htmlFor="city">Cidade</Label>
+                     <Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} readOnly className="bg-muted"/>
                 </div>
                 <div className="col-span-2 md:col-span-1 space-y-2">
                      <Label htmlFor="state">UF</Label>
-                     <Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} placeholder="UF" maxLength={2} required readOnly={isLoadingCep}/>
+                     <Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} readOnly className="bg-muted"/>
+                </div>
+
+                {/* LINHA 2: LOGRADOURO E NÚMERO */}
+                <div className="col-span-2 md:col-span-3 space-y-2">
+                    <Label htmlFor="street">Logradouro (Rua/Av.)</Label>
+                    <Input id="street" name="street" value={street} onChange={e => setStreet(e.target.value)} placeholder="Rua..." required />
+                </div>
+                <div className="col-span-2 md:col-span-1 space-y-2">
+                    <Label htmlFor="number">Número</Label>
+                    <Input id="number" name="number" value={number} onChange={e => setNumber(e.target.value)} placeholder="123" required />
+                </div>
+
+                {/* LINHA 3: BAIRRO E COMPLEMENTO */}
+                <div className="col-span-2 space-y-2">
+                    <Label htmlFor="neighborhood">Bairro</Label>
+                    <Input id="neighborhood" name="neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} placeholder="Centro" required />
+                </div>
+                <div className="col-span-2 space-y-2">
+                    <Label htmlFor="complement">Complemento</Label>
+                    <Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} placeholder="Sala 01, Térreo..." />
                 </div>
             </div>
-
+             
              <div className="space-y-2">
               <Label htmlFor="logo">Logotipo</Label>
               <Input id="logo" name="logo" type="file" accept="image/*" className="cursor-pointer text-sm" />
             </div>
           </div>
 
-          {/* SEÇÃO 3: HORÁRIOS */}
+          {/* SEÇÃO 4: HORÁRIOS */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 pb-2 border-b">
               <Clock className="w-4 h-4 text-primary" />
