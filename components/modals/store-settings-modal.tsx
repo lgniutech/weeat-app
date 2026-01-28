@@ -47,7 +47,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
       setCnpj(store.cnpj || "")
       setPhone(store.whatsapp || "")
       
-      // Carrega endereço
+      // Carrega endereço existente
       setZipCode(store.zip_code || "")
       setStreet(store.street || "")
       setNumber(store.number || "")
@@ -88,7 +88,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     setPhone(value)
   }
 
-  // BUSCA INTELIGENTE DE CEP
+  // --- LÓGICA INTELIGENTE DE CEP ---
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
      let value = e.target.value.replace(/\D/g, "")
      if (value.length > 8) value = value.slice(0, 8)
@@ -104,12 +104,16 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
         const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
         const data = await response.json()
         if (!data.erro) {
+          // Preenche o que a API devolveu
           setStreet(data.logradouro)
           setNeighborhood(data.bairro)
           setCity(data.localidade)
           setUf(data.uf)
-          // Foca no campo de número após carregar (ux)
-          document.getElementById("number")?.focus()
+          
+          // UX: Foca automaticamente no campo Número para o usuário completar
+          setTimeout(() => {
+              document.getElementById("number")?.focus()
+          }, 100)
         }
       } catch (error) {
         console.error("Erro ao buscar CEP", error)
@@ -133,7 +137,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
             <Settings className="w-6 h-6 text-primary" />
