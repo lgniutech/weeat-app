@@ -167,11 +167,24 @@ export function OrderManager({ store }: { store: any }) {
                 Hoje
              </Button>
              
+             {/* CORREÇÃO DO CLICK: 
+                Adicionei onClick com showPicker() para forçar a abertura do calendário 
+                ao clicar em qualquer lugar do campo, não apenas no ícone.
+             */}
              <input 
                 type="date" 
-                className="h-7 px-2 text-xs bg-transparent border-none focus:ring-0 text-slate-700 font-bold cursor-pointer outline-none hover:bg-white/50 rounded transition-colors"
+                className="h-7 px-2 text-xs bg-transparent border-none focus:ring-0 text-slate-700 font-bold cursor-pointer outline-none hover:bg-white/50 rounded transition-colors w-[110px]"
                 value={format(selectedDate, 'yyyy-MM-dd')}
                 onChange={handleDateChange}
+                onClick={(e) => {
+                    try {
+                        // Força abrir o calendário nativo do browser
+                        e.currentTarget.showPicker() 
+                    } catch(err) {
+                        // Fallback para browsers antigos que não suportam showPicker (raro hoje em dia)
+                        console.log("Picker not supported")
+                    }
+                }}
              />
           </div>
         </div>
