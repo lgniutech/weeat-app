@@ -35,7 +35,7 @@ export async function createOrderAction(order: OrderInput) {
       store_id: order.storeId,
       status: "pendente",
       customer_name: order.customerName,
-      customer_phone: order.customerPhone,
+      customer_phone: order.customerPhone, // Espera receber APENAS números aqui
       delivery_type: order.deliveryType,
       address: order.address,
       payment_method: order.paymentMethod,
@@ -70,12 +70,10 @@ export async function createOrderAction(order: OrderInput) {
     return { error: "Erro ao registrar itens do pedido." };
   }
 
-  // Se você tiver a integração de envio de msg via WhatsApp API (Twilio/Z-API), seria aqui.
-
   return { success: true, orderId: newOrder.id };
 }
 
-// BUSCAR PEDIDOS (Dashboard)
+// BUSCAR PEDIDOS (Dashboard do Lojista)
 export async function getStoreOrdersAction(storeId: string) {
     const supabase = await createClient();
     
@@ -93,7 +91,7 @@ export async function getStoreOrdersAction(storeId: string) {
     return data || [];
 }
 
-// ATUALIZAR STATUS (Dashboard)
+// ATUALIZAR STATUS (Dashboard do Lojista)
 export async function updateOrderStatusAction(orderId: string, newStatus: string) {
     const supabase = await createClient();
     const { error } = await supabase
@@ -105,4 +103,33 @@ export async function updateOrderStatusAction(orderId: string, newStatus: string
     
     revalidatePath("/");
     return { success: true };
+}
+
+// RASTREIO DE PEDIDOS (Cliente Final)
+export async function getCustomerOrdersAction(phone: string) {
+  const supabase = await createClient();
+  
+  // Garante que estamos buscando apenas números
+  const clean = phone.replace(/\D/g, "")
+
+  if (!clean) return []
+
+  const { data, error } = await supabase
+      .from("orders")
+      .select(`
+          *,
+          store:stores(name, slug),
+          items:order_items(*)
+      `)
+      // Busca segura: tenta encontrar o telefone limpo
+      .eq("customer_phone", clean)
+      .order("created_at", { ascending: false })
+      .limit(5) // Limita aos últimos 5 pedidos
+
+  if (error) {
+      console.error("Erro ao buscar pedidos:", error);
+      return [];
+  }
+  
+  return data || [];
 }

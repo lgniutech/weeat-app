@@ -3,14 +3,14 @@
 import { useState, useMemo, useEffect } from "react"
 import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" // Mantido para o menu horizontal de categorias
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { cn } from "@/lib/utils"
+import { cn, formatPhone, cleanPhone } from "@/lib/utils" // IMPORTADO formatPhone e cleanPhone
 import { createOrderAction } from "@/app/actions/order"
 
 // Interfaces
@@ -160,10 +160,13 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         }
     })
 
+    // HIGIENE DE DADOS: Limpa o telefone antes de salvar
+    const cleanNumber = cleanPhone(checkoutData.phone)
+
     const orderPayload = {
         storeId: store.id,
         customerName: checkoutData.name,
-        customerPhone: checkoutData.phone,
+        customerPhone: cleanNumber, // SALVA SOMENTE NÚMEROS
         deliveryType: checkoutData.deliveryType,
         address: checkoutData.address,
         paymentMethod: checkoutData.paymentMethod,
@@ -337,7 +340,17 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">1</div> Seus Dados</h3>
                                 <div className="grid gap-3 pl-8">
                                     <div><Label>Seu Nome</Label><Input placeholder="Como te chamamos?" value={checkoutData.name} onChange={e => setCheckoutData({...checkoutData, name: e.target.value})} /></div>
-                                    <div><Label>WhatsApp / Telefone</Label><Input placeholder="(00) 00000-0000" type="tel" value={checkoutData.phone} onChange={e => setCheckoutData({...checkoutData, phone: e.target.value})} /></div>
+                                    <div>
+                                        <Label>WhatsApp / Telefone</Label>
+                                        <Input 
+                                            placeholder="(00) 00000-0000" 
+                                            type="tel" 
+                                            value={checkoutData.phone} 
+                                            // APLICA MÁSCARA NO ONCHANGE
+                                            onChange={e => setCheckoutData({...checkoutData, phone: formatPhone(e.target.value)})} 
+                                            maxLength={15}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

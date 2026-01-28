@@ -9,10 +9,9 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { AlertCircle, Bike, CheckCircle2, Clock, MapPin, Package, User, Volume2, VolumeX } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, User, Volume2, VolumeX } from "lucide-react"
 import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
-import { cn } from "@/lib/utils"
+import { cn, formatPhone } from "@/lib/utils" // IMPORTADO formatPhone
 
 // Definição dos Status e Cores
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
@@ -29,7 +28,6 @@ export function OrderManager({ store }: { store: any }) {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Função para carregar pedidos iniciais
   const fetchOrders = async () => {
     setLoading(true)
     const data = await getStoreOrdersAction(store.id)
@@ -37,24 +35,20 @@ export function OrderManager({ store }: { store: any }) {
     setLoading(false)
   }
 
-  // Tocar som de notificação
   const playNotificationSound = () => {
     if (soundEnabled && audioRef.current) {
       audioRef.current.play().catch(e => console.log("Erro ao tocar som:", e))
     }
   }
 
-  // Setup do Realtime e Carregamento Inicial
   useEffect(() => {
     fetchOrders()
     
-    // Inicializa áudio (Você precisará de um arquivo .mp3 em public/sounds/notification.mp3)
-    // Se não tiver, o código não quebra, apenas avisa no console.
+    // Inicializa áudio
     audioRef.current = new Audio("/sounds/notification.mp3")
 
     const supabase = createClient()
     
-    // Escuta a tabela 'orders' para novos pedidos nessa loja
     const channel = supabase
       .channel('store-orders')
       .on(
@@ -63,7 +57,6 @@ export function OrderManager({ store }: { store: any }) {
         (payload) => {
           console.log("Novo pedido recebido!", payload)
           playNotificationSound()
-          // Recarrega tudo para garantir consistência (ou poderia adicionar manualmente ao state)
           fetchOrders() 
         }
       )
@@ -74,15 +67,13 @@ export function OrderManager({ store }: { store: any }) {
     }
   }, [store.id, soundEnabled])
 
-  // Atualizar Status
   const handleStatusChange = async (orderId: string, newStatus: string) => {
-    // Atualiza otimista na UI
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o))
     
     const res = await updateOrderStatusAction(orderId, newStatus)
     if (res?.error) {
       alert("Erro ao atualizar status.")
-      fetchOrders() // Reverte em caso de erro
+      fetchOrders()
     }
   }
 
@@ -174,7 +165,7 @@ export function OrderManager({ store }: { store: any }) {
                                             {order.address && <p className="text-xs text-muted-foreground leading-tight">{order.address}</p>}
                                         </div>
                                     </div>
-                                    {order.customer_phone && <p className="text-xs pl-6 text-slate-500">{order.customer_phone}</p>}
+                                    {order.customer_phone && <p className="text-xs pl-6 text-slate-500">{formatPhone(order.customer_phone)}</p>}
                                 </div>
                             </CardContent>
 
