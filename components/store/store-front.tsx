@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import Link from "next/link" // <--- NOVO IMPORT
-import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2, Package } from "lucide-react" // <--- Package ADICIONADO
+import Link from "next/link" 
+import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2, Package, AlertTriangle } from "lucide-react" 
 import { Button } from "@/components/ui/button"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -42,7 +42,13 @@ interface CheckoutData {
     name: string
     phone: string
     deliveryType: "entrega" | "retirada"
-    address: string
+    // Endereço detalhado
+    cep: string
+    street: string
+    number: string
+    neighborhood: string
+    city: string
+    complement: string
     paymentMethod: "pix" | "cartao" | "dinheiro"
     changeFor: string
 }
@@ -56,9 +62,12 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   // Checkout States
   const [step, setStep] = useState<"cart" | "checkout" | "success">("cart")
   const [checkoutData, setCheckoutData] = useState<CheckoutData>({
-    name: "", phone: "", deliveryType: "entrega", address: "", paymentMethod: "pix", changeFor: ""
+    name: "", phone: "", deliveryType: "entrega", 
+    cep: "", street: "", number: "", neighborhood: "", city: "", complement: "",
+    paymentMethod: "pix", changeFor: ""
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoadingCep, setIsLoadingCep] = useState(false)
   
   // Product Modal States
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -132,13 +141,47 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       setTempSelectedAddons(prev => prev.includes(addonId) ? prev.filter(id => id !== addonId) : [...prev, addonId])
   }
 
+  // --- LÓGICA DE CEP ---
+  const handleCepBlur = async () => {
+      const cleanCep = checkoutData.cep.replace(/\D/g, "")
+      if (cleanCep.length === 8) {
+          setIsLoadingCep(true)
+          try {
+              const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
+              const data = await res.json()
+              if (!data.erro) {
+                  setCheckoutData(prev => ({
+                      ...prev,
+                      street: data.logradouro,
+                      neighborhood: data.bairro,
+                      city: data.localidade
+                  }))
+              }
+          } catch (e) {
+              console.error("Erro CEP", e)
+          } finally {
+              setIsLoadingCep(false)
+          }
+      }
+  }
+
   const cartTotal = cart.reduce((acc, item) => acc + (item.totalPrice * item.quantity), 0)
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0)
 
   // --- LÓGICA DE ENVIO DO PEDIDO ---
   const handleFinishOrder = async () => {
     if (!checkoutData.name || !checkoutData.phone) return alert("Preencha nome e telefone.")
-    if (checkoutData.deliveryType === 'entrega' && !checkoutData.address) return alert("Informe o endereço.")
+    
+    // Constrói string de endereço para manter compatibilidade com backend
+    let fullAddress = ""
+    if (checkoutData.deliveryType === 'entrega') {
+        if (!checkoutData.street || !checkoutData.number || !checkoutData.neighborhood) {
+            return alert("Preencha o endereço completo (Rua, Número e Bairro).")
+        }
+        fullAddress = `${checkoutData.street}, ${checkoutData.number} - ${checkoutData.neighborhood}, ${checkoutData.city}. CEP: ${checkoutData.cep}. ${checkoutData.complement}`
+    } else {
+        fullAddress = "Retirada no Balcão"
+    }
 
     setIsSubmitting(true)
 
@@ -161,15 +204,14 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         }
     })
 
-    // HIGIENE DE DADOS: Limpa o telefone antes de salvar
     const cleanNumber = cleanPhone(checkoutData.phone)
 
     const orderPayload = {
         storeId: store.id,
         customerName: checkoutData.name,
-        customerPhone: cleanNumber, // SALVA SOMENTE NÚMEROS
+        customerPhone: cleanNumber,
         deliveryType: checkoutData.deliveryType,
-        address: checkoutData.address,
+        address: fullAddress, // Envia endereço composto
         paymentMethod: checkoutData.paymentMethod,
         changeFor: checkoutData.changeFor,
         totalPrice: cartTotal,
@@ -203,7 +245,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       {/* HEADER E BANNER */}
       <div className="relative w-full bg-slate-900 overflow-hidden">
         
-        {/* BOTÃO DE RASTREIO (NOVIDADE) */}
         <Link href="/rastreio" className="absolute top-4 right-4 z-30">
             <Button size="sm" className="bg-white/90 text-slate-900 hover:bg-white border-0 shadow-lg backdrop-blur-sm font-bold gap-2">
                 <Package className="w-4 h-4" />
@@ -229,7 +270,14 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                 </div>
                 <div className="flex-1 text-white mb-1">
                     <h1 className="text-2xl md:text-4xl font-bold drop-shadow-lg leading-none tracking-tight">{store.name}</h1>
-                    {store.bio && (<p className="text-white/90 text-xs md:text-sm line-clamp-2 mt-1 drop-shadow-md max-w-xl font-medium">{store.bio}</p>)}
+                    <div className="flex items-center gap-2 mt-2">
+                        {store.bio && (<p className="text-white/90 text-xs md:text-sm line-clamp-1 drop-shadow-md font-medium">{store.bio}</p>)}
+                    </div>
+                     {store.city && (
+                        <div className="flex items-center gap-1 text-white/80 text-xs font-semibold mt-1">
+                            <MapPin className="w-3 h-3" /> {store.city} - {store.state}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -294,16 +342,13 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
       {/* SHEET: CARRINHO E CHECKOUT */}
       <Sheet open={isCartOpen} onOpenChange={(open) => { setIsCartOpen(open); if(!open) setTimeout(() => setStep("cart"), 300); }}>
-        {/* CORREÇÃO CRÍTICA: gap-0, flex-col, h-[100dvh] e overflow-hidden no container principal */}
         <SheetContent className="w-full sm:max-w-md bg-slate-50 p-0 font-sans gap-0 flex flex-col h-[100dvh] overflow-hidden" style={{ fontFamily: fontFamily }}>
             
             {/* ETAPA 1: CARRINHO */}
             {step === "cart" && (
                 <>
-                    {/* Header: shrink-0 para não amassar */}
                     <SheetHeader className="p-5 border-b bg-white shrink-0"><SheetTitle className="flex items-center gap-3 text-xl"><ShoppingBag className="w-6 h-6" style={{ color: primaryColor }} />Sua Sacola</SheetTitle></SheetHeader>
                     
-                    {/* Body: flex-1, min-h-0 (CRUCIAL PARA SCROLL) e overflow-y-auto */}
                     <div className="flex-1 overflow-y-auto min-h-0 p-5 bg-slate-50">
                         {cart.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4"><div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center"><ShoppingBag className="w-10 h-10 opacity-20" /></div><p className="font-medium text-lg">Sua sacola está vazia</p></div>
@@ -331,7 +376,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                             </div>
                         )}
                     </div>
-                    {/* Footer: shrink-0 e z-index alto */}
                     <div className="p-5 bg-white border-t space-y-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0 z-20">
                         <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(cartTotal)}</span></div>
                         <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 transition-all shadow-lg active:scale-[0.98]" style={{ backgroundColor: primaryColor }} disabled={cart.length === 0} onClick={() => setStep("checkout")}>Continuar</Button>
@@ -357,7 +401,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                             placeholder="(00) 00000-0000" 
                                             type="tel" 
                                             value={checkoutData.phone} 
-                                            // APLICA MÁSCARA NO ONCHANGE
                                             onChange={e => setCheckoutData({...checkoutData, phone: formatPhone(e.target.value)})} 
                                             maxLength={15}
                                         />
@@ -383,9 +426,50 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                     </RadioGroup>
                                     
                                     {checkoutData.deliveryType === 'entrega' && (
-                                        <div className="animate-in slide-in-from-top-2 fade-in">
-                                            <Label>Endereço Completo</Label>
-                                            <Textarea placeholder="Rua, Número, Bairro e Complemento..." value={checkoutData.address} onChange={e => setCheckoutData({...checkoutData, address: e.target.value})} className="mt-1.5" />
+                                        <div className="animate-in slide-in-from-top-2 fade-in space-y-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                            <div className="space-y-1">
+                                                <Label>CEP</Label>
+                                                <div className="relative">
+                                                    <Input 
+                                                        placeholder="00000-000" 
+                                                        value={checkoutData.cep} 
+                                                        onChange={e => {
+                                                            let v = e.target.value.replace(/\D/g, "").slice(0, 8);
+                                                            v = v.replace(/^(\d{5})(\d)/, "$1-$2");
+                                                            setCheckoutData({...checkoutData, cep: v});
+                                                        }}
+                                                        onBlur={handleCepBlur}
+                                                    />
+                                                    {isLoadingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* ALERTA DE LOCALIZAÇÃO */}
+                                            {checkoutData.city && store.city && checkoutData.city.toLowerCase() !== store.city.toLowerCase() && (
+                                                 <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-md flex gap-2 text-yellow-800 text-xs">
+                                                     <AlertTriangle className="w-4 h-4 shrink-0" />
+                                                     <span><b>Atenção:</b> Esta loja fica em <b>{store.city}</b>, mas seu endereço parece ser em <b>{checkoutData.city}</b>. Verifique se eles entregam aí.</span>
+                                                 </div>
+                                            )}
+
+                                            <div className="grid grid-cols-4 gap-2">
+                                                <div className="col-span-3 space-y-1">
+                                                    <Label>Rua</Label>
+                                                    <Input placeholder="Nome da rua" value={checkoutData.street} onChange={e => setCheckoutData({...checkoutData, street: e.target.value})} />
+                                                </div>
+                                                <div className="col-span-1 space-y-1">
+                                                    <Label>Nº</Label>
+                                                    <Input placeholder="123" value={checkoutData.number} onChange={e => setCheckoutData({...checkoutData, number: e.target.value})} />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label>Bairro</Label>
+                                                <Input placeholder="Seu bairro" value={checkoutData.neighborhood} onChange={e => setCheckoutData({...checkoutData, neighborhood: e.target.value})} />
+                                            </div>
+                                             <div className="space-y-1">
+                                                <Label>Complemento (Opcional)</Label>
+                                                <Input placeholder="Apto, Bloco, Ponto de referência..." value={checkoutData.complement} onChange={e => setCheckoutData({...checkoutData, complement: e.target.value})} />
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -434,7 +518,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         </SheetContent>
       </Sheet>
 
-      {/* MODAL DO PRODUTO (Mantido e Otimizado) */}
+      {/* MODAL DO PRODUTO */}
       <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
         <DialogContent className="max-w-md p-0 overflow-hidden gap-0 border-none sm:rounded-2xl">
             {selectedProduct && (

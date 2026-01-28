@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Store, FileText, Phone, Check, User } from "lucide-react"
+import { Loader2, Store, FileText, Phone, Check, User, MapPin } from "lucide-react"
 
 export function StoreSetupModal() {
   const [isOpen, setIsOpen] = useState(true)
@@ -22,6 +22,12 @@ export function StoreSetupModal() {
   
   const [cnpj, setCnpj] = useState("")
   const [phone, setPhone] = useState("")
+  // Novos estados para endereço
+  const [cep, setCep] = useState("")
+  const [city, setCity] = useState("")
+  const [uf, setUf] = useState("")
+  const [isLoadingCep, setIsLoadingCep] = useState(false)
+
   const [hours, setHours] = useState([
     { day: "Segunda", open: "08:00", close: "18:00", active: true },
     { day: "Terça", open: "08:00", close: "18:00", active: true },
@@ -32,7 +38,7 @@ export function StoreSetupModal() {
     { day: "Domingo", open: "00:00", close: "00:00", active: false },
   ])
 
-  // Máscaras (CNPJ e Phone) permanecem iguais...
+  // Máscaras e Validadores
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "")
     if (value.length > 14) value = value.slice(0, 14)
@@ -49,6 +55,32 @@ export function StoreSetupModal() {
     value = value.replace(/^(\d{2})(\d)/g, "($1) $2")
     value = value.replace(/(\d)(\d{4})$/, "$1-$2")
     setPhone(value)
+  }
+
+  const handleCepBlur = async () => {
+    const cleanCep = cep.replace(/\D/g, "")
+    if (cleanCep.length === 8) {
+      setIsLoadingCep(true)
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
+        const data = await response.json()
+        if (!data.erro) {
+          setCity(data.localidade)
+          setUf(data.uf)
+        }
+      } catch (error) {
+        console.error("Erro ao buscar CEP", error)
+      } finally {
+        setIsLoadingCep(false)
+      }
+    }
+  }
+
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     let value = e.target.value.replace(/\D/g, "")
+     if (value.length > 8) value = value.slice(0, 8)
+     value = value.replace(/^(\d{5})(\d)/, "$1-$2")
+     setCep(value)
   }
 
   const toggleDay = (index: number) => {
@@ -150,6 +182,29 @@ export function StoreSetupModal() {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* SEÇÃO DE ENDEREÇO DA LOJA */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-3 rounded-lg border">
+                <div className="col-span-2 md:col-span-1 space-y-2">
+                    <Label htmlFor="cep">CEP</Label>
+                    <Input 
+                        id="cep" 
+                        value={cep} 
+                        onChange={handleCepChange} 
+                        onBlur={handleCepBlur} 
+                        placeholder="00000-000" 
+                        required 
+                    />
+                </div>
+                <div className="col-span-2 md:col-span-2 space-y-2">
+                     <Label htmlFor="city">Cidade {isLoadingCep && <Loader2 className="inline w-3 h-3 animate-spin"/>}</Label>
+                     <Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} placeholder="Cidade" required readOnly={isLoadingCep}/>
+                </div>
+                <div className="col-span-2 md:col-span-1 space-y-2">
+                     <Label htmlFor="state">UF</Label>
+                     <Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} placeholder="UF" maxLength={2} required readOnly={isLoadingCep}/>
+                </div>
             </div>
             
             <div className="space-y-2">
