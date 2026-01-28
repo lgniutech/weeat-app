@@ -67,6 +67,22 @@ export function StoreSettingsForm({ store }: StoreSettingsFormProps) {
                 </p>
               </div>
             </div>
+            
+            {/* NOVO: Exibição da Cidade/Estado */}
+            <div className="flex items-start gap-3 md:col-span-2">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Localização</p>
+                <p className="font-semibold text-lg">
+                    {store.city ? `${store.city} - ${store.state}` : "Endereço não configurado"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Base para cálculo de frete (Futuro)
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="border-t my-2" />

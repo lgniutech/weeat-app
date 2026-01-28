@@ -26,6 +26,8 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   const name = formData.get("name") as string;
   const cnpj = formData.get("cnpj") as string;
   const whatsapp = formData.get("whatsapp") as string;
+  const city = formData.get("city") as string; // NOVO
+  const state = formData.get("state") as string; // NOVO
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
   
@@ -33,7 +35,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Sessão expirada." };
 
-    if (!name || !cnpj || !whatsapp || !fullName) {
+    if (!name || !cnpj || !whatsapp || !fullName || !city || !state) {
       return { error: "Preencha todos os campos obrigatórios." };
     }
 
@@ -51,7 +53,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
     const randomSuffix = Math.floor(Math.random() * 10000);
     const generatedSlug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + `-${randomSuffix}`;
 
-    // Upload do Logo (Server-side para o setup inicial é seguro pois é só 1 arquivo)
+    // Upload do Logo
     let logoUrl = "";
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
@@ -70,6 +72,8 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       slug: generatedSlug,
       cnpj: cnpj.replace(/\D/g, ''),
       whatsapp: whatsapp.replace(/\D/g, ''),
+      city, // NOVO
+      state, // NOVO
       logo_url: logoUrl,
       settings: { business_hours: businessHours ? JSON.parse(businessHours) : [] }
     });
@@ -91,6 +95,8 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const fullName = formData.get("fullName") as string;
   const name = formData.get("name") as string;
   const whatsapp = formData.get("whatsapp") as string;
+  const city = formData.get("city") as string; // NOVO
+  const state = formData.get("state") as string; // NOVO
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
   const password = formData.get("password") as string;
@@ -119,10 +125,12 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
     let updateData: any = {
       name,
       whatsapp: whatsapp.replace(/\D/g, ''),
+      city, // NOVO
+      state, // NOVO
       settings: { business_hours: JSON.parse(businessHours) }
     };
 
-    // Upload Logo (Mantido server-side aqui por ser edição leve)
+    // Upload Logo
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
