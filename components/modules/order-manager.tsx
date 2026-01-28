@@ -134,7 +134,6 @@ export function OrderManager({ store }: { store: any }) {
   // Handlers de Data
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if(e.target.valueAsDate) {
-          // Ajuste de fuso horário simples
           const date = new Date(e.target.value + 'T00:00:00')
           setSelectedDate(date)
       }
@@ -146,7 +145,7 @@ export function OrderManager({ store }: { store: any }) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-slate-50">
-      {/* CSS TRICK: Expande o clique do calendário para o input inteiro */}
+      {/* CSS TRICK: Expande o clique do calendário */}
       <style jsx global>{`
         .full-picker-input::-webkit-calendar-picker-indicator {
             position: absolute;
@@ -171,12 +170,13 @@ export function OrderManager({ store }: { store: any }) {
             </span>
           </h2>
 
-          {/* CONTROLE DE DATA (DESIGN LIMPO E FUNCIONAL) */}
+          {/* CONTROLE DE DATA */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
              <Button 
                 size="sm" 
                 variant={isFilterToday ? "default" : "ghost"} 
-                className={cn("h-7 text-xs font-bold transition-all", isFilterToday ? "bg-blue-600 hover:bg-blue-700 text-white shadow-sm" : "text-slate-600 hover:bg-white")}
+                // AQUI: Usando 'bg-primary' e 'text-primary-foreground' para respeitar o tema do sistema
+                className={cn("h-7 text-xs font-bold transition-all", isFilterToday ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm" : "text-slate-600 hover:bg-white")}
                 onClick={handleSetToday}
              >
                 Hoje
@@ -184,19 +184,18 @@ export function OrderManager({ store }: { store: any }) {
              
              {/* CONTAINER RELATIVO */}
              <div className="relative group">
-                 {/* Visual Text (Inerte, apenas visual) */}
+                 {/* Visual Text */}
                  <div className={cn("h-7 px-3 flex items-center justify-center text-xs font-bold text-slate-700 rounded cursor-pointer transition-colors min-w-[90px] pointer-events-none select-none", !isFilterToday && "bg-white shadow-sm border border-slate-200/50 group-hover:bg-slate-50")}>
                     {format(selectedDate, 'dd/MM/yyyy')}
                  </div>
                  
-                 {/* Input Nativo Invisível (Recebe o clique real) */}
+                 {/* Input Nativo Invisível */}
                  <input 
                     type="date" 
                     className="full-picker-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     value={format(selectedDate, 'yyyy-MM-dd')}
                     onChange={handleDateChange}
                     onClick={(e) => {
-                        // Tenta forçar a abertura via API (suporte moderno)
                         try { e.currentTarget.showPicker() } catch(err) {}
                     }}
                  />
