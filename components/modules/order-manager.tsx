@@ -6,7 +6,7 @@ import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/ord
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, ArrowLeft, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer } from "lucide-react"
 import { format, differenceInMinutes } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
@@ -30,7 +30,7 @@ export function OrderManager({ store }: { store: any }) {
   const [loading, setLoading] = useState(true)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [showCanceled, setShowCanceled] = useState(false)
-  const [now, setNow] = useState(new Date()) // Relógio tempo real
+  const [now, setNow] = useState(new Date())
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const fetchOrders = async () => {
@@ -47,7 +47,6 @@ export function OrderManager({ store }: { store: any }) {
   }
 
   useEffect(() => {
-    // Atualiza o contador de minutos a cada 60s
     const interval = setInterval(() => setNow(new Date()), 60000)
     return () => clearInterval(interval)
   }, [])
@@ -71,7 +70,7 @@ export function OrderManager({ store }: { store: any }) {
         'postgres_changes', 
         { event: 'UPDATE', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
         (payload) => {
-           fetchOrders() // Atualiza se mudar status em outro pc
+           fetchOrders()
         }
       )
       .subscribe()
@@ -81,7 +80,6 @@ export function OrderManager({ store }: { store: any }) {
 
   const moveOrder = async (orderId: string, nextStatus: string) => {
     const nowISO = new Date().toISOString()
-    // Atualização otimista
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus, last_status_change: nowISO } : o))
     
     const res = await updateOrderStatusAction(orderId, nextStatus)
@@ -105,7 +103,6 @@ export function OrderManager({ store }: { store: any }) {
   const getOrdersForColumn = (status: string) => {
     const colOrders = orders.filter(o => o.status === status)
     const isHistory = status === 'entregue' || status === 'cancelado'
-    // Concluídos: Recentes primeiro (LIFO). Ativos: Antigos primeiro (FIFO).
     return colOrders.sort((a, b) => {
         const dateA = new Date(a.created_at).getTime()
         const dateB = new Date(b.created_at).getTime()
@@ -121,7 +118,7 @@ export function OrderManager({ store }: { store: any }) {
       
       if (minutes < 1) return "Agora"
       if (minutes < 60) return `${minutes} min`
-      return format(dateRef, "HH:mm") // Se > 1h, mostra hora fixa
+      return format(dateRef, "HH:mm")
   }
 
   return (
@@ -198,7 +195,7 @@ export function OrderManager({ store }: { store: any }) {
                                                 {timeInStage}
                                             </div>
                                             
-                                            {/* Cancelar (Hover) */}
+                                            {/* Dropdown Cancelar (Hover) */}
                                             {['pendente', 'preparando', 'enviado'].includes(order.status) && (
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -228,7 +225,6 @@ export function OrderManager({ store }: { store: any }) {
                                                     <span className="font-bold mr-1">{item.quantity}x</span>
                                                     <span>{item.product_name}</span>
                                                     
-                                                    {/* Modificadores Inline */}
                                                     {hasMods && (
                                                         <span className="text-[9px] text-slate-500 ml-1">
                                                             (
@@ -242,7 +238,7 @@ export function OrderManager({ store }: { store: any }) {
                                             )
                                         })}
                                         
-                                        {/* Rodapé Interno: Entrega e Preço */}
+                                        {/* Footer Info: Preço e Endereço */}
                                         <div className="flex justify-between items-center pt-1.5 mt-0.5 border-t border-dashed border-slate-100">
                                             <div className="flex items-center gap-1 text-[9px] text-slate-400 max-w-[60%]">
                                                 {order.delivery_type === 'entrega' ? <Bike className="w-2.5 h-2.5 shrink-0" /> : <Store className="w-2.5 h-2.5 shrink-0" />}
@@ -262,14 +258,16 @@ export function OrderManager({ store }: { store: any }) {
                                     
                                     {col.id === 'preparando' && (
                                         <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
-                                             <button onClick={() => moveOrder(order.id, 'pendente')} className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 text-[10px] border-t border-r border-slate-100"><RotateCcw className="w-3 h-3 mx-auto" /></button>
+                                             {/* BOTÃO VOLTAR (ArrowLeft) */}
+                                             <button onClick={() => moveOrder(order.id, 'pendente')} className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 text-[10px] border-t border-r border-slate-100"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
                                              <button onClick={() => moveOrder(order.id, 'enviado')} className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-colors uppercase">Pronto</button>
                                         </div>
                                     )}
 
                                     {col.id === 'enviado' && (
                                         <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
-                                             <button onClick={() => moveOrder(order.id, 'preparando')} className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 text-[10px] border-t border-r border-slate-100"><RotateCcw className="w-3 h-3 mx-auto" /></button>
+                                             {/* BOTÃO VOLTAR (ArrowLeft) */}
+                                             <button onClick={() => moveOrder(order.id, 'preparando')} className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 text-[10px] border-t border-r border-slate-100"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
                                              <button onClick={() => moveOrder(order.id, 'entregue')} className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold transition-colors uppercase">Entregue</button>
                                         </div>
                                     )}
