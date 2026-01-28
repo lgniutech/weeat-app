@@ -72,7 +72,7 @@ export function OrderManager({ store }: { store: any }) {
   // Efeito principal: Realtime + Carga Inicial
   useEffect(() => {
     fetchOrders()
-    audioRef.current = new Audio("/sounds/notification.mp3")
+    audioRef.current = new Audio("https://hebbkx1anhila5yf.public.blob.vercel-storage.com/call-bell-ding-mYDJlF6XtEMcaiRvPr22v5Te9d2Rdm.mp3")
 
     const supabase = createClient()
     const channel = supabase
