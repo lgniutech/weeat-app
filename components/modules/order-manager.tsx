@@ -37,7 +37,7 @@ export function OrderManager({ store }: { store: any }) {
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Função para buscar pedidos (agora com filtro de data)
+  // Função para buscar pedidos (com filtro de data)
   const fetchOrders = async () => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd')
     const data = await getStoreOrdersAction(store.id, dateStr)
@@ -70,7 +70,7 @@ export function OrderManager({ store }: { store: any }) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
         (payload) => {
-          // Só toca som e atualiza se o filtro for "Hoje", senão pode confundir quem tá vendo histórico
+          // Só toca som e atualiza se o filtro for "Hoje"
           if (isToday(selectedDate)) {
              playNotificationSound()
              fetchOrders()
@@ -87,7 +87,7 @@ export function OrderManager({ store }: { store: any }) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [store.id, soundEnabled, selectedDate]) // Recarrega se mudar a data
+  }, [store.id, soundEnabled, selectedDate])
 
   const moveOrder = async (orderId: string, nextStatus: string) => {
     const nowISO = new Date().toISOString()
@@ -134,7 +134,7 @@ export function OrderManager({ store }: { store: any }) {
   // Handlers de Data
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if(e.target.valueAsDate) {
-          // Ajuste de fuso horário simples (pega a data local escolhida)
+          // Ajuste de fuso horário para garantir a data local correta
           const date = new Date(e.target.value + 'T00:00:00')
           setSelectedDate(date)
       }
@@ -156,7 +156,7 @@ export function OrderManager({ store }: { store: any }) {
             </span>
           </h2>
 
-          {/* CONTROLE DE DATA ATUALIZADO */}
+          {/* CONTROLE DE DATA (DESIGN LIMPO) */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
              <Button 
                 size="sm" 
@@ -167,25 +167,29 @@ export function OrderManager({ store }: { store: any }) {
                 Hoje
              </Button>
              
-             {/* CORREÇÃO DO CLICK: 
-                Adicionei onClick com showPicker() para forçar a abertura do calendário 
-                ao clicar em qualquer lugar do campo, não apenas no ícone.
-             */}
-             <input 
-                type="date" 
-                className="h-7 px-2 text-xs bg-transparent border-none focus:ring-0 text-slate-700 font-bold cursor-pointer outline-none hover:bg-white/50 rounded transition-colors w-[110px]"
-                value={format(selectedDate, 'yyyy-MM-dd')}
-                onChange={handleDateChange}
-                onClick={(e) => {
-                    try {
-                        // Força abrir o calendário nativo do browser
-                        e.currentTarget.showPicker() 
-                    } catch(err) {
-                        // Fallback para browsers antigos que não suportam showPicker (raro hoje em dia)
-                        console.log("Picker not supported")
-                    }
-                }}
-             />
+             {/* CONTAINER RELATIVO: Texto visual + Input Invisível por cima */}
+             <div className="relative">
+                 {/* O texto bonito que aparece para o usuário */}
+                 <div className={cn("h-7 px-3 flex items-center justify-center text-xs font-bold text-slate-700 rounded cursor-pointer transition-colors min-w-[90px]", !isFilterToday && "bg-white shadow-sm border border-slate-200/50")}>
+                    {format(selectedDate, 'dd/MM/yyyy')}
+                 </div>
+                 
+                 {/* O Input Nativo que recebe o clique real (Invisível) */}
+                 <input 
+                    type="date" 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    value={format(selectedDate, 'yyyy-MM-dd')}
+                    onChange={handleDateChange}
+                    onClick={(e) => {
+                        try {
+                            // Força a abertura do picker nativo no clique
+                            e.currentTarget.showPicker() 
+                        } catch(err) {
+                            // Fallback silencioso para browsers antigos
+                        }
+                    }}
+                 />
+             </div>
           </div>
         </div>
 
