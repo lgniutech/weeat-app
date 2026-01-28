@@ -6,7 +6,7 @@ import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/ord
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, ArrowLeft, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, Calendar as CalendarIcon, Filter } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer } from "lucide-react"
 import { format, differenceInMinutes, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
@@ -15,7 +15,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
 
 const BASE_COLUMNS = [
   { id: 'pendente', label: 'Pendente', color: 'bg-yellow-500', text: 'text-yellow-700', icon: AlertCircle },
@@ -157,8 +156,8 @@ export function OrderManager({ store }: { store: any }) {
             </span>
           </h2>
 
-          {/* CONTROLE DE DATA */}
-          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
+          {/* CONTROLE DE DATA ATUALIZADO */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
              <Button 
                 size="sm" 
                 variant={isFilterToday ? "default" : "ghost"} 
@@ -168,15 +167,12 @@ export function OrderManager({ store }: { store: any }) {
                 Hoje
              </Button>
              
-             <div className="relative flex items-center">
-                <CalendarIcon className="w-3.5 h-3.5 absolute left-2 text-slate-500 pointer-events-none" />
-                <input 
-                    type="date" 
-                    className="h-7 pl-7 pr-2 text-xs bg-transparent border-none focus:ring-0 text-slate-700 font-medium cursor-pointer outline-none w-[110px]"
-                    value={format(selectedDate, 'yyyy-MM-dd')}
-                    onChange={handleDateChange}
-                />
-             </div>
+             <input 
+                type="date" 
+                className="h-7 px-2 text-xs bg-transparent border-none focus:ring-0 text-slate-700 font-bold cursor-pointer outline-none hover:bg-white/50 rounded transition-colors"
+                value={format(selectedDate, 'yyyy-MM-dd')}
+                onChange={handleDateChange}
+             />
           </div>
         </div>
 
