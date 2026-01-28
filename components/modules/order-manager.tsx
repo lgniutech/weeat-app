@@ -73,7 +73,8 @@ export function OrderManager({ store }: { store: any }) {
 
   useEffect(() => {
     fetchOrders()
-    audioRef.current = new Audio("https://hebbkx1anhila5yf.public.blob.vercel-storage.com/call-bell-ding-mYDJlF6XtEMcaiRvPr22v5Te9d2Rdm.mp3")
+    // ALTERAÇÃO AQUI: Caminho para o arquivo na pasta public
+    audioRef.current = new Audio("/som-pedido.mp3")
 
     const supabase = createClient()
     const channel = supabase
