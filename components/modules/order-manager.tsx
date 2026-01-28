@@ -52,11 +52,21 @@ export function OrderManager({ store }: { store: any }) {
     }
   }
 
-  // Timer para atualizar minutos do "há quanto tempo"
+  // Timer 1: Atualizar minutos do "há quanto tempo" (Relógio UI) - A cada 60s
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 60000)
     return () => clearInterval(interval)
   }, [])
+
+  // Timer 2: Auto-Refresh dos Pedidos (Backup do Realtime) - A cada 30s
+  useEffect(() => {
+    const interval = setInterval(() => {
+        console.log("Auto-refreshing orders...")
+        fetchOrders()
+    }, 30000) // 30 segundos
+
+    return () => clearInterval(interval)
+  }, [selectedDate, store.id]) // Reinicia o timer se mudar a data ou a loja
 
   // Efeito principal: Realtime + Carga Inicial
   useEffect(() => {
@@ -175,7 +185,6 @@ export function OrderManager({ store }: { store: any }) {
              <Button 
                 size="sm" 
                 variant={isFilterToday ? "default" : "ghost"} 
-                // AQUI: Usando 'bg-primary' e 'text-primary-foreground' para respeitar o tema do sistema
                 className={cn("h-7 text-xs font-bold transition-all", isFilterToday ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm" : "text-slate-600 hover:bg-white")}
                 onClick={handleSetToday}
              >
