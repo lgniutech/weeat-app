@@ -1,32 +1,35 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/order"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { AlertCircle, Bike, CheckCircle2, Package, User, Volume2, VolumeX, ArrowRight, Clock, Store, MapPin, XCircle } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, User, Volume2, VolumeX, ArrowRight, ArrowLeft, Clock, Store, Eye, EyeOff, RotateCcw, XCircle } from "lucide-react"
 import { format } from "date-fns"
-import { cn, formatPhone } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 
-// Definição das Colunas do Kanban
-const KANBAN_COLUMNS = [
+// Definição Base das Colunas
+const BASE_COLUMNS = [
   { id: 'pendente', label: 'Pendente (Aceitar)', color: 'bg-yellow-500', icon: AlertCircle },
   { id: 'preparando', label: 'Na Cozinha', color: 'bg-blue-500', icon: Package },
   { id: 'enviado', label: 'Saiu p/ Entrega', color: 'bg-orange-500', icon: Bike },
   { id: 'entregue', label: 'Concluídos', color: 'bg-green-600', icon: CheckCircle2 },
 ]
 
+// Coluna de Cancelados (Separada para facilitar o toggle)
+const CANCELED_COLUMN = { id: 'cancelado', label: 'Cancelados', color: 'bg-red-500', icon: XCircle }
+
 export function OrderManager({ store }: { store: any }) {
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [soundEnabled, setSoundEnabled] = useState(true)
+  const [showCanceled, setShowCanceled] = useState(false) // Começa oculto por padrão para limpeza visual
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const fetchOrders = async () => {
-    // Não ativa loading full para não piscar a tela toda hora no refresh
     const data = await getStoreOrdersAction(store.id)
     setOrders(data || [])
     setLoading(false)
@@ -62,7 +65,7 @@ export function OrderManager({ store }: { store: any }) {
 
   // Lógica para mover card
   const moveOrder = async (orderId: string, nextStatus: string) => {
-    // Atualização Otimista (UI primeiro)
+    // Atualização Otimista
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o))
     
     const res = await updateOrderStatusAction(orderId, nextStatus)
@@ -74,12 +77,10 @@ export function OrderManager({ store }: { store: any }) {
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-  // Filtra pedidos por coluna
-  const getOrdersByStatus = (status: string) => {
-    // Se for coluna "entregue", mostra também cancelados ou mantém só os do dia? 
-    // Por enquanto mostra entregues recentes.
-    return orders.filter(o => o.status === status)
-  }
+  // Define quais colunas mostrar baseado no toggle
+  const visibleColumns = useMemo(() => {
+    return showCanceled ? [...BASE_COLUMNS, CANCELED_COLUMN] : BASE_COLUMNS
+  }, [showCanceled])
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden">
@@ -95,10 +96,17 @@ export function OrderManager({ store }: { store: any }) {
           <p className="text-sm text-muted-foreground">Arraste ou clique para mover os pedidos.</p>
         </div>
         <div className="flex items-center gap-3">
+            {/* Botão Toggle Cancelados */}
+            <Button variant="outline" size="sm" onClick={() => setShowCanceled(!showCanceled)} className={cn("transition-all", showCanceled ? "bg-slate-100 text-slate-900 border-slate-300" : "text-slate-500")}>
+                {showCanceled ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                {showCanceled ? "Ocultar Cancelados" : "Ver Cancelados"}
+            </Button>
+
             <Button variant={soundEnabled ? "default" : "outline"} size="sm" onClick={() => setSoundEnabled(!soundEnabled)} className={cn("transition-all", soundEnabled ? "bg-green-600 hover:bg-green-700" : "")}>
                 {soundEnabled ? <Volume2 className="h-4 w-4 mr-2" /> : <VolumeX className="h-4 w-4 mr-2 text-slate-400" />}
                 {soundEnabled ? "Som Ligado" : "Mudo"}
             </Button>
+            
             <Button variant="outline" size="sm" onClick={fetchOrders}>Atualizar</Button>
         </div>
       </div>
@@ -107,10 +115,11 @@ export function OrderManager({ store }: { store: any }) {
       <div className="flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/50 p-4">
         <div className="flex h-full gap-4 min-w-[1000px]">
             
-            {KANBAN_COLUMNS.map((col) => {
-                const colOrders = getOrdersByStatus(col.id)
+            {visibleColumns.map((col) => {
+                const colOrders = orders.filter(o => o.status === col.id)
+                
                 return (
-                    <div key={col.id} className="flex-1 flex flex-col min-w-[280px] h-full bg-slate-50 border rounded-xl shadow-sm overflow-hidden">
+                    <div key={col.id} className="flex-1 flex flex-col min-w-[280px] h-full bg-slate-50 border rounded-xl shadow-sm overflow-hidden transition-all duration-300">
                         {/* Header da Coluna */}
                         <div className={cn("p-3 font-bold text-white flex justify-between items-center text-sm uppercase tracking-wide", col.color)}>
                             <div className="flex items-center gap-2">
@@ -130,7 +139,7 @@ export function OrderManager({ store }: { store: any }) {
                                 )}
                                 
                                 {colOrders.map(order => (
-                                    <Card key={order.id} className="shadow-sm border-l-4 animate-in zoom-in-95 duration-200 hover:shadow-md transition-shadow" style={{ borderLeftColor: order.status === 'pendente' ? '#eab308' : 'transparent' }}>
+                                    <Card key={order.id} className="shadow-sm border-l-4 animate-in zoom-in-95 duration-200 hover:shadow-md transition-shadow group" style={{ borderLeftColor: order.status === 'pendente' ? '#eab308' : 'transparent' }}>
                                         <CardHeader className="p-3 pb-1 space-y-0">
                                             <div className="flex justify-between items-start">
                                                 <div>
@@ -144,7 +153,6 @@ export function OrderManager({ store }: { store: any }) {
                                         </CardHeader>
                                         
                                         <CardContent className="p-3 py-2 space-y-2">
-                                            {/* Resumo dos Itens (Max 3 linhas para não poluir) */}
                                             <div className="text-xs text-slate-700 space-y-1 bg-slate-50 p-2 rounded border border-slate-100/50">
                                                 {order.items.map((item: any, idx: number) => (
                                                     <div key={idx} className="flex justify-between">
@@ -152,8 +160,6 @@ export function OrderManager({ store }: { store: any }) {
                                                     </div>
                                                 ))}
                                             </div>
-                                            
-                                            {/* Dados Entrega */}
                                             <div className="flex items-center gap-2 text-[10px] text-slate-500 truncate">
                                                 {order.delivery_type === 'entrega' ? <Bike className="w-3 h-3 text-primary" /> : <Store className="w-3 h-3 text-orange-500" />}
                                                 <span className="uppercase font-bold">{order.delivery_type}</span>
@@ -162,8 +168,10 @@ export function OrderManager({ store }: { store: any }) {
                                             </div>
                                         </CardContent>
 
-                                        {/* Ações Rápidas */}
+                                        {/* Ações Rápidas - AGORA COM "VOLTAR" */}
                                         <CardFooter className="p-2 pt-0 gap-2">
+                                            
+                                            {/* PENDENTE: Cancelar | Aceitar */}
                                             {col.id === 'pendente' && (
                                                 <div className="grid grid-cols-2 gap-2 w-full">
                                                     <Button variant="outline" size="sm" className="h-8 text-xs text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => moveOrder(order.id, 'cancelado')}>
@@ -174,16 +182,45 @@ export function OrderManager({ store }: { store: any }) {
                                                     </Button>
                                                 </div>
                                             )}
+
+                                            {/* PREPARANDO: Voltar | Enviar */}
                                             {col.id === 'preparando' && (
-                                                 <Button size="sm" className="h-8 text-xs w-full bg-orange-500 hover:bg-orange-600" onClick={() => moveOrder(order.id, 'enviado')}>
-                                                    Pronto / Enviar <ArrowRight className="w-3 h-3 ml-1" />
-                                                 </Button>
+                                                <div className="grid grid-cols-[30%_1fr] gap-2 w-full">
+                                                    <Button variant="ghost" size="sm" className="h-8 text-xs text-slate-400 hover:text-slate-600 px-0" onClick={() => moveOrder(order.id, 'pendente')} title="Voltar para Pendente">
+                                                        <ArrowLeft className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button size="sm" className="h-8 text-xs w-full bg-orange-500 hover:bg-orange-600" onClick={() => moveOrder(order.id, 'enviado')}>
+                                                        Pronto / Enviar <ArrowRight className="w-3 h-3 ml-1" />
+                                                    </Button>
+                                                </div>
                                             )}
+
+                                            {/* ENVIADO: Voltar | Concluir */}
                                             {col.id === 'enviado' && (
-                                                 <Button size="sm" className="h-8 text-xs w-full bg-green-600 hover:bg-green-700" onClick={() => moveOrder(order.id, 'entregue')}>
-                                                    Concluir Entrega <CheckCircle2 className="w-3 h-3 ml-1" />
+                                                <div className="grid grid-cols-[30%_1fr] gap-2 w-full">
+                                                    <Button variant="ghost" size="sm" className="h-8 text-xs text-slate-400 hover:text-slate-600 px-0" onClick={() => moveOrder(order.id, 'preparando')} title="Voltar para Cozinha">
+                                                        <ArrowLeft className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button size="sm" className="h-8 text-xs w-full bg-green-600 hover:bg-green-700" onClick={() => moveOrder(order.id, 'entregue')}>
+                                                        Concluir Entrega <CheckCircle2 className="w-3 h-3 ml-1" />
+                                                    </Button>
+                                                </div>
+                                            )}
+
+                                            {/* ENTREGUE: Reverter (Caso clicou errado) */}
+                                            {col.id === 'entregue' && (
+                                                 <Button variant="ghost" size="sm" className="h-8 text-xs w-full text-slate-400 hover:text-orange-500" onClick={() => moveOrder(order.id, 'enviado')}>
+                                                    <RotateCcw className="w-3 h-3 mr-2" /> Reverter (Voltar status)
                                                  </Button>
                                             )}
+
+                                            {/* CANCELADO: Restaurar */}
+                                            {col.id === 'cancelado' && (
+                                                 <Button variant="outline" size="sm" className="h-8 text-xs w-full border-dashed text-slate-500 hover:text-blue-600 hover:border-blue-300" onClick={() => moveOrder(order.id, 'pendente')}>
+                                                    <RotateCcw className="w-3 h-3 mr-2" /> Restaurar Pedido
+                                                 </Button>
+                                            )}
+
                                         </CardFooter>
                                     </Card>
                                 ))}
