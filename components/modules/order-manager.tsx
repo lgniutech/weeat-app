@@ -6,10 +6,15 @@ import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/ord
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-// Removido ScrollArea para usar scroll nativo
-import { AlertCircle, Bike, CheckCircle2, Package, User, Volume2, VolumeX, ArrowRight, ArrowLeft, Clock, Store, Eye, EyeOff, RotateCcw, XCircle, DollarSign } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, User, Volume2, VolumeX, ArrowRight, ArrowLeft, Clock, Store, Eye, EyeOff, RotateCcw, XCircle, DollarSign, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { cn, formatPhone } from "@/lib/utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 // Definição Base das Colunas
 const BASE_COLUMNS = [
@@ -74,7 +79,6 @@ export function OrderManager({ store }: { store: any }) {
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-  // Função segura para parsear JSON do banco
   const parseJson = (val: any) => {
       if (!val) return []
       if (typeof val === 'string') {
@@ -83,14 +87,23 @@ export function OrderManager({ store }: { store: any }) {
       return val
   }
 
-  // Ordenação: Mais antigos primeiro (FIFO - First In First Out)
-  const sortedOrders = useMemo(() => {
-      return [...orders].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-  }, [orders])
-
   const visibleColumns = useMemo(() => {
     return showCanceled ? [...BASE_COLUMNS, CANCELED_COLUMN] : BASE_COLUMNS
   }, [showCanceled])
+
+  // Função para pegar e ordenar os pedidos de cada coluna
+  const getOrdersForColumn = (status: string) => {
+    const colOrders = orders.filter(o => o.status === status)
+
+    // Lógica de Ordenação Híbrida
+    if (status === 'entregue' || status === 'cancelado') {
+        // LIFO (Last-In, First-Out): Mais recentes no topo (Ordem Decrescente de Data)
+        return colOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    } else {
+        // FIFO (First-In, First-Out): Mais antigos no topo (Ordem Crescente de Data)
+        return colOrders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    }
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden">
@@ -103,7 +116,9 @@ export function OrderManager({ store }: { store: any }) {
                 {orders.filter(o => o.status !== 'entregue' && o.status !== 'cancelado').length} Fila
             </Badge>
           </h2>
-          <p className="text-sm text-muted-foreground">Pedidos ordenados por chegada (Antigos no topo).</p>
+          <p className="text-sm text-muted-foreground">
+            Fila: Antigos no topo. Concluídos: Recentes no topo.
+          </p>
         </div>
         <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" onClick={() => setShowCanceled(!showCanceled)} className={cn("transition-all", showCanceled ? "bg-slate-100 text-slate-900 border-slate-300" : "text-slate-500")}>
@@ -125,7 +140,7 @@ export function OrderManager({ store }: { store: any }) {
         <div className="flex h-full gap-4 min-w-[1000px]">
             
             {visibleColumns.map((col) => {
-                const colOrders = sortedOrders.filter(o => o.status === col.id)
+                const colOrders = getOrdersForColumn(col.id)
                 
                 return (
                     <div key={col.id} className="flex-1 flex flex-col min-w-[300px] h-full bg-slate-50 border rounded-xl shadow-sm overflow-hidden transition-all duration-300">
@@ -137,7 +152,7 @@ export function OrderManager({ store }: { store: any }) {
                             <span className="bg-white/20 px-2 py-0.5 rounded text-xs">{colOrders.length}</span>
                         </div>
 
-                        {/* Lista de Cards - SCROLL NATIVO (Correção de Scroll) */}
+                        {/* Lista de Cards */}
                         <div className="flex-1 overflow-y-auto min-h-0 p-2 space-y-3 scroll-smooth">
                             {colOrders.length === 0 && (
                                 <div className="flex flex-col items-center justify-center h-32 text-slate-300 opacity-60">
@@ -147,9 +162,28 @@ export function OrderManager({ store }: { store: any }) {
                             )}
                             
                             {colOrders.map(order => (
-                                <Card key={order.id} className="shadow-sm border-l-4 animate-in zoom-in-95 duration-200 hover:shadow-md transition-shadow group flex flex-col" style={{ borderLeftColor: order.status === 'pendente' ? '#eab308' : 'transparent' }}>
+                                <Card key={order.id} className="shadow-sm border-l-4 animate-in zoom-in-95 duration-200 hover:shadow-md transition-shadow group flex flex-col relative" style={{ borderLeftColor: order.status === 'pendente' ? '#eab308' : 'transparent' }}>
+                                    
+                                    {/* Botão de Cancelar Rápido (Disponível em Pendente, Preparando e Enviado) */}
+                                    {['pendente', 'preparando', 'enviado'].includes(order.status) && (
+                                        <div className="absolute top-2 right-2">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-300 hover:text-red-500 hover:bg-red-50">
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => moveOrder(order.id, 'cancelado')} className="text-red-600 focus:text-red-600 cursor-pointer">
+                                                        <XCircle className="w-4 h-4 mr-2" /> Confirmar Cancelamento
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    )}
+
                                     <CardHeader className="p-3 pb-2 space-y-0">
-                                        <div className="flex justify-between items-start mb-2">
+                                        <div className="flex justify-between items-start mb-2 pr-6"> {/* pr-6 para não bater no ícone de lixo */}
                                             <div className="flex flex-col">
                                                 <span className="text-xs font-bold text-slate-500 font-mono">#{order.id.slice(0, 4)}</span>
                                                 <h3 className="font-bold text-sm text-slate-900 leading-tight">{order.customer_name}</h3>
@@ -176,7 +210,6 @@ export function OrderManager({ store }: { store: any }) {
                                                             <span>{item.quantity}x {item.product_name}</span>
                                                         </div>
                                                         
-                                                        {/* Adicionais e Remoções */}
                                                         {(removed.length > 0 || addons.length > 0 || item.observation) && (
                                                             <div className="mt-1 ml-1 pl-2 border-l-2 border-slate-300 space-y-0.5 text-xs">
                                                                 {removed.length > 0 && (
