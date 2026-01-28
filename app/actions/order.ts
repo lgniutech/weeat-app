@@ -28,7 +28,6 @@ interface OrderInput {
 export async function createOrderAction(order: OrderInput) {
   const supabase = await createClient();
 
-  // 1. Cria o Pedido Principal
   const { data: newOrder, error: orderError } = await supabase
     .from("orders")
     .insert({
@@ -41,7 +40,7 @@ export async function createOrderAction(order: OrderInput) {
       payment_method: order.paymentMethod,
       change_for: order.changeFor,
       total_price: order.totalPrice,
-      last_status_change: new Date().toISOString() // Define o tempo inicial
+      last_status_change: new Date().toISOString()
     })
     .select()
     .single();
@@ -51,7 +50,6 @@ export async function createOrderAction(order: OrderInput) {
     return { error: "Erro ao registrar pedido." };
   }
 
-  // 2. Prepara os itens
   const itemsToInsert = order.items.map(item => ({
     order_id: newOrder.id,
     product_name: item.product_name,
@@ -70,7 +68,6 @@ export async function createOrderAction(order: OrderInput) {
     return { error: "Erro ao registrar itens do pedido." };
   }
 
-  // Registra o primeiro histórico (Criação)
   await supabase.from("order_history").insert({
       order_id: newOrder.id,
       previous_status: null,
@@ -81,11 +78,12 @@ export async function createOrderAction(order: OrderInput) {
   return { success: true, orderId: newOrder.id };
 }
 
-// BUSCAR PEDIDOS (Dashboard)
-export async function getStoreOrdersAction(storeId: string) {
+// BUSCAR PEDIDOS (COM FILTRO DE DATA)
+// dateFilter deve vir no formato "YYYY-MM-DD"
+export async function getStoreOrdersAction(storeId: string, dateFilter?: string) {
     const supabase = await createClient();
     
-    const { data, error } = await supabase
+    let query = supabase
         .from("orders")
         .select(`
             *,
@@ -94,15 +92,23 @@ export async function getStoreOrdersAction(storeId: string) {
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
 
+    // Se tiver data, aplica o filtro do dia (00:00 até 23:59)
+    if (dateFilter) {
+        query = query
+            .gte('created_at', `${dateFilter}T00:00:00`)
+            .lte('created_at', `${dateFilter}T23:59:59`);
+    }
+
+    const { data, error } = await query;
+
     if (error) console.error(error);
     return data || [];
 }
 
-// ATUALIZAR STATUS (Com Histórico)
+// ATUALIZAR STATUS
 export async function updateOrderStatusAction(orderId: string, newStatus: string) {
     const supabase = await createClient();
 
-    // 1. Busca status anterior
     const { data: currentOrder } = await supabase
         .from("orders")
         .select("status")
@@ -112,7 +118,6 @@ export async function updateOrderStatusAction(orderId: string, newStatus: string
     if (!currentOrder) return { error: "Pedido não encontrado" };
     const previousStatus = currentOrder.status;
 
-    // 2. Atualiza Pedido + Timestamp
     const { error: updateError } = await supabase
         .from("orders")
         .update({ 
@@ -123,7 +128,6 @@ export async function updateOrderStatusAction(orderId: string, newStatus: string
     
     if (updateError) return { error: "Erro ao atualizar status" };
 
-    // 3. Grava Histórico
     await supabase.from("order_history").insert({
         order_id: orderId,
         previous_status: previousStatus,
@@ -135,10 +139,10 @@ export async function updateOrderStatusAction(orderId: string, newStatus: string
     return { success: true };
 }
 
-// RASTREIO (Cliente)
+// RASTREIO
 export async function getCustomerOrdersAction(phone: string) {
   const supabase = await createClient();
-  const clean = phone.replace(/\D/g, "") // Garante busca limpa
+  const clean = phone.replace(/\D/g, "")
 
   if (!clean) return []
 

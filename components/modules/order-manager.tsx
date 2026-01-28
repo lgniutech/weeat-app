@@ -6,8 +6,8 @@ import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/ord
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, ArrowLeft, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer } from "lucide-react"
-import { format, differenceInMinutes } from "date-fns"
+import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, ArrowLeft, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, Calendar as CalendarIcon, Filter } from "lucide-react"
+import { format, differenceInMinutes, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 
 const BASE_COLUMNS = [
   { id: 'pendente', label: 'Pendente', color: 'bg-yellow-500', text: 'text-yellow-700', icon: AlertCircle },
@@ -31,10 +32,16 @@ export function OrderManager({ store }: { store: any }) {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [showCanceled, setShowCanceled] = useState(false)
   const [now, setNow] = useState(new Date())
+  
+  // ESTADO DA DATA (Padrão: Hoje)
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  // Função para buscar pedidos (agora com filtro de data)
   const fetchOrders = async () => {
-    const data = await getStoreOrdersAction(store.id)
+    const dateStr = format(selectedDate, 'yyyy-MM-dd')
+    const data = await getStoreOrdersAction(store.id, dateStr)
     setOrders(data || [])
     setLoading(false)
   }
@@ -46,11 +53,13 @@ export function OrderManager({ store }: { store: any }) {
     }
   }
 
+  // Timer para atualizar minutos do "há quanto tempo"
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 60000)
     return () => clearInterval(interval)
   }, [])
 
+  // Efeito principal: Realtime + Carga Inicial
   useEffect(() => {
     fetchOrders()
     audioRef.current = new Audio("/sounds/notification.mp3")
@@ -62,8 +71,11 @@ export function OrderManager({ store }: { store: any }) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
         (payload) => {
-          playNotificationSound()
-          fetchOrders()
+          // Só toca som e atualiza se o filtro for "Hoje", senão pode confundir quem tá vendo histórico
+          if (isToday(selectedDate)) {
+             playNotificationSound()
+             fetchOrders()
+          }
         }
       )
       .on(
@@ -76,7 +88,7 @@ export function OrderManager({ store }: { store: any }) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [store.id, soundEnabled])
+  }, [store.id, soundEnabled, selectedDate]) // Recarrega se mudar a data
 
   const moveOrder = async (orderId: string, nextStatus: string) => {
     const nowISO = new Date().toISOString()
@@ -115,32 +127,69 @@ export function OrderManager({ store }: { store: any }) {
       const minutes = differenceInMinutes(now, dateRef)
       
       if (status === 'entregue' || status === 'cancelado') return format(dateRef, "HH:mm")
-      
       if (minutes < 1) return "Agora"
       if (minutes < 60) return `${minutes} min`
       return format(dateRef, "HH:mm")
   }
 
+  // Handlers de Data
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if(e.target.valueAsDate) {
+          // Ajuste de fuso horário simples (pega a data local escolhida)
+          const date = new Date(e.target.value + 'T00:00:00')
+          setSelectedDate(date)
+      }
+  }
+
+  const handleSetToday = () => setSelectedDate(new Date())
+
+  const isFilterToday = isToday(selectedDate)
+
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-slate-50">
       {/* HEADER KDS */}
-      <div className="flex items-center justify-between px-3 py-2 shrink-0 bg-white border-b shadow-sm h-12">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-3 py-2 shrink-0 bg-white border-b shadow-sm h-14">
+        <div className="flex items-center gap-4">
           <h2 className="text-sm font-bold tracking-tight flex items-center gap-2 text-slate-800 uppercase">
             KDS <span className="text-slate-400">|</span> Cozinha
             <span className="bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded-full">
                 {orders.filter(o => o.status !== 'entregue' && o.status !== 'cancelado').length}
             </span>
           </h2>
+
+          {/* CONTROLE DE DATA */}
+          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
+             <Button 
+                size="sm" 
+                variant={isFilterToday ? "default" : "ghost"} 
+                className={cn("h-7 text-xs font-bold transition-all", isFilterToday ? "bg-blue-600 hover:bg-blue-700 text-white shadow-sm" : "text-slate-600 hover:bg-white")}
+                onClick={handleSetToday}
+             >
+                Hoje
+             </Button>
+             
+             <div className="relative flex items-center">
+                <CalendarIcon className="w-3.5 h-3.5 absolute left-2 text-slate-500 pointer-events-none" />
+                <input 
+                    type="date" 
+                    className="h-7 pl-7 pr-2 text-xs bg-transparent border-none focus:ring-0 text-slate-700 font-medium cursor-pointer outline-none w-[110px]"
+                    value={format(selectedDate, 'yyyy-MM-dd')}
+                    onChange={handleDateChange}
+                />
+             </div>
+          </div>
         </div>
+
         <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => setShowCanceled(!showCanceled)} className="h-7 w-7 text-slate-400">
-                {showCanceled ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            <Button variant="ghost" size="icon" onClick={() => setShowCanceled(!showCanceled)} className="h-8 w-8 text-slate-400" title={showCanceled ? "Ocultar Cancelados" : "Ver Cancelados"}>
+                {showCanceled ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setSoundEnabled(!soundEnabled)} className={cn("h-7 w-7 transition-colors", soundEnabled ? "text-green-600 bg-green-50" : "text-slate-400")}>
-                {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+            <Button variant="ghost" size="icon" onClick={() => setSoundEnabled(!soundEnabled)} className={cn("h-8 w-8 transition-colors", soundEnabled ? "text-green-600 bg-green-50" : "text-slate-400")} title="Som de Notificação">
+                {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
-            <Button variant="outline" size="sm" onClick={fetchOrders} className="h-7 text-[10px] px-2 ml-1">Atualizar</Button>
+            <Button variant="outline" size="sm" onClick={fetchOrders} className="h-8 text-[10px] px-3 ml-1 gap-1">
+                <RotateCcw className="w-3 h-3" /> Atualizar
+            </Button>
         </div>
       </div>
 
@@ -152,7 +201,7 @@ export function OrderManager({ store }: { store: any }) {
                 return (
                     <div key={col.id} className="flex-1 flex flex-col min-w-[220px] h-full bg-slate-200/50 border rounded-lg overflow-hidden">
                         {/* Header Coluna */}
-                        <div className={cn("px-2 py-1 font-bold text-white flex justify-between items-center text-[10px] uppercase tracking-wider shrink-0", col.color)}>
+                        <div className={cn("px-2 py-1.5 font-bold text-white flex justify-between items-center text-[10px] uppercase tracking-wider shrink-0", col.color)}>
                             <div className="flex items-center gap-1">
                                 <col.icon className="w-3 h-3" /> {col.label}
                             </div>
@@ -162,8 +211,9 @@ export function OrderManager({ store }: { store: any }) {
                         {/* Lista de Pedidos */}
                         <div className="flex-1 overflow-y-auto min-h-0 p-1 space-y-1.5 scroll-smooth">
                             {colOrders.length === 0 && (
-                                <div className="flex items-center justify-center h-full opacity-30">
-                                    <span className="text-[10px] font-bold uppercase text-slate-400">Vazio</span>
+                                <div className="flex flex-col items-center justify-center h-full opacity-40 gap-1">
+                                    <span className="text-[10px] font-bold uppercase text-slate-400">Sem Pedidos</span>
+                                    {!isFilterToday && <span className="text-[9px] text-slate-400">nesta data</span>}
                                 </div>
                             )}
                             
@@ -258,7 +308,6 @@ export function OrderManager({ store }: { store: any }) {
                                     
                                     {col.id === 'preparando' && (
                                         <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
-                                             {/* BOTÃO VOLTAR (ArrowLeft) */}
                                              <button onClick={() => moveOrder(order.id, 'pendente')} className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 text-[10px] border-t border-r border-slate-100"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
                                              <button onClick={() => moveOrder(order.id, 'enviado')} className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-colors uppercase">Pronto</button>
                                         </div>
@@ -266,7 +315,6 @@ export function OrderManager({ store }: { store: any }) {
 
                                     {col.id === 'enviado' && (
                                         <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
-                                             {/* BOTÃO VOLTAR (ArrowLeft) */}
                                              <button onClick={() => moveOrder(order.id, 'preparando')} className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 text-[10px] border-t border-r border-slate-100"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
                                              <button onClick={() => moveOrder(order.id, 'entregue')} className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold transition-colors uppercase">Entregue</button>
                                         </div>
