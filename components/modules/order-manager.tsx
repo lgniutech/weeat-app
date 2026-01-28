@@ -6,7 +6,8 @@ import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/ord
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer } from "lucide-react"
+// ADICIONADO: ArrowLeft na importação
+import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft } from "lucide-react"
 import { format, differenceInMinutes, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
@@ -52,7 +53,7 @@ export function OrderManager({ store }: { store: any }) {
     }
   }
 
-  // Timer 1: Atualizar minutos do "há quanto tempo" (Relógio UI) - A cada 60s
+  // Timer para atualizar minutos do "há quanto tempo"
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 60000)
     return () => clearInterval(interval)
@@ -66,7 +67,7 @@ export function OrderManager({ store }: { store: any }) {
     }, 30000) // 30 segundos
 
     return () => clearInterval(interval)
-  }, [selectedDate, store.id]) // Reinicia o timer se mudar a data ou a loja
+  }, [selectedDate, store.id])
 
   // Efeito principal: Realtime + Carga Inicial
   useEffect(() => {
@@ -144,6 +145,7 @@ export function OrderManager({ store }: { store: any }) {
   // Handlers de Data
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if(e.target.valueAsDate) {
+          // Ajuste de fuso horário simples
           const date = new Date(e.target.value + 'T00:00:00')
           setSelectedDate(date)
       }
