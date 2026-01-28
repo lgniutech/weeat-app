@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2 } from "lucide-react"
+import Link from "next/link" // <--- NOVO IMPORT
+import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2, Package } from "lucide-react" // <--- Package ADICIONADO
 import { Button } from "@/components/ui/button"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -10,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { cn, formatPhone, cleanPhone } from "@/lib/utils" // IMPORTADO formatPhone e cleanPhone
+import { cn, formatPhone, cleanPhone } from "@/lib/utils" 
 import { createOrderAction } from "@/app/actions/order"
 
 // Interfaces
@@ -201,6 +202,16 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       
       {/* HEADER E BANNER */}
       <div className="relative w-full bg-slate-900 overflow-hidden">
+        
+        {/* BOTÃO DE RASTREIO (NOVIDADE) */}
+        <Link href="/rastreio" className="absolute top-4 right-4 z-30">
+            <Button size="sm" className="bg-white/90 text-slate-900 hover:bg-white border-0 shadow-lg backdrop-blur-sm font-bold gap-2">
+                <Package className="w-4 h-4" />
+                <span className="hidden sm:inline">Acompanhar Pedido</span>
+                <span className="sm:hidden">Rastrear</span>
+            </Button>
+        </Link>
+
         <div className="relative h-[40vh] md:h-[350px] w-full">
             {banners.length > 0 ? (
                 banners.map((img: string, index: number) => (
@@ -412,7 +423,11 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                     <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600"><Check className="w-12 h-12" /></div>
                     <h2 className="text-2xl font-bold text-slate-900 mb-2">Pedido Recebido!</h2>
                     <p className="text-slate-500 mb-8 max-w-xs">A loja já recebeu seu pedido e começará a preparar em breve.</p>
-                    <Button variant="outline" className="w-full h-12 border-2 font-bold" onClick={() => setIsCartOpen(false)}>Voltar ao Cardápio</Button>
+                    {/* Link para Rastreio também na tela de sucesso */}
+                    <Link href="/rastreio" className="w-full mt-4">
+                        <Button variant="default" className="w-full h-12 font-bold bg-blue-600 hover:bg-blue-700">Acompanhar Pedido</Button>
+                    </Link>
+                    <Button variant="outline" className="w-full h-12 border-2 font-bold mt-2" onClick={() => setIsCartOpen(false)}>Voltar ao Cardápio</Button>
                 </div>
             )}
 
