@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings, MapPin, DollarSign } from "lucide-react"
+import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings, MapPin, DollarSign, CheckCircle2 } from "lucide-react"
 
 interface StoreSettingsModalProps {
   store: any
@@ -30,7 +30,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
   const [cnpj, setCnpj] = useState("")
   const [phone, setPhone] = useState("")
   
-  // States de Valores (Novos)
+  // States de Valores
   const [deliveryFee, setDeliveryFee] = useState("")
   const [minimumOrder, setMinimumOrder] = useState("")
 
@@ -48,10 +48,20 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
 
   // Helper para formatar moeda
   const formatCurrency = (value: string | number) => {
-    if (!value) return ""
+    if (!value && value !== 0) return ""
     const numberValue = typeof value === "string" ? parseFloat(value) : value
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numberValue)
   }
+
+  // Efeito para fechar o modal automaticamente em caso de sucesso
+  useEffect(() => {
+    if (state?.success) {
+      const timer = setTimeout(() => {
+        onOpenChange(false)
+      }, 1500) // Fecha após 1.5 segundos
+      return () => clearTimeout(timer)
+    }
+  }, [state, onOpenChange])
 
   // Sincroniza dados do banco com o formulário
   useEffect(() => {
@@ -293,7 +303,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                 </div>
             </div>
 
-            {/* BLOCO DE TAXAS E VALORES (NOVO) */}
+            {/* BLOCO DE TAXAS E VALORES */}
             <div className="bg-slate-50 border rounded-lg p-4 space-y-4">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <DollarSign className="w-4 h-4" />
@@ -392,14 +402,17 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           )}
 
           {state?.success && (
-            <Alert className="bg-green-50 text-green-700 border-green-200">
-              <AlertDescription>{state.success}</AlertDescription>
+            <Alert className="bg-green-50 text-green-700 border-green-200 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription className="font-medium">{state.success}</AlertDescription>
             </Alert>
           )}
 
-          <Button type="submit" className="w-full" disabled={isPending}>
+          <Button type="submit" className="w-full" disabled={isPending || state?.success}>
             {isPending ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</>
+            ) : state?.success ? (
+              "Salvo!"
             ) : (
               <><Save className="mr-2 h-4 w-4" /> Salvar Alterações</>
             )}
