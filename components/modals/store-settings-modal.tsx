@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings, MapPin } from "lucide-react"
+import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings, MapPin, DollarSign } from "lucide-react"
 
 interface StoreSettingsModalProps {
   store: any
@@ -30,7 +30,11 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
   const [cnpj, setCnpj] = useState("")
   const [phone, setPhone] = useState("")
   
-  // States de Endereço (Novos)
+  // States de Valores (Novos)
+  const [deliveryFee, setDeliveryFee] = useState("")
+  const [minimumOrder, setMinimumOrder] = useState("")
+
+  // States de Endereço
   const [zipCode, setZipCode] = useState("")
   const [street, setStreet] = useState("")
   const [number, setNumber] = useState("")
@@ -41,6 +45,13 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
   const [isLoadingCep, setIsLoadingCep] = useState(false)
 
   const [hours, setHours] = useState<any[]>([])
+
+  // Helper para formatar moeda
+  const formatCurrency = (value: string | number) => {
+    if (!value) return ""
+    const numberValue = typeof value === "string" ? parseFloat(value) : value
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numberValue)
+  }
 
   // Sincroniza dados do banco com o formulário
   useEffect(() => {
@@ -56,6 +67,11 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
       setComplement(store.complement || "")
       setCity(store.city || "")
       setUf(store.state || "")
+
+      // Carrega Valores (com verificação de segurança para settings)
+      const settings = store.settings || {}
+      if (settings.delivery_fee !== undefined) setDeliveryFee(formatCurrency(settings.delivery_fee))
+      if (settings.minimum_order !== undefined) setMinimumOrder(formatCurrency(settings.minimum_order))
       
       const defaultHours = [
         { day: "Segunda", open: "08:00", close: "18:00", active: true },
@@ -66,7 +82,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
         { day: "Sábado", open: "09:00", close: "14:00", active: true },
         { day: "Domingo", open: "00:00", close: "00:00", active: false },
       ]
-      setHours(store.settings?.business_hours || defaultHours)
+      setHours(settings.business_hours || defaultHours)
     }
   }, [store, isOpen])
 
@@ -101,7 +117,20 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     }
   }
 
-  // Máscaras
+  // Máscaras e Formatação
+  const handleCurrencyInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+    let value = e.target.value
+    // Remove tudo que não é dígito
+    value = value.replace(/\D/g, "")
+    // Converte para centavos e formata
+    const numberValue = parseInt(value) / 100
+    if (isNaN(numberValue)) {
+        setter("")
+        return
+    }
+    setter(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numberValue))
+  }
+
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "")
     if (value.length > 14) value = value.slice(0, 14)
@@ -141,7 +170,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           </div>
           <DialogTitle className="text-center">Configurações & Perfil</DialogTitle>
           <DialogDescription className="text-center">
-            Gerencie seus dados e informações da loja.
+            Gerencie seus dados, endereço e taxas de entrega.
           </DialogDescription>
         </DialogHeader>
 
@@ -176,7 +205,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
             </div>
           </div>
 
-          {/* SEÇÃO 2: INFORMAÇÕES DA LOJA (COM ENDEREÇO INCLUSO) */}
+          {/* SEÇÃO 2: INFORMAÇÕES DA LOJA */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
               <Store className="w-4 h-4 text-primary" />
@@ -206,7 +235,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
               </div>
             </div>
             
-            {/* BLOCO DE ENDEREÇO (INTEGRADO AQUI) */}
+            {/* BLOCO DE ENDEREÇO */}
             <div className="bg-slate-50 border rounded-lg p-4 space-y-4 mt-2">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <MapPin className="w-4 h-4" />
@@ -260,6 +289,46 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                     <div className="col-span-2 space-y-1">
                          <Label htmlFor="complement" className="text-xs">Complemento</Label>
                          <Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} placeholder="Opcional" className="h-9" />
+                    </div>
+                </div>
+            </div>
+
+            {/* BLOCO DE TAXAS E VALORES (NOVO) */}
+            <div className="bg-slate-50 border rounded-lg p-4 space-y-4">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                    <DollarSign className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wide">Configurações de Pedido</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="deliveryFee">Taxa de Entrega (Padrão)</Label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
+                            <Input 
+                                id="deliveryFee" 
+                                name="deliveryFee" 
+                                value={deliveryFee}
+                                onChange={(e) => handleCurrencyInput(e, setDeliveryFee)}
+                                className="pl-9"
+                                placeholder="0,00"
+                            />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">Valor fixo para entrega.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="minimumOrder">Pedido Mínimo</Label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
+                            <Input 
+                                id="minimumOrder" 
+                                name="minimumOrder" 
+                                value={minimumOrder}
+                                onChange={(e) => handleCurrencyInput(e, setMinimumOrder)}
+                                className="pl-9"
+                                placeholder="0,00"
+                            />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">Valor mínimo para o cliente fechar o carrinho.</p>
                     </div>
                 </div>
             </div>
