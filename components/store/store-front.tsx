@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link" 
-import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2, Package, Info, Clock, AlertTriangle, ChevronRight, Star, Ban } from "lucide-react" 
+import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2, Package, Info, Clock, AlertTriangle, ChevronRight, Star, Ban, AlertCircle } from "lucide-react" 
 import { Button } from "@/components/ui/button"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { cn, formatPhone, cleanPhone } from "@/lib/utils" 
 import { createOrderAction } from "@/app/actions/order"
+import { Progress } from "@/components/ui/progress"
 
 // Interfaces
 interface Ingredient { id: string; name: string }
@@ -77,9 +78,13 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const [tempSelectedAddons, setTempSelectedAddons] = useState<string[]>([])
   const [itemQuantity, setItemQuantity] = useState(1)
 
+  // Configurações da Loja (Valores)
   const banners = (store.banners && store.banners.length > 0) ? store.banners : (store.banner_url ? [store.banner_url] : [])
   const fontFamily = store.font_family || "Inter"
   const primaryColor = store.primary_color || "#ea1d2c"
+  
+  const deliveryFee = store.settings?.delivery_fee || 0
+  const minimumOrder = store.settings?.minimum_order || 0
 
   useEffect(() => {
     if (banners.length <= 1) return;
@@ -89,10 +94,9 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
   const formatPrice = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-  // Formata endereço da loja para exibição (AGORA COM CIDADE)
+  // Formata endereço da loja para exibição
   const storeAddress = useMemo(() => {
     if (store.street && store.number && store.neighborhood) {
-        // Formato: Rua, Numero - Bairro, Cidade - UF
         let addr = `${store.street}, ${store.number} - ${store.neighborhood}`
         if (store.city && store.state) {
             addr += `, ${store.city} - ${store.state}`
@@ -204,8 +208,17 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       }
   }
 
-  const cartTotal = cart.reduce((acc, item) => acc + (item.totalPrice * item.quantity), 0)
+  // --- CÁLCULOS TOTAIS ---
+  const cartSubtotal = cart.reduce((acc, item) => acc + (item.totalPrice * item.quantity), 0)
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0)
+  
+  // Cálculo final considerando a taxa
+  const currentDeliveryFee = checkoutData.deliveryType === 'entrega' ? deliveryFee : 0
+  const finalTotal = cartSubtotal + currentDeliveryFee
+  
+  // Validação Pedido Mínimo
+  const remainingForMinimum = Math.max(0, minimumOrder - cartSubtotal)
+  const isBelowMinimum = cartSubtotal < minimumOrder
 
   // --- LÓGICA DE ENVIO DO PEDIDO ---
   const handleFinishOrder = async () => {
@@ -263,7 +276,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         address: fullAddress,
         paymentMethod: checkoutData.paymentMethod,
         changeFor: checkoutData.changeFor,
-        totalPrice: cartTotal,
+        totalPrice: finalTotal, // ENVIA O TOTAL JÁ COM TAXA
         items: formattedItems
     }
 
@@ -354,7 +367,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                   </div>
               </button>
 
-              {/* Status da Loja (SEM AS ESTRELAS) */}
+              {/* Status da Loja */}
               <div className="flex items-center gap-3">
                   <div className={cn("px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5", isOpenNow ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
                       <Clock className="w-3.5 h-3.5" />
@@ -416,7 +429,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center z-40">
             <Button className="w-full max-w-md h-16 rounded-full shadow-2xl text-white flex items-center justify-between px-8 text-lg animate-in slide-in-from-bottom-4 hover:brightness-110 transition-all" style={{ backgroundColor: primaryColor }} onClick={() => setIsCartOpen(true)}>
                 <div className="flex items-center gap-3"><span className="bg-white/20 px-3 py-1 rounded-full text-sm font-bold backdrop-blur-sm">{cartCount}</span><span className="font-bold tracking-wide">Ver Sacola</span></div>
-                <span className="font-bold text-xl">{formatPrice(cartTotal)}</span>
+                <span className="font-bold text-xl">{formatPrice(cartSubtotal)}</span>
             </Button>
         </div>
       )}
@@ -458,8 +471,27 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                         )}
                     </div>
                     <div className="p-5 bg-white border-t space-y-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0 z-20">
-                        <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(cartTotal)}</span></div>
-                        <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 transition-all shadow-lg active:scale-[0.98]" style={{ backgroundColor: primaryColor }} disabled={cart.length === 0} onClick={() => setStep("checkout")}>Continuar</Button>
+                        {/* ALERTA DE PEDIDO MÍNIMO */}
+                        {isBelowMinimum && cart.length > 0 && (
+                            <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                    <p className="text-xs font-bold text-orange-800 uppercase mb-1">Pedido Mínimo: {formatPrice(minimumOrder)}</p>
+                                    <p className="text-sm text-orange-700">Adicione mais <b>{formatPrice(remainingForMinimum)}</b> para fechar o pedido.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(cartSubtotal)}</span></div>
+                        
+                        <Button 
+                            className="w-full h-14 text-lg font-bold text-white hover:brightness-110 transition-all shadow-lg active:scale-[0.98]" 
+                            style={{ backgroundColor: isBelowMinimum ? '#94a3b8' : primaryColor }} // Cor cinza se bloqueado
+                            disabled={cart.length === 0 || isBelowMinimum} 
+                            onClick={() => setStep("checkout")}
+                        >
+                            {isBelowMinimum ? "Complete o valor mínimo" : "Continuar"}
+                        </Button>
                     </div>
                 </>
             )}
@@ -498,11 +530,14 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                             <RadioGroupItem value="entrega" className="sr-only" />
                                             <Bike className="mb-2 h-6 w-6" />
                                             <span className="font-bold">Entrega</span>
+                                            {/* Exibe o valor da entrega aqui também */}
+                                            {deliveryFee > 0 && <span className="text-xs mt-1 bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium">{formatPrice(deliveryFee)}</span>}
                                         </Label>
                                         <Label className={cn("flex flex-col items-center justify-center border-2 rounded-xl p-3 cursor-pointer hover:bg-slate-50 transition-all", checkoutData.deliveryType === 'retirada' ? "border-primary bg-primary/5 text-primary" : "border-slate-200")}>
                                             <RadioGroupItem value="retirada" className="sr-only" />
                                             <Store className="mb-2 h-6 w-6" />
                                             <span className="font-bold">Retirada</span>
+                                            <span className="text-xs mt-1 text-green-600 font-medium">Grátis</span>
                                         </Label>
                                     </RadioGroup>
                                     
@@ -574,14 +609,32 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                             </div>
                         </div>
                     </div>
-                    {/* Footer */}
+                    
+                    {/* Footer com Resumo Financeiro */}
                     <div className="p-5 bg-white border-t space-y-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0 z-20">
-                        <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(cartTotal)}</span></div>
+                        <div className="space-y-1 text-sm text-slate-500 pb-2 border-b border-dashed border-slate-200">
+                             <div className="flex justify-between">
+                                 <span>Subtotal</span>
+                                 <span>{formatPrice(cartSubtotal)}</span>
+                             </div>
+                             <div className="flex justify-between">
+                                 <span>Taxa de Entrega</span>
+                                 <span className={checkoutData.deliveryType === 'entrega' ? "text-slate-900" : "text-green-600"}>
+                                     {checkoutData.deliveryType === 'entrega' ? formatPrice(deliveryFee) : "Grátis"}
+                                 </span>
+                             </div>
+                        </div>
+
+                        <div className="flex justify-between font-bold text-xl text-slate-900">
+                            <span>Total</span>
+                            <span>{formatPrice(finalTotal)}</span>
+                        </div>
+                        
                         <Button 
                             className="w-full h-14 text-lg font-bold text-white hover:brightness-110 transition-all shadow-lg" 
                             style={{ backgroundColor: primaryColor }} 
                             onClick={handleFinishOrder} 
-                            disabled={isSubmitting || (checkoutData.deliveryType === 'entrega' && isCityMismatch)} // DESABILITA BOTÃO SE CIDADE ERRADA
+                            disabled={isSubmitting || (checkoutData.deliveryType === 'entrega' && isCityMismatch)}
                         >
                             {isSubmitting ? <Loader2 className="animate-spin" /> : "Enviar Pedido"}
                         </Button>
