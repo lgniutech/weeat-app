@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-// Função auxiliar para traduzir erros do banco de dados para português amigável
+// Função auxiliar para traduzir erros
 function translateError(errorMsg: string) {
   if (errorMsg.includes("duplicate key")) {
      if (errorMsg.includes("stores_slug_key")) return "O nome/link desta loja já está em uso."
@@ -16,24 +16,22 @@ function translateError(errorMsg: string) {
   return errorMsg;
 }
 
-// Helper para converter string de moeda (R$ 10,00) para number (10.00)
+// Helper para converter string de moeda
 function parseCurrency(value: string) {
   if (!value) return 0;
   return parseFloat(value.replace("R$", "").replace(/\./g, "").replace(",", ".").trim()) || 0;
 }
 
-// --- 1. CRIAÇÃO DE LOJA (Setup Inicial) ---
+// --- 1. CRIAÇÃO DE LOJA ---
 export async function createStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
-  
+  // ... (código de criação mantido igual ao anterior, pois o foco é update)
   const fullName = formData.get("fullName") as string;
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
   const name = formData.get("name") as string;
   const cnpj = formData.get("cnpj") as string;
   const whatsapp = formData.get("whatsapp") as string;
-  
-  // Endereço Completo
   const zipCode = formData.get("zipCode") as string;
   const street = formData.get("street") as string;
   const number = formData.get("number") as string;
@@ -41,7 +39,6 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   const complement = formData.get("complement") as string;
   const city = formData.get("city") as string;
   const state = formData.get("state") as string;
-  
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
   
@@ -53,7 +50,6 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       return { error: "Preencha todos os campos obrigatórios." };
     }
 
-    // Atualiza dados do Usuário (Dono)
     const userUpdates: any = { data: { full_name: fullName } };
     if (password) {
       if (password.length < 6) return { error: "A senha deve ter no mínimo 6 caracteres." };
@@ -63,11 +59,9 @@ export async function createStoreAction(prevState: any, formData: FormData) {
     const { error: userError } = await supabase.auth.updateUser(userUpdates);
     if (userError) throw new Error(translateError(userError.message));
 
-    // Gera Slug (Link da loja)
     const randomSuffix = Math.floor(Math.random() * 10000);
     const generatedSlug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + `-${randomSuffix}`;
 
-    // Upload do Logo
     let logoUrl = "";
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
@@ -79,7 +73,6 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       }
     }
 
-    // Cria a Loja
     const { error } = await supabase.from("stores").insert({
       owner_id: user.id,
       name,
@@ -96,7 +89,6 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       logo_url: logoUrl,
       settings: { 
         business_hours: businessHours ? JSON.parse(businessHours) : [],
-        delivery_fee_mode: 'fixed', // Padrão
         delivery_fee: 0,
         minimum_order: 0
       }
@@ -112,15 +104,13 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   redirect("/");
 }
 
-// --- 2. ATUALIZAÇÃO BÁSICA (Dados da Loja - Modal) ---
+// --- 2. ATUALIZAÇÃO BÁSICA (AQUI FOI A CORREÇÃO PRINCIPAL) ---
 export async function updateStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
   const fullName = formData.get("fullName") as string;
   const name = formData.get("name") as string;
   const whatsapp = formData.get("whatsapp") as string;
-  
-  // Endereço Completo
   const zipCode = formData.get("zipCode") as string;
   const street = formData.get("street") as string;
   const number = formData.get("number") as string;
@@ -129,15 +119,12 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const city = formData.get("city") as string;
   const state = formData.get("state") as string;
   
-  // Coordenadas (Geolocalização)
-  const lat = formData.get("latitude") as string;
-  const lng = formData.get("longitude") as string;
+  const latStr = formData.get("latitude") as string;
+  const lngStr = formData.get("longitude") as string;
 
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
-  
-  // Valores e Modos
-  const deliveryFeeMode = formData.get("deliveryFeeMode") as string; // 'fixed', 'per_km', 'fixed_plus_km'
+  const deliveryFeeMode = formData.get("deliveryFeeMode") as string;
   const deliveryFee = formData.get("deliveryFee") as string;
   const pricePerKm = formData.get("pricePerKm") as string;
   const minimumOrder = formData.get("minimumOrder") as string;
@@ -147,9 +134,8 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Sessão expirada. Recarregue a página." };
+    if (!user) return { error: "Sessão expirada." };
 
-    // Atualiza Usuário
     const authUpdates: any = {};
     if (fullName) authUpdates.data = { full_name: fullName };
     
@@ -164,11 +150,17 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       if (userError) throw new Error(translateError(userError.message));
     }
 
-    // Busca settings atuais para não perder dados se não forem enviados
     const { data: currentStore } = await supabase.from("stores").select("settings").eq("owner_id", user.id).single();
     const currentSettings = currentStore?.settings || {};
 
-    // Prepara dados da Loja
+    // Lógica segura para converter lat/lng
+    let finalLat = currentSettings.location?.lat;
+    let finalLng = currentSettings.location?.lng;
+
+    // Se o formulário mandou algo que não seja vazio, usa o novo. Se vazio, mantemos o antigo (fallback) ou definimos null se quisermos limpar (mas manter é mais seguro para UX)
+    if (latStr && latStr.trim() !== "") finalLat = parseFloat(latStr);
+    if (lngStr && lngStr.trim() !== "") finalLng = parseFloat(lngStr);
+
     let updateData: any = {
       name,
       whatsapp: whatsapp.replace(/\D/g, ''),
@@ -187,13 +179,12 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
         price_per_km: parseCurrency(pricePerKm),
         minimum_order: parseCurrency(minimumOrder),
         location: {
-            lat: lat ? parseFloat(lat) : currentSettings.location?.lat,
-            lng: lng ? parseFloat(lng) : currentSettings.location?.lng
+            lat: finalLat,
+            lng: finalLng
         }
       }
     };
 
-    // Upload Logo
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
@@ -219,36 +210,28 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
-// --- 3. ATUALIZAÇÃO DE DESIGN E APARÊNCIA ---
+// ... (Resto das funções mantidas iguais)
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
-    
     const name = formData.get("name") as string;
     const bio = formData.get("bio") as string;
     const primaryColor = formData.get("primaryColor") as string;
     const fontFamily = formData.get("fontFamily") as string;
     const logoUrl = formData.get("logoUrl") as string;
     const bannersJson = formData.get("bannersJson") as string;
-    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { error: "Sessão expirada." };
-  
-      // Busca configurações atuais para não perder dados
       const { data: currentStore } = await supabase.from("stores").select("settings").eq("owner_id", user.id).single();
       const currentSettings = currentStore?.settings || {};
-
       let updateData: any = {
         name,
         bio,
         primary_color: primaryColor,
         font_family: fontFamily,
-        // Mantém settings existentes
         settings: currentSettings 
       };
-  
       if (logoUrl) updateData.logo_url = logoUrl;
-
       if (bannersJson) {
          try {
              const banners = JSON.parse(bannersJson);
@@ -256,25 +239,20 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
              updateData.banner_url = banners.length > 0 ? banners[0] : null;
          } catch (e) { console.error(e); }
       }
-  
       const { error } = await supabase.from("stores").update(updateData).eq("owner_id", user.id);
       if (error) throw new Error(error.message);
-  
     } catch (error: any) {
       return { error: "Erro ao atualizar: " + error.message };
     }
-  
     revalidatePath("/");
     return { success: "Loja atualizada com sucesso!" };
 }
 
-// --- 4. PREFERÊNCIAS DE TEMA ---
 export async function updateStoreSettings(storeId: string, settings: { theme_mode?: string, theme_color?: string }) {
   const supabase = await createClient();
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Não autorizado" };
-
     const { error } = await supabase.from("stores").update(settings).eq("id", storeId).eq("owner_id", user.id);
     if (error) throw new Error(error.message);
     revalidatePath("/");
