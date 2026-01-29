@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link" 
-import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2, Package, Info, Clock, AlertTriangle, ChevronRight, Star, Ban, AlertCircle } from "lucide-react" 
+import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, Loader2, Package, Clock, ChevronRight, Ban, AlertCircle, Trash2, ArrowRight } from "lucide-react" 
 import { Button } from "@/components/ui/button"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -53,6 +53,9 @@ interface CheckoutData {
 }
 
 export function StoreFront({ store, categories }: { store: any, categories: any[] }) {
+  // Estado de montagem para evitar Hydration Error com localStorage
+  const [isMounted, setIsMounted] = useState(false)
+  
   const [cart, setCart] = useState<CartItem[]>([])
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -79,22 +82,52 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   // --- LOGICA DE FRETE ---
   const [calculatedFee, setCalculatedFee] = useState(0)
   const [distanceKm, setDistanceKm] = useState<number | null>(null)
-  const [calcStatus, setCalcStatus] = useState<string>("") // Para debug visual do usuário
+  const [calcStatus, setCalcStatus] = useState<string>("") 
 
   const banners = (store.banners && store.banners.length > 0) ? store.banners : (store.banner_url ? [store.banner_url] : [])
   const fontFamily = store.font_family || "Inter"
   const primaryColor = store.primary_color || "#ea1d2c"
   
-  // Parse seguro das configurações
   const settings = store.settings || {}
   const deliveryFeeMode = settings.delivery_fee_mode || 'fixed'
   const fixedFee = Number(settings.delivery_fee) || 0
   const pricePerKm = Number(settings.price_per_km) || 0
   const minimumOrder = Number(settings.minimum_order) || 0
   
-  // Coordenadas da Loja (Conversão forçada para Number)
   const storeLat = settings.location?.lat ? Number(settings.location.lat) : null
   const storeLng = settings.location?.lng ? Number(settings.location.lng) : null
+
+  // 1. CARREGAR CARRINHO DO LOCALSTORAGE (Apenas no cliente)
+  useEffect(() => {
+    setIsMounted(true)
+    const savedCart = localStorage.getItem(`cart-${store.id}`)
+    const savedData = localStorage.getItem(`checkout-${store.id}`)
+    if (savedCart) {
+        try { setCart(JSON.parse(savedCart)) } catch (e) {}
+    }
+    if (savedData) {
+        try { 
+            const parsed = JSON.parse(savedData)
+            // Mantemos o endereço salvo, mas resetamos o pagamento para segurança
+            setCheckoutData(prev => ({ ...prev, ...parsed, paymentMethod: "pix", changeFor: "" })) 
+        } catch (e) {}
+    }
+  }, [store.id])
+
+  // 2. SALVAR CARRINHO NO LOCALSTORAGE
+  useEffect(() => {
+    if (isMounted) {
+        localStorage.setItem(`cart-${store.id}`, JSON.stringify(cart))
+    }
+  }, [cart, isMounted, store.id])
+
+  // 3. SALVAR DADOS PESSOAIS (exceto sensíveis)
+  useEffect(() => {
+      if (isMounted) {
+          const { paymentMethod, changeFor, ...safeData } = checkoutData
+          localStorage.setItem(`checkout-${store.id}`, JSON.stringify(safeData))
+      }
+  }, [checkoutData, isMounted, store.id])
 
   useEffect(() => {
     if (banners.length <= 1) return;
@@ -102,29 +135,22 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     return () => clearInterval(interval)
   }, [banners.length])
 
-  // Recalcula taxa quando muda o modo ou a distância
+  // Recalcula taxa
   useEffect(() => {
-      // 1. Se for retirada, zero
       if (checkoutData.deliveryType === 'retirada') {
           setCalculatedFee(0)
           setCalcStatus("")
           return
       }
-
-      // 2. Modo Fixo Puro
       if (deliveryFeeMode === 'fixed') {
           setCalculatedFee(fixedFee)
           setCalcStatus("")
           return
       }
-
-      // 3. Modos que dependem de KM (per_km ou fixed_plus_km)
       if (distanceKm === null) {
-          // Se não calculou KM ainda, mas tem taxa fixa base configurada, usa ela como fallback
-          // Se for puramente por KM e não tem KM, fica 0 ou aguarda
           setCalculatedFee(fixedFee) 
           if (checkoutData.cep.length >= 8) {
-             setCalcStatus("Aguardando cálculo de distância...") 
+             setCalcStatus("Aguardando cálculo...") 
           }
       } else {
           let fee = 0
@@ -140,7 +166,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
   const formatPrice = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-  // Fórmula de Haversine
   function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
       const R = 6371; 
       const dLat = deg2rad(lat2 - lat1);
@@ -155,7 +180,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
   const activeDays = settings.business_hours?.filter((h: any) => h.active) || []
 
-  // Verifica Loja Aberta
   const isOpenNow = useMemo(() => {
       const now = new Date()
       const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
@@ -191,8 +215,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     }
     setCart(prev => [...prev, newItem])
     setSelectedProduct(null)
-    setIsCartOpen(true)
-    setStep("cart")
+    // Pequeno feedback tátil/visual poderia ser adicionado aqui
   }
 
   const removeFromCart = (cartId: string) => setCart(prev => prev.filter(item => item.cartId !== cartId))
@@ -210,16 +233,15 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const toggleIngredient = (ingId: string) => { setTempRemovedIngredients(prev => prev.includes(ingId) ? prev.filter(id => id !== ingId) : [...prev, ingId]) }
   const toggleAddon = (addonId: string) => { setTempSelectedAddons(prev => prev.includes(addonId) ? prev.filter(id => id !== addonId) : [...prev, addonId]) }
 
-  // --- BUSCA DE CEP E GEOLOCALIZAÇÃO ---
+  // --- BUSCA DE CEP ---
   const handleCepBlur = async () => {
       const cleanCep = checkoutData.cep.replace(/\D/g, "")
       if (cleanCep.length === 8) {
           setIsLoadingCep(true)
-          setDistanceKm(null) // Reseta para forçar novo cálculo
+          setDistanceKm(null)
           setCalcStatus("Buscando endereço...")
           
           try {
-              // 1. Busca Endereço no ViaCEP
               const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
               const data = await res.json()
               
@@ -233,12 +255,8 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                   }))
                   document.getElementById("checkout-number")?.focus()
                   
-                  // 2. Calcula Distância (Só se a loja tiver Lat/Lng configurados)
                   if (storeLat && storeLng) {
                       setCalcStatus("Calculando distância...")
-                      
-                      // Tenta achar a Lat/Lng do Cliente via Nominatim
-                      // Prioridade: Rua + Cidade + UF -> Se falhar -> CEP + Brasil
                       const queryHighPrec = `${data.logradouro}, ${data.localidade}, ${data.uf}, Brasil`
                       const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryHighPrec)}&limit=1`)
                       const geoData = await geoRes.json()
@@ -249,7 +267,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                           userLat = Number(geoData[0].lat)
                           userLng = Number(geoData[0].lon)
                       } else {
-                          // Fallback: Busca genérica pelo CEP
                           const queryLowPrec = `${cleanCep}, Brasil`
                           const cepRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryLowPrec)}&limit=1`)
                           const cepData = await cepRes.json()
@@ -264,17 +281,16 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                           setDistanceKm(dist)
                           setCalcStatus(`Distância: ${dist.toFixed(1)}km`)
                       } else {
-                          setCalcStatus("Não foi possível calcular a distância exata.")
+                          setCalcStatus("Não foi possível calcular a distância.")
                       }
                   } else {
-                      setCalcStatus("Loja sem localização configurada.")
+                      setCalcStatus("Loja sem localização exata.")
                   }
               } else {
                   setCalcStatus("CEP não encontrado.")
               }
           } catch (e) {
-              console.error("Erro CEP/Geo", e)
-              setCalcStatus("Erro ao calcular frete.")
+              setCalcStatus("Erro ao calcular.")
           } finally {
               setIsLoadingCep(false)
           }
@@ -288,7 +304,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const remainingForMinimum = Math.max(0, minimumOrder - cartSubtotal)
   const isBelowMinimum = cartSubtotal < minimumOrder
 
-  // --- ENVIO DO PEDIDO ---
   const handleFinishOrder = async () => {
     if (!checkoutData.name || !checkoutData.phone) return alert("Preencha nome e telefone.")
     
@@ -297,7 +312,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         if (!checkoutData.street || !checkoutData.number || !checkoutData.neighborhood) {
             return alert("Preencha o endereço completo.")
         }
-        // Trava de cidade
         if (store.city && checkoutData.city) {
             if (store.city.toLowerCase().trim() !== checkoutData.city.toLowerCase().trim()) {
                 return alert(`Desculpe, esta loja só realiza entregas em ${store.city}.`)
@@ -335,6 +349,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     if (res.success) {
         setStep("success")
         setCart([])
+        localStorage.removeItem(`cart-${store.id}`) // Limpa carrinho ao finalizar
     } else {
         alert("Erro ao enviar pedido. Tente novamente.")
     }
@@ -358,6 +373,9 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       return store.city.toLowerCase().trim() !== checkoutData.city.toLowerCase().trim()
   }, [store.city, checkoutData.city])
 
+  // Se não estiver montado (SSR), renderiza um shell básico ou null para evitar mismatch
+  if (!isMounted) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24" style={{ fontFamily: fontFamily }}>
       <style jsx global>{`@import url('https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@300;400;500;700&display=swap');`}</style>
@@ -365,7 +383,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       {/* HEADER */}
       <div className="relative w-full bg-slate-900 overflow-hidden">
         <Link href="/rastreio" className="absolute top-4 right-4 z-30">
-            <Button size="sm" className="bg-white/90 text-slate-900 hover:bg-white border-0 shadow-lg backdrop-blur-sm font-bold gap-2">
+            <Button size="sm" className="bg-white/90 text-slate-900 hover:bg-white border-0 shadow-lg backdrop-blur-sm font-bold gap-2 transition-all hover:scale-105">
                 <Package className="w-4 h-4" /> <span className="hidden sm:inline">Acompanhar Pedido</span>
             </Button>
         </Link>
@@ -412,12 +430,14 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         <div className="px-4 md:px-8 py-3 max-w-7xl mx-auto space-y-3">
             <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar produtos..." className="pl-9 bg-slate-100 border-transparent focus:bg-white" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ borderColor: searchTerm ? primaryColor : 'transparent' }} />
+                <Input placeholder="Buscar produtos..." className="pl-9 bg-slate-100 border-transparent focus:bg-white transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ borderColor: searchTerm ? primaryColor : 'transparent' }} />
             </div>
             <ScrollArea className="w-full whitespace-nowrap pb-1">
                 <div className="flex gap-2">
                     {filteredCategories.map((cat) => (
-                        <button key={cat.id} onClick={() => document.getElementById(`cat-${cat.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="px-5 py-2 rounded-full text-sm font-bold bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100">{cat.name}</button>
+                        <button key={cat.id} onClick={() => document.getElementById(`cat-${cat.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="px-5 py-2 rounded-full text-sm font-bold bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 transition-colors active:scale-95">
+                            {cat.name}
+                        </button>
                     ))}
                 </div>
                 <ScrollBar orientation="horizontal" className="hidden" />
@@ -435,7 +455,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                     <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-6 flex items-center gap-3">{cat.name}<div className="h-1 flex-1 bg-slate-100 rounded-full" /></h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {cat.products.map((product: Product) => (
-                            <div key={product.id} className="flex bg-white rounded-2xl border border-slate-100 shadow-sm p-3 gap-4 hover:border-slate-300 hover:shadow-md transition-all cursor-pointer group" onClick={() => handleProductClick(product)}>
+                            <div key={product.id} className="flex bg-white rounded-2xl border border-slate-100 shadow-sm p-3 gap-4 hover:border-slate-300 hover:shadow-md transition-all cursor-pointer group active:scale-[0.98]" onClick={() => handleProductClick(product)}>
                                 <div className="flex-1 flex flex-col justify-between py-1">
                                     <div>
                                         <h3 className="font-bold text-slate-900 line-clamp-2 text-base group-hover:text-[var(--primary)] transition-colors" style={{ '--primary': primaryColor } as any}>{product.name}</h3>
@@ -455,7 +475,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       {/* BOTÃO FLUTUANTE DO CARRINHO */}
       {cartCount > 0 && (
         <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center z-40">
-            <Button className="w-full max-w-md h-16 rounded-full shadow-2xl text-white flex items-center justify-between px-8 text-lg animate-in slide-in-from-bottom-4 hover:brightness-110" style={{ backgroundColor: primaryColor }} onClick={() => setIsCartOpen(true)}>
+            <Button className="w-full max-w-md h-16 rounded-full shadow-2xl text-white flex items-center justify-between px-8 text-lg animate-in slide-in-from-bottom-4 hover:brightness-110 active:scale-95 transition-all" style={{ backgroundColor: primaryColor }} onClick={() => setIsCartOpen(true)}>
                 <div className="flex items-center gap-3"><span className="bg-white/20 px-3 py-1 rounded-full text-sm font-bold backdrop-blur-sm">{cartCount}</span><span className="font-bold tracking-wide">Ver Sacola</span></div>
                 <span className="font-bold text-xl">{formatPrice(cartSubtotal)}</span>
             </Button>
@@ -476,7 +496,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                         ) : (
                             <div className="space-y-4">
                                 {cart.map((item) => (
-                                    <div key={item.cartId} className="flex gap-4 items-start bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                    <div key={item.cartId} className="flex gap-4 items-start bg-white p-4 rounded-xl border border-slate-100 shadow-sm relative group">
                                         <div className="flex-1">
                                             <div className="flex justify-between"><p className="font-bold text-slate-900 text-sm">{item.name}</p><p className="text-sm font-bold text-slate-900">{formatPrice(item.totalPrice * item.quantity)}</p></div>
                                             <div className="text-xs text-muted-foreground mt-1 space-y-1">
@@ -485,12 +505,13 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                                 {item.observation && <p className="italic">"{item.observation}"</p>}
                                             </div>
                                         </div>
-                                        <div className="flex flex-col items-center gap-2">
+                                        <div className="flex flex-col items-center gap-2 pl-2">
                                             <div className="flex items-center border border-slate-200 rounded-lg h-8 bg-slate-50">
-                                                <button onClick={() => item.quantity > 1 ? updateQuantity(item.cartId, -1) : removeFromCart(item.cartId)} className="w-8 h-full flex items-center justify-center hover:bg-white text-slate-500 rounded-l-lg">-</button>
+                                                <button onClick={() => item.quantity > 1 ? updateQuantity(item.cartId, -1) : removeFromCart(item.cartId)} className="w-8 h-full flex items-center justify-center hover:bg-white text-slate-500 rounded-l-lg hover:text-red-500 transition-colors">-</button>
                                                 <span className="w-6 text-center text-xs font-bold text-slate-900">{item.quantity}</span>
-                                                <button onClick={() => updateQuantity(item.cartId, 1)} className="w-8 h-full flex items-center justify-center hover:bg-white text-slate-500 rounded-r-lg">+</button>
+                                                <button onClick={() => updateQuantity(item.cartId, 1)} className="w-8 h-full flex items-center justify-center hover:bg-white text-slate-500 rounded-r-lg hover:text-green-600 transition-colors">+</button>
                                             </div>
+                                            <button onClick={() => removeFromCart(item.cartId)} className="text-[10px] text-red-400 hover:text-red-600 underline decoration-dashed">Remover</button>
                                         </div>
                                     </div>
                                 ))}
@@ -499,7 +520,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                     </div>
                     <div className="p-5 bg-white border-t space-y-4 pb-safe shrink-0 z-20">
                         {isBelowMinimum && cart.length > 0 && (
-                            <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg flex items-start gap-3">
+                            <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg flex items-start gap-3 animate-in slide-in-from-bottom-2">
                                 <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
                                 <div className="flex-1">
                                     <p className="text-xs font-bold text-orange-800 uppercase mb-1">Mínimo: {formatPrice(minimumOrder)}</p>
@@ -508,7 +529,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                             </div>
                         )}
                         <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(cartSubtotal)}</span></div>
-                        <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 shadow-lg" style={{ backgroundColor: isBelowMinimum ? '#94a3b8' : primaryColor }} disabled={cart.length === 0 || isBelowMinimum} onClick={() => setStep("checkout")}>{isBelowMinimum ? "Complete o valor mínimo" : "Continuar"}</Button>
+                        <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 shadow-lg active:scale-[0.99] transition-all" style={{ backgroundColor: isBelowMinimum ? '#94a3b8' : primaryColor }} disabled={cart.length === 0 || isBelowMinimum} onClick={() => setStep("checkout")}>{isBelowMinimum ? "Complete o valor mínimo" : "Continuar"}</Button>
                     </div>
                 </>
             )}
@@ -531,8 +552,8 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">2</div> Entrega</h3>
                                 <div className="pl-8 space-y-3">
                                     <RadioGroup value={checkoutData.deliveryType} onValueChange={(v: any) => setCheckoutData({...checkoutData, deliveryType: v})} className="grid grid-cols-2 gap-3">
-                                        <Label className={cn("flex flex-col items-center justify-center border-2 rounded-xl p-3 cursor-pointer hover:bg-slate-50", checkoutData.deliveryType === 'entrega' ? "border-primary bg-primary/5 text-primary" : "border-slate-200")}><RadioGroupItem value="entrega" className="sr-only" /><Bike className="mb-2 h-6 w-6" /><span className="font-bold">Entrega</span></Label>
-                                        <Label className={cn("flex flex-col items-center justify-center border-2 rounded-xl p-3 cursor-pointer hover:bg-slate-50", checkoutData.deliveryType === 'retirada' ? "border-primary bg-primary/5 text-primary" : "border-slate-200")}><RadioGroupItem value="retirada" className="sr-only" /><Store className="mb-2 h-6 w-6" /><span className="font-bold">Retirada</span><span className="text-xs mt-1 text-green-600 font-medium">Grátis</span></Label>
+                                        <Label className={cn("flex flex-col items-center justify-center border-2 rounded-xl p-3 cursor-pointer hover:bg-slate-50 transition-all", checkoutData.deliveryType === 'entrega' ? "border-primary bg-primary/5 text-primary" : "border-slate-200")}><RadioGroupItem value="entrega" className="sr-only" /><Bike className="mb-2 h-6 w-6" /><span className="font-bold">Entrega</span></Label>
+                                        <Label className={cn("flex flex-col items-center justify-center border-2 rounded-xl p-3 cursor-pointer hover:bg-slate-50 transition-all", checkoutData.deliveryType === 'retirada' ? "border-primary bg-primary/5 text-primary" : "border-slate-200")}><RadioGroupItem value="retirada" className="sr-only" /><Store className="mb-2 h-6 w-6" /><span className="font-bold">Retirada</span><span className="text-xs mt-1 text-green-600 font-medium">Grátis</span></Label>
                                     </RadioGroup>
                                     
                                     {checkoutData.deliveryType === 'entrega' && (
@@ -545,7 +566,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                                 </div>
                                             </div>
                                             
-                                            {/* ALERTAS DE STATUS DO CÁLCULO */}
                                             {isCityMismatch && <div className="bg-red-50 border border-red-200 p-3 rounded-md flex gap-2 text-red-800 text-xs"><Ban className="w-4 h-4 shrink-0 mt-0.5" /><span><b>Entrega Indisponível:</b> A loja não entrega em {checkoutData.city}.</span></div>}
                                             
                                             {calcStatus && !isCityMismatch && (
@@ -570,9 +590,9 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">3</div> Pagamento</h3>
                                 <div className="pl-8 space-y-3">
                                     <RadioGroup value={checkoutData.paymentMethod} onValueChange={(v: any) => setCheckoutData({...checkoutData, paymentMethod: v})} className="space-y-2">
-                                        <div className="flex items-center space-x-2 border p-3 rounded-lg"><RadioGroupItem value="pix" id="pix" /><Label htmlFor="pix" className="flex-1 cursor-pointer font-medium">Pix</Label></div>
-                                        <div className="flex items-center space-x-2 border p-3 rounded-lg"><RadioGroupItem value="cartao" id="cartao" /><Label htmlFor="cartao" className="flex-1 cursor-pointer font-medium">Cartão</Label></div>
-                                        <div className="flex items-center space-x-2 border p-3 rounded-lg"><RadioGroupItem value="dinheiro" id="dinheiro" /><Label htmlFor="dinheiro" className="flex-1 cursor-pointer font-medium">Dinheiro</Label></div>
+                                        <div className="flex items-center space-x-2 border p-3 rounded-lg cursor-pointer hover:bg-slate-50"><RadioGroupItem value="pix" id="pix" /><Label htmlFor="pix" className="flex-1 cursor-pointer font-medium">Pix</Label></div>
+                                        <div className="flex items-center space-x-2 border p-3 rounded-lg cursor-pointer hover:bg-slate-50"><RadioGroupItem value="cartao" id="cartao" /><Label htmlFor="cartao" className="flex-1 cursor-pointer font-medium">Cartão</Label></div>
+                                        <div className="flex items-center space-x-2 border p-3 rounded-lg cursor-pointer hover:bg-slate-50"><RadioGroupItem value="dinheiro" id="dinheiro" /><Label htmlFor="dinheiro" className="flex-1 cursor-pointer font-medium">Dinheiro</Label></div>
                                     </RadioGroup>
                                     {checkoutData.paymentMethod === 'dinheiro' && <div className="animate-in slide-in-from-top-2 fade-in"><Label>Troco para quanto?</Label><Input placeholder="Ex: R$ 50,00" value={checkoutData.changeFor} onChange={e => setCheckoutData({...checkoutData, changeFor: e.target.value})} className="mt-1.5" /></div>}
                                 </div>
@@ -590,7 +610,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                              </div>
                         </div>
                         <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(finalTotal)}</span></div>
-                        <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 shadow-lg" style={{ backgroundColor: primaryColor }} onClick={handleFinishOrder} disabled={isSubmitting || (checkoutData.deliveryType === 'entrega' && isCityMismatch)}>{isSubmitting ? <Loader2 className="animate-spin" /> : "Enviar Pedido"}</Button>
+                        <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 shadow-lg active:scale-[0.99] transition-all" style={{ backgroundColor: primaryColor }} onClick={handleFinishOrder} disabled={isSubmitting || (checkoutData.deliveryType === 'entrega' && isCityMismatch)}>{isSubmitting ? <Loader2 className="animate-spin" /> : "Enviar Pedido"}</Button>
                     </div>
                 </>
             )}
@@ -598,11 +618,11 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
             {/* ETAPA 3: SUCESSO */}
             {step === "success" && (
                 <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in zoom-in-95 duration-300">
-                    <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600"><Check className="w-12 h-12" /></div>
+                    <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 shadow-lg shadow-green-100"><Check className="w-12 h-12" /></div>
                     <h2 className="text-2xl font-bold text-slate-900 mb-2">Pedido Recebido!</h2>
-                    <p className="text-slate-500 mb-8 max-w-xs">A loja já recebeu seu pedido.</p>
-                    <Link href="/rastreio" className="w-full mt-4"><Button variant="default" className="w-full h-12 font-bold bg-blue-600 hover:bg-blue-700">Acompanhar Pedido</Button></Link>
-                    <Button variant="outline" className="w-full h-12 border-2 font-bold mt-2" onClick={() => setIsCartOpen(false)}>Voltar ao Cardápio</Button>
+                    <p className="text-slate-500 mb-8 max-w-xs">A loja já recebeu seu pedido e logo começará o preparo.</p>
+                    <Link href="/rastreio" className="w-full mt-4"><Button variant="default" className="w-full h-12 font-bold bg-blue-600 hover:bg-blue-700 shadow-blue-200 shadow-lg">Acompanhar Pedido</Button></Link>
+                    <Button variant="outline" className="w-full h-12 border-2 font-bold mt-2 hover:bg-slate-50" onClick={() => setIsCartOpen(false)}>Voltar ao Cardápio</Button>
                 </div>
             )}
         </SheetContent>
@@ -627,16 +647,16 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
       {/* MODAL PRODUTO */}
       <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
-        <DialogContent className="max-w-md p-0 overflow-hidden gap-0 border-none sm:rounded-2xl">
+        <DialogContent className="max-w-md p-0 overflow-hidden gap-0 border-none sm:rounded-2xl h-[100dvh] sm:h-auto">
             {selectedProduct && (
                 <>
-                    <div className="relative h-48 w-full bg-slate-100">
+                    <div className="relative h-48 w-full bg-slate-100 shrink-0">
                         {selectedProduct.image_url ? (<img src={selectedProduct.image_url} alt={selectedProduct.name} className="w-full h-full object-cover" />) : (<div className="flex h-full items-center justify-center bg-slate-100 text-slate-300"><Search className="h-12 w-12" /></div>)}
                         <Button variant="ghost" size="icon" className="absolute top-2 right-2 rounded-full bg-white/80 hover:bg-white text-black backdrop-blur-sm" onClick={() => setSelectedProduct(null)}><X className="h-4 w-4" /></Button>
                     </div>
-                    <ScrollArea className="max-h-[60vh]">
+                    <ScrollArea className="flex-1 -mx-px sm:max-h-[60vh]">
                         <div className="p-6 space-y-6">
-                            <div><DialogTitle className="text-2xl font-bold">{selectedProduct.name}</DialogTitle><DialogDescription className="text-base text-slate-500 mt-2">{selectedProduct.description}</DialogDescription></div>
+                            <div><DialogTitle className="text-2xl font-bold leading-tight">{selectedProduct.name}</DialogTitle><DialogDescription className="text-base text-slate-500 mt-2 leading-relaxed">{selectedProduct.description}</DialogDescription></div>
                             {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && (
                                 <div className="space-y-3">
                                     <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">Ingredientes <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full lowercase">Remova o que não quiser</span></h3>
@@ -675,19 +695,19 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                     </div>
                                 </div>
                             )}
-                            <div className="space-y-3">
+                            <div className="space-y-3 pb-safe">
                                 <Label className="flex items-center gap-2"><MessageSquare className="w-4 h-4" /> Alguma observação?</Label>
                                 <Textarea placeholder="Ex: Tocar a campainha, caprichar no molho..." className="resize-none" value={tempObservation} onChange={e => setTempObservation(e.target.value)} />
                             </div>
                         </div>
                     </ScrollArea>
-                    <div className="p-4 border-t bg-slate-50 flex items-center gap-4">
+                    <div className="p-4 border-t bg-slate-50 flex items-center gap-4 shrink-0 z-20 pb-safe">
                         <div className="flex items-center border rounded-lg bg-white h-12 shadow-sm">
-                            <button onClick={() => setItemQuantity(q => Math.max(1, q - 1))} className="px-4 h-full hover:bg-slate-50 text-slate-500">-</button>
+                            <button onClick={() => setItemQuantity(q => Math.max(1, q - 1))} className="px-4 h-full hover:bg-slate-50 text-slate-500 active:bg-slate-100 rounded-l-lg">-</button>
                             <span className="w-8 text-center font-bold">{itemQuantity}</span>
-                            <button onClick={() => setItemQuantity(q => q + 1)} className="px-4 h-full hover:bg-slate-50 text-slate-500">+</button>
+                            <button onClick={() => setItemQuantity(q => q + 1)} className="px-4 h-full hover:bg-slate-50 text-slate-500 active:bg-slate-100 rounded-r-lg">+</button>
                         </div>
-                        <Button className="flex-1 h-12 text-lg font-bold text-white shadow-md hover:brightness-110" style={{ backgroundColor: primaryColor }} onClick={confirmAddToCart}>
+                        <Button className="flex-1 h-12 text-lg font-bold text-white shadow-md hover:brightness-110 active:scale-[0.98] transition-all" style={{ backgroundColor: primaryColor }} onClick={confirmAddToCart}>
                             Adicionar {formatPrice(calculateItemTotal(selectedProduct, tempSelectedAddons) * itemQuantity)}
                         </Button>
                     </div>
