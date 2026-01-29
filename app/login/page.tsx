@@ -163,12 +163,7 @@ function LoginForm() {
       
       {!isRedirecting && (
           <CardFooter className="justify-center border-t pt-4">
-          <p className="text-sm text-muted-foreground">
-              Não tem uma conta?{" "}
-              <Link href="/register" className="text-primary hover:underline font-medium">
-              Criar conta
-              </Link>
-          </p>
+          
           </CardFooter>
       )}
     </Card>
