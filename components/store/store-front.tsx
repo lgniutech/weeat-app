@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link" 
-import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2, Package, Info, Clock, AlertTriangle, ChevronRight, Star } from "lucide-react" 
+import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, CreditCard, Loader2, Package, Info, Clock, AlertTriangle, ChevronRight, Star, Ban } from "lucide-react" 
 import { Button } from "@/components/ui/button"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -89,10 +89,15 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
   const formatPrice = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-  // Formata endereço da loja para exibição
+  // Formata endereço da loja para exibição (AGORA COM CIDADE)
   const storeAddress = useMemo(() => {
     if (store.street && store.number && store.neighborhood) {
-        return `${store.street}, ${store.number} - ${store.neighborhood}`
+        // Formato: Rua, Numero - Bairro, Cidade - UF
+        let addr = `${store.street}, ${store.number} - ${store.neighborhood}`
+        if (store.city && store.state) {
+            addr += `, ${store.city} - ${store.state}`
+        }
+        return addr
     }
     if (store.city && store.state) {
         return `${store.city} - ${store.state}`
@@ -102,7 +107,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
   const activeDays = store.settings?.business_hours?.filter((h: any) => h.active) || []
 
-  // Verifica se a loja está aberta agora (Lógica simples baseada no dia/hora atual)
+  // Verifica se a loja está aberta
   const isOpenNow = useMemo(() => {
       const now = new Date()
       const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
@@ -211,6 +216,17 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         if (!checkoutData.street || !checkoutData.number || !checkoutData.neighborhood) {
             return alert("Preencha o endereço completo (Rua, Número e Bairro).")
         }
+        
+        // --- VALIDAÇÃO DE CIDADE (TRAVA) ---
+        if (store.city && checkoutData.city) {
+            const storeCity = store.city.toLowerCase().trim()
+            const clientCity = checkoutData.city.toLowerCase().trim()
+            
+            if (storeCity !== clientCity) {
+                return alert(`Desculpe, esta loja só realiza entregas em ${store.city}. Seu endereço consta como ${checkoutData.city}.`)
+            }
+        }
+
         fullAddress = `${checkoutData.street}, ${checkoutData.number} - ${checkoutData.neighborhood}, ${checkoutData.city}. CEP: ${checkoutData.cep}. ${checkoutData.complement}`
     } else {
         fullAddress = "Retirada no Balcão"
@@ -271,6 +287,12 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     })).filter(cat => cat.products.length > 0)
   }, [searchTerm, categories])
 
+  // Verifica se há divergência de cidade para exibir alerta visual
+  const isCityMismatch = useMemo(() => {
+      if (!store.city || !checkoutData.city) return false
+      return store.city.toLowerCase().trim() !== checkoutData.city.toLowerCase().trim()
+  }, [store.city, checkoutData.city])
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24" style={{ fontFamily: fontFamily }}>
       <style jsx global>{`@import url('https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@300;400;500;700&display=swap');`}</style>
@@ -309,7 +331,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         </div>
       </div>
 
-      {/* BARRA DE INFORMAÇÕES (NOVO - ONDE VOCÊ PROVAVELMENTE DESENHOU) */}
+      {/* BARRA DE INFORMAÇÕES */}
       <div className="bg-white border-b border-slate-100 shadow-sm relative z-20">
           <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               
@@ -332,15 +354,11 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                   </div>
               </button>
 
-              {/* Status da Loja */}
+              {/* Status da Loja (SEM AS ESTRELAS) */}
               <div className="flex items-center gap-3">
                   <div className={cn("px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5", isOpenNow ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
                       <Clock className="w-3.5 h-3.5" />
                       {isOpenNow ? "Loja Aberta" : "Loja Fechada"}
-                  </div>
-                  {/* Nota (Placeholder Futuro) */}
-                  <div className="hidden sm:flex items-center gap-1 text-sm font-bold text-slate-700">
-                      <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" /> 5.0
                   </div>
               </div>
           </div>
@@ -507,11 +525,13 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                                 </div>
                                             </div>
                                             
-                                            {/* ALERTA DE LOCALIZAÇÃO */}
-                                            {checkoutData.city && store.city && checkoutData.city.toLowerCase() !== store.city.toLowerCase() && (
-                                                 <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-md flex gap-2 text-yellow-800 text-xs">
-                                                     <AlertTriangle className="w-4 h-4 shrink-0" />
-                                                     <span><b>Atenção:</b> Esta loja fica em <b>{store.city}</b>, mas seu endereço parece ser em <b>{checkoutData.city}</b>. Verifique se eles entregam aí.</span>
+                                            {/* ALERTA DE DIVERGÊNCIA DE CIDADE (VERMELHO) */}
+                                            {isCityMismatch && (
+                                                 <div className="bg-red-50 border border-red-200 p-3 rounded-md flex gap-2 text-red-800 text-xs">
+                                                     <Ban className="w-4 h-4 shrink-0 mt-0.5" />
+                                                     <span>
+                                                         <b>Entrega Indisponível:</b> A loja fica em <b>{store.city}</b> e não realiza entregas em <b>{checkoutData.city}</b>.
+                                                     </span>
                                                  </div>
                                             )}
 
@@ -557,7 +577,12 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                     {/* Footer */}
                     <div className="p-5 bg-white border-t space-y-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0 z-20">
                         <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(cartTotal)}</span></div>
-                        <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 transition-all shadow-lg" style={{ backgroundColor: primaryColor }} onClick={handleFinishOrder} disabled={isSubmitting}>
+                        <Button 
+                            className="w-full h-14 text-lg font-bold text-white hover:brightness-110 transition-all shadow-lg" 
+                            style={{ backgroundColor: primaryColor }} 
+                            onClick={handleFinishOrder} 
+                            disabled={isSubmitting || (checkoutData.deliveryType === 'entrega' && isCityMismatch)} // DESABILITA BOTÃO SE CIDADE ERRADA
+                        >
                             {isSubmitting ? <Loader2 className="animate-spin" /> : "Enviar Pedido"}
                         </Button>
                     </div>
