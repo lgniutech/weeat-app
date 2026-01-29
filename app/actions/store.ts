@@ -16,6 +16,12 @@ function translateError(errorMsg: string) {
   return errorMsg;
 }
 
+// Helper para converter string de moeda (R$ 10,00) para number (10.00)
+function parseCurrency(value: string) {
+  if (!value) return 0;
+  return parseFloat(value.replace("R$", "").replace(/\./g, "").replace(",", ".").trim()) || 0;
+}
+
 // --- 1. CRIAÇÃO DE LOJA (Setup Inicial) ---
 export async function createStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
@@ -88,7 +94,11 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       city,
       state,
       logo_url: logoUrl,
-      settings: { business_hours: businessHours ? JSON.parse(businessHours) : [] }
+      settings: { 
+        business_hours: businessHours ? JSON.parse(businessHours) : [],
+        delivery_fee: 0,
+        minimum_order: 0
+      }
     });
     
     if (error) throw new Error(translateError(error.message));
@@ -120,6 +130,9 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
 
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
+  const deliveryFee = formData.get("deliveryFee") as string;
+  const minimumOrder = formData.get("minimumOrder") as string;
+
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
@@ -153,7 +166,11 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       complement,
       city,
       state,
-      settings: { business_hours: JSON.parse(businessHours) }
+      settings: { 
+        business_hours: JSON.parse(businessHours),
+        delivery_fee: parseCurrency(deliveryFee),
+        minimum_order: parseCurrency(minimumOrder)
+      }
     };
 
     // Upload Logo
@@ -197,11 +214,17 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { error: "Sessão expirada." };
   
+      // Busca configurações atuais para não perder dados ao atualizar apenas o design
+      const { data: currentStore } = await supabase.from("stores").select("settings").eq("owner_id", user.id).single();
+      const currentSettings = currentStore?.settings || {};
+
       let updateData: any = {
         name,
         bio,
         primary_color: primaryColor,
-        font_family: fontFamily
+        font_family: fontFamily,
+        // Mantém settings existentes (business_hours, delivery_fee, etc)
+        settings: currentSettings 
       };
   
       if (logoUrl) updateData.logo_url = logoUrl;
