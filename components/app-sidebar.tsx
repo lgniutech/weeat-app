@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation" // Importante para marcar o menu ativo
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -19,7 +20,7 @@ import {
   Ticket,
   Star,
   Palette,
-  Image as ImageIcon // Ícone novo para aparência
+  Image as ImageIcon
 } from "lucide-react"
 import {
   Sidebar,
@@ -45,11 +46,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { logoutAction } from "@/app/actions/auth"
 
-// --- ATENÇÃO AQUI: IDs Atualizados ---
+// --- CONFIGURAÇÃO DOS MENUS ---
 const navigationItems = [
   {
     title: "Dashboard",
-    url: "#",
+    url: "/", // Alterado para rota raiz
     icon: LayoutDashboard,
     id: "dashboard",
   },
@@ -68,7 +69,7 @@ const navigationItems = [
     icon: UtensilsCrossed,
     id: "cardapio",
     items: [
-      { title: "Produtos & Categorias", url: "#", id: "menu-products" }, // ID NOVO
+      { title: "Produtos & Categorias", url: "#", id: "menu-products" },
       { title: "Estoque", url: "#" },
     ],
   },
@@ -98,8 +99,9 @@ const navigationItems = [
     icon: Settings,
     id: "configuracoes",
     items: [
-      { title: "Dados da Loja", url: "#", id: "store-settings", icon: Store }, 
-      { title: "Aparência & Marca", url: "#", id: "store-appearance", icon: ImageIcon }, // ID NOVO
+      // AQUI ESTÃO OS LINKS QUE VOCÊ PRECISA
+      { title: "Dados da Loja", url: "/settings/store", id: "store-settings", icon: Store }, 
+      { title: "Aparência & Marca", url: "/settings/store", id: "store-appearance", icon: ImageIcon },
       { title: "Equipe & Permissões", url: "#" },
       { title: "Tema (Claro/Escuro)", url: "#", icon: Palette, id: "tema" },
     ],
@@ -125,6 +127,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const [openGroups, setOpenGroups] = React.useState<string[]>(["cardapio", "configuracoes"])
   const { state, setOpen } = useSidebar()
+  const pathname = usePathname() // Hook para saber em qual página estamos
 
   const getInitials = (name: string) => {
     return name ? name.split(' ').map(part => part[0]).join('').toUpperCase().substring(0, 2) : "U"
@@ -188,38 +191,62 @@ export function AppSidebar({
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <SidebarMenuSub>
-                          {item.items.map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton
-                                asChild
-                                onClick={() => onModuleChange((subItem as any).id || item.id)}
-                                className={`cursor-pointer hover:text-primary transition-colors ${
-                                  activeModule === ((subItem as any).id || item.id) ? "text-primary font-medium bg-primary/10" : ""
-                                }`}
-                              >
-                                <span>
-                                  {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 inline-block" />}
-                                  <span className="mr-2 inline-block">{subItem.title}</span>
-                                </span>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
+                          {item.items.map((subItem) => {
+                            // Verifica se é um link real ou troca de aba
+                            const isRealLink = subItem.url && subItem.url !== "#";
+                            const isActive = isRealLink 
+                                ? pathname === subItem.url 
+                                : activeModule === ((subItem as any).id || item.id);
+
+                            return (
+                              <SidebarMenuSubItem key={subItem.title}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  onClick={() => !isRealLink && onModuleChange((subItem as any).id || item.id)}
+                                  className={`cursor-pointer hover:text-primary transition-colors ${
+                                    isActive ? "text-primary font-medium bg-primary/10" : ""
+                                  }`}
+                                >
+                                  {isRealLink ? (
+                                    <Link href={subItem.url}>
+                                        {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 inline-block" />}
+                                        <span className="mr-2 inline-block">{subItem.title}</span>
+                                    </Link>
+                                  ) : (
+                                    <span>
+                                        {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 inline-block" />}
+                                        <span className="mr-2 inline-block">{subItem.title}</span>
+                                    </span>
+                                  )}
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            )
+                          })}
                         </SidebarMenuSub>
                       </CollapsibleContent>
                     </Collapsible>
                   ) : (
                     <SidebarMenuButton
-                      onClick={() => onModuleChange(item.id)}
-                      isActive={activeModule === item.id}
+                      asChild // Permite usar Link como filho
+                      isActive={activeModule === item.id || (item.url !== "#" && pathname === item.url)}
                       tooltip={item.title}
                       className={`relative mb-1 transition-all duration-300 ease-in-out ${
-                        activeModule === item.id
+                        (activeModule === item.id || (item.url !== "#" && pathname === item.url))
                           ? "bg-primary text-primary-foreground shadow-md shadow-primary/30 hover:bg-primary/90"
                           : "text-muted-foreground hover:bg-primary/5 hover:text-primary hover:translate-x-1"
                       }`}
                     >
-                      <item.icon className="h-4 w-4" />
-                      <span className="font-medium">{item.title}</span>
+                      {item.url && item.url !== "#" ? (
+                        <Link href={item.url} onClick={() => onModuleChange(item.id)}>
+                            <item.icon className="h-4 w-4" />
+                            <span className="font-medium">{item.title}</span>
+                        </Link>
+                      ) : (
+                        <button onClick={() => onModuleChange(item.id)}>
+                            <item.icon className="h-4 w-4" />
+                            <span className="font-medium">{item.title}</span>
+                        </button>
+                      )}
                     </SidebarMenuButton>
                   )}
                 </SidebarMenuItem>
