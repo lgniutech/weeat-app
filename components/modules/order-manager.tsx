@@ -4,11 +4,10 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/order"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft, MessageSquareWarning } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft, MessageSquareWarning, Printer, Phone, ExternalLink, MessageCircle, DollarSign } from "lucide-react"
 import { format, differenceInMinutes, isToday } from "date-fns"
-import { cn } from "@/lib/utils"
+import { cn, formatPhone } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,8 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
 
 const BASE_COLUMNS = [
   { id: 'pendente', label: 'Pendente', color: 'bg-yellow-500', text: 'text-yellow-700', icon: AlertCircle },
@@ -41,6 +42,9 @@ export function OrderManager({ store }: { store: any }) {
   const [orderToCancel, setOrderToCancel] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState("")
   
+  // ESTADO DO MODAL DE DETALHES (VIEW)
+  const [viewOrder, setViewOrder] = useState<any | null>(null)
+
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -73,7 +77,6 @@ export function OrderManager({ store }: { store: any }) {
 
   useEffect(() => {
     fetchOrders()
-    // ALTERAÇÃO AQUI: Caminho para o arquivo na pasta public
     audioRef.current = new Audio("/som-pedido.mp3")
 
     const supabase = createClient()
@@ -94,15 +97,28 @@ export function OrderManager({ store }: { store: any }) {
         { event: 'UPDATE', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
         (payload) => {
            fetchOrders()
+           // Se o pedido aberto no modal for atualizado, atualiza o modal também
+           if (viewOrder && payload.new.id === viewOrder.id) {
+               // Pequeno delay para garantir que o fetch pegue os dados novos
+               setTimeout(async () => {
+                   const dateStr = format(selectedDate, 'yyyy-MM-dd')
+                   const data = await getStoreOrdersAction(store.id, dateStr)
+                   const updated = data.find((o: any) => o.id === payload.new.id)
+                   if (updated) setViewOrder(updated)
+               }, 500)
+           }
         }
       )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [store.id, soundEnabled, selectedDate])
+  }, [store.id, soundEnabled, selectedDate, viewOrder])
 
-  // Função genérica de mover (sem motivo)
+  // Função genérica de mover
   const moveOrder = async (orderId: string, nextStatus: string) => {
+    // Fecha o modal se estiver aberto e movemos o status
+    if (viewOrder?.id === orderId) setViewOrder(null)
+
     const nowISO = new Date().toISOString()
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus, last_status_change: nowISO } : o))
     
@@ -111,27 +127,95 @@ export function OrderManager({ store }: { store: any }) {
   }
 
   // Abre o modal de cancelamento
-  const handleCancelClick = (orderId: string) => {
+  const handleCancelClick = (orderId: string, e?: React.MouseEvent) => {
+      e?.stopPropagation() // Evita abrir o modal de detalhes
       setOrderToCancel(orderId)
-      setCancelReason("") // Reseta o motivo
+      setCancelReason("")
       setIsCancelOpen(true)
+      // Se estiver vendo detalhes, fecha
+      setViewOrder(null) 
   }
 
-  // Confirma o cancelamento com motivo
   const confirmCancel = async () => {
       if (!orderToCancel) return
 
-      // Atualização Otimista
       const nowISO = new Date().toISOString()
       setOrders(prev => prev.map(o => o.id === orderToCancel ? { ...o, status: 'cancelado', last_status_change: nowISO, cancellation_reason: cancelReason } : o))
       setIsCancelOpen(false)
 
-      // Server Action
       const res = await updateOrderStatusAction(orderToCancel, 'cancelado', cancelReason)
       if (res?.error) {
           alert("Erro ao cancelar pedido.")
           fetchOrders()
       }
+  }
+
+  // LÓGICA DE IMPRESSÃO TÉRMICA
+  const handlePrint = (order: any) => {
+      const w = window.open('', '_blank', 'width=400,height=600')
+      if (!w) return
+
+      const itemsHtml = order.items.map((item: any) => {
+          const removed = parseJson(item.removed_ingredients)
+          const addons = parseJson(item.selected_addons)
+          return `
+            <div style="margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
+                <div style="font-weight: bold; font-size: 14px;">${item.quantity}x ${item.product_name}</div>
+                ${removed.length ? `<div style="font-size: 12px; text-decoration: line-through;">Sem: ${removed.join(', ')}</div>` : ''}
+                ${addons.length ? `<div style="font-size: 12px;">+ ${addons.map((a:any) => a.name).join(', ')}</div>` : ''}
+                ${item.observation ? `<div style="font-size: 12px; font-weight: bold;">OBS: ${item.observation}</div>` : ''}
+                <div style="text-align: right; font-size: 12px;">${formatCurrency(item.total_price * item.quantity)}</div>
+            </div>
+          `
+      }).join('')
+
+      w.document.write(`
+        <html>
+        <head>
+            <title>Pedido #${order.id.slice(0,4)}</title>
+            <style>
+                body { font-family: 'Courier New', monospace; width: 300px; padding: 10px; font-size: 12px; }
+                .header { text-align: center; margin-bottom: 10px; }
+                .divider { border-top: 1px dashed #000; margin: 10px 0; }
+                .bold { font-weight: bold; }
+                .big { font-size: 16px; }
+                .flex { display: flex; justify-content: space-between; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="big bold">${store.name}</div>
+                <div>${format(new Date(order.created_at), 'dd/MM/yyyy HH:mm')}</div>
+                <div class="big bold" style="margin-top: 5px;">PEDIDO #${order.id.slice(0,4)}</div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div>
+                <div class="bold">${order.customer_name}</div>
+                <div>${order.customer_phone}</div>
+                <div style="margin-top: 5px;">${order.delivery_type === 'entrega' ? `Entrega: ${order.address}` : 'RETIRADA NO BALCÃO'}</div>
+            </div>
+
+            <div class="divider"></div>
+            
+            ${itemsHtml}
+
+            <div class="flex bold big" style="margin-top: 10px;">
+                <span>TOTAL</span>
+                <span>${formatCurrency(order.total_price)}</span>
+            </div>
+            
+            <div style="margin-top: 10px;">
+                Pagamento: ${order.payment_method}
+                ${order.change_for ? `<br/>Troco para: ${order.change_for}` : ''}
+            </div>
+
+            <script>window.print(); setTimeout(() => window.close(), 1000);</script>
+        </body>
+        </html>
+      `)
+      w.document.close()
   }
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -176,22 +260,24 @@ export function OrderManager({ store }: { store: any }) {
   }
 
   const handleSetToday = () => setSelectedDate(new Date())
-
   const isFilterToday = isToday(selectedDate)
+
+  // Link WhatsApp
+  const getWhatsappLink = (phone: string, name: string) => {
+      const clean = phone.replace(/\D/g, "")
+      return `https://wa.me/55${clean}?text=Olá ${name}, sobre seu pedido no ${store.name}...`
+  }
+
+  // Link Maps
+  const getMapsLink = (address: string) => {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-slate-50">
       <style jsx global>{`
         .full-picker-input::-webkit-calendar-picker-indicator {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            cursor: pointer;
+            position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;
         }
       `}</style>
 
@@ -219,16 +305,7 @@ export function OrderManager({ store }: { store: any }) {
                  <div className={cn("h-7 px-3 flex items-center justify-center text-xs font-bold text-slate-700 rounded cursor-pointer transition-colors min-w-[90px] pointer-events-none select-none", !isFilterToday && "bg-white shadow-sm border border-slate-200/50 group-hover:bg-slate-50")}>
                     {format(selectedDate, 'dd/MM/yyyy')}
                  </div>
-                 
-                 <input 
-                    type="date" 
-                    className="full-picker-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    value={format(selectedDate, 'yyyy-MM-dd')}
-                    onChange={handleDateChange}
-                    onClick={(e) => {
-                        try { e.currentTarget.showPicker() } catch(err) {}
-                    }}
-                 />
+                 <input type="date" className="full-picker-input z-10" value={format(selectedDate, 'yyyy-MM-dd')} onChange={handleDateChange} onClick={(e) => {try{e.currentTarget.showPicker()}catch(err){}}} />
              </div>
           </div>
         </div>
@@ -275,86 +352,84 @@ export function OrderManager({ store }: { store: any }) {
                                 const isLongWait = differenceInMinutes(now, new Date(order.last_status_change || order.created_at)) > 15 && order.status !== 'entregue' && order.status !== 'cancelado';
                                 
                                 return (
-                                <Card key={order.id} className={cn("shadow-[0_1px_2px_rgba(0,0,0,0.05)] border-0 rounded overflow-hidden group bg-white hover:ring-1 hover:ring-slate-300 transition-all", isLongWait ? "ring-1 ring-red-200" : "")}>
+                                <Card key={order.id} className={cn("shadow-[0_1px_2px_rgba(0,0,0,0.05)] border-0 rounded overflow-hidden group bg-white hover:ring-2 hover:ring-primary/50 transition-all cursor-pointer", isLongWait ? "ring-1 ring-red-200" : "")}>
                                     
-                                    {/* Linha Superior: ID, Cliente e Tempos */}
-                                    <div className="flex justify-between items-center bg-slate-50 px-2 py-1 border-b border-slate-100">
-                                        <div className="flex items-center gap-2 overflow-hidden">
-                                            <span className="font-mono font-bold text-[10px] text-slate-500 shrink-0">#{order.id.slice(0, 4)}</span>
-                                            <span className="text-[10px] font-bold text-slate-700 truncate max-w-[80px]" title={order.customer_name}>{order.customer_name.split(' ')[0]}</span>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                            <div className="flex items-center gap-0.5 text-[9px] text-slate-400" title="Criado às">
-                                                <Clock className="w-2.5 h-2.5" /> {format(new Date(order.created_at), "HH:mm")}
-                                            </div>
-
-                                            <div className={cn("flex items-center gap-0.5 text-[9px] font-bold px-1 rounded border", 
-                                                isLongWait ? "bg-red-50 text-red-600 border-red-100 animate-pulse" : "bg-white text-slate-600 border-slate-100")} 
-                                                title={order.status === 'entregue' ? "Finalizado às" : "Tempo nesta etapa"}>
-                                                {order.status === 'entregue' ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
-                                                {timeInStage}
+                                    {/* CLIQUE AQUI ABRE O MODAL */}
+                                    <div onClick={() => setViewOrder(order)}>
+                                        {/* Linha Superior: ID, Cliente e Tempos */}
+                                        <div className="flex justify-between items-center bg-slate-50 px-2 py-1 border-b border-slate-100">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <span className="font-mono font-bold text-[10px] text-slate-500 shrink-0">#{order.id.slice(0, 4)}</span>
+                                                <span className="text-[10px] font-bold text-slate-700 truncate max-w-[80px]" title={order.customer_name}>{order.customer_name.split(' ')[0]}</span>
                                             </div>
                                             
-                                            {/* Botão de Cancelar (Abre Modal) */}
-                                            {['pendente', 'preparando', 'enviado'].includes(order.status) && (
-                                                <button 
-                                                    className="text-slate-300 hover:text-red-500 transition-colors ml-0.5" 
-                                                    onClick={() => handleCancelClick(order.id)}
-                                                    title="Cancelar Pedido"
-                                                >
-                                                    <Trash2 className="w-3 h-3" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Conteúdo: Itens Compactos */}
-                                    <div className="px-2 py-1.5 space-y-0.5">
-                                        {/* MOSTRAR MOTIVO DO CANCELAMENTO (Só se estiver cancelado) */}
-                                        {order.status === 'cancelado' && order.cancellation_reason && (
-                                            <div className="bg-red-50 text-red-700 p-1 rounded text-[10px] mb-1 flex items-start gap-1">
-                                                <MessageSquareWarning className="w-3 h-3 shrink-0 mt-0.5" />
-                                                <span className="font-medium leading-tight">{order.cancellation_reason}</span>
-                                            </div>
-                                        )}
-
-                                        {order.items.map((item: any, idx: number) => {
-                                            const removed = parseJson(item.removed_ingredients);
-                                            const addons = parseJson(item.selected_addons);
-                                            const hasMods = removed.length > 0 || addons.length > 0 || item.observation;
-                                            
-                                            return (
-                                                <div key={idx} className="text-[11px] leading-tight text-slate-800">
-                                                    <span className="font-bold mr-1">{item.quantity}x</span>
-                                                    <span>{item.product_name}</span>
-                                                    
-                                                    {hasMods && (
-                                                        <span className="text-[9px] text-slate-500 ml-1">
-                                                            (
-                                                            {removed.length > 0 && <span className="text-red-500 decoration-red-500/30 line-through mr-1">sem {removed.join(", ")}</span>}
-                                                            {addons.length > 0 && <span className="text-green-600 mr-1">+ {addons.map((a:any) => a.name).join(", ")}</span>}
-                                                            {item.observation && <span className="text-amber-600 italic">"{item.observation}"</span>}
-                                                            )
-                                                        </span>
-                                                    )}
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <div className="flex items-center gap-0.5 text-[9px] text-slate-400" title="Criado às">
+                                                    <Clock className="w-2.5 h-2.5" /> {format(new Date(order.created_at), "HH:mm")}
                                                 </div>
-                                            )
-                                        })}
-                                        
-                                        <div className="flex justify-between items-center pt-1.5 mt-0.5 border-t border-dashed border-slate-100">
-                                            <div className="flex items-center gap-1 text-[9px] text-slate-400 max-w-[60%]">
-                                                {order.delivery_type === 'entrega' ? <Bike className="w-2.5 h-2.5 shrink-0" /> : <Store className="w-2.5 h-2.5 shrink-0" />}
-                                                {order.delivery_type === 'entrega' && <span className="truncate">{order.address}</span>}
+
+                                                <div className={cn("flex items-center gap-0.5 text-[9px] font-bold px-1 rounded border", 
+                                                    isLongWait ? "bg-red-50 text-red-600 border-red-100 animate-pulse" : "bg-white text-slate-600 border-slate-100")} 
+                                                    title={order.status === 'entregue' ? "Finalizado às" : "Tempo nesta etapa"}>
+                                                    {order.status === 'entregue' ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
+                                                    {timeInStage}
+                                                </div>
+                                                
+                                                {/* Botão de Cancelar (Fora do clique do modal, via propagation stop) */}
+                                                {['pendente', 'preparando', 'enviado'].includes(order.status) && (
+                                                    <button 
+                                                        className="text-slate-300 hover:text-red-500 transition-colors ml-0.5 p-0.5 rounded hover:bg-red-50" 
+                                                        onClick={(e) => handleCancelClick(order.id, e)}
+                                                        title="Cancelar Pedido"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </button>
+                                                )}
                                             </div>
-                                            <span className="text-[10px] font-bold text-slate-900 bg-slate-100 px-1 rounded">{formatCurrency(order.total_price)}</span>
+                                        </div>
+
+                                        {/* Conteúdo: Itens Compactos */}
+                                        <div className="px-2 py-1.5 space-y-0.5 pointer-events-none"> {/* pointer-events-none para garantir que o click vá para o container pai */}
+                                            {order.status === 'cancelado' && order.cancellation_reason && (
+                                                <div className="bg-red-50 text-red-700 p-1 rounded text-[10px] mb-1 flex items-start gap-1">
+                                                    <MessageSquareWarning className="w-3 h-3 shrink-0 mt-0.5" />
+                                                    <span className="font-medium leading-tight">{order.cancellation_reason}</span>
+                                                </div>
+                                            )}
+
+                                            {order.items.map((item: any, idx: number) => {
+                                                const removed = parseJson(item.removed_ingredients);
+                                                const addons = parseJson(item.selected_addons);
+                                                const hasMods = removed.length > 0 || addons.length > 0 || item.observation;
+                                                
+                                                return (
+                                                    <div key={idx} className="text-[11px] leading-tight text-slate-800">
+                                                        <span className="font-bold mr-1">{item.quantity}x</span>
+                                                        <span>{item.product_name}</span>
+                                                        
+                                                        {hasMods && (
+                                                            <span className="text-[9px] text-slate-500 ml-1">
+                                                                (...)
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                            
+                                            <div className="flex justify-between items-center pt-1.5 mt-0.5 border-t border-dashed border-slate-100">
+                                                <div className="flex items-center gap-1 text-[9px] text-slate-400 max-w-[60%]">
+                                                    {order.delivery_type === 'entrega' ? <Bike className="w-2.5 h-2.5 shrink-0" /> : <Store className="w-2.5 h-2.5 shrink-0" />}
+                                                    {order.delivery_type === 'entrega' && <span className="truncate">{order.address}</span>}
+                                                </div>
+                                                <span className="text-[10px] font-bold text-slate-900 bg-slate-100 px-1 rounded">{formatCurrency(order.total_price)}</span>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Botões de Ação */}
+                                    {/* Botões de Ação (Abaixo, fora do clique de detalhes) */}
                                     {col.id === 'pendente' && (
                                         <div className="grid grid-cols-2 h-6 mt-px">
-                                            <button onClick={() => handleCancelClick(order.id)} className="bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 text-[10px] font-bold border-t border-r border-slate-100 transition-colors">RECUSAR</button>
+                                            <button onClick={(e) => handleCancelClick(order.id, e)} className="bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 text-[10px] font-bold border-t border-r border-slate-100 transition-colors">RECUSAR</button>
                                             <button onClick={() => moveOrder(order.id, 'preparando')} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors">ACEITAR</button>
                                         </div>
                                     )}
@@ -416,6 +491,142 @@ export function OrderManager({ store }: { store: any }) {
                 <Button variant="destructive" onClick={confirmCancel}>Confirmar Cancelamento</Button>
             </DialogFooter>
         </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE DETALHES DO PEDIDO (OTIMIZAÇÃO) */}
+      <Dialog open={!!viewOrder} onOpenChange={(open) => !open && setViewOrder(null)}>
+         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+             {viewOrder && (
+                 <>
+                    <DialogHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b">
+                         <div className="flex flex-col">
+                            <DialogTitle className="text-xl flex items-center gap-2">
+                                Pedido #{viewOrder.id.slice(0,4)}
+                                <Badge variant="outline" className={cn(
+                                    BASE_COLUMNS.find(c => c.id === viewOrder.status)?.text, 
+                                    BASE_COLUMNS.find(c => c.id === viewOrder.status)?.color.replace('bg-', 'bg-opacity-10 bg-')
+                                )}>
+                                    {viewOrder.status.toUpperCase()}
+                                </Badge>
+                            </DialogTitle>
+                            <DialogDescription>{format(new Date(viewOrder.created_at), "dd/MM/yyyy 'às' HH:mm")}</DialogDescription>
+                         </div>
+                         <Button variant="outline" size="sm" className="gap-2" onClick={() => handlePrint(viewOrder)}>
+                             <Printer className="w-4 h-4" /> Imprimir
+                         </Button>
+                    </DialogHeader>
+
+                    <div className="grid md:grid-cols-2 gap-6 py-4">
+                        {/* Lado Esquerdo: Cliente e Entrega */}
+                        <div className="space-y-6">
+                             <div className="space-y-2">
+                                 <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Phone className="w-4 h-4" /> Cliente</h4>
+                                 <div className="bg-slate-50 p-3 rounded-lg border">
+                                     <p className="font-bold text-lg">{viewOrder.customer_name}</p>
+                                     <div className="flex items-center gap-2 mt-1">
+                                         <p className="text-slate-600">{viewOrder.customer_phone}</p>
+                                         <a href={getWhatsappLink(viewOrder.customer_phone, viewOrder.customer_name)} target="_blank" rel="noreferrer" className="text-green-600 hover:underline text-xs font-bold flex items-center gap-1">
+                                             <MessageCircle className="w-3 h-3" /> WhatsApp
+                                         </a>
+                                     </div>
+                                 </div>
+                             </div>
+
+                             <div className="space-y-2">
+                                 <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                     {viewOrder.delivery_type === 'entrega' ? <Bike className="w-4 h-4" /> : <Store className="w-4 h-4" />} 
+                                     {viewOrder.delivery_type === 'entrega' ? 'Endereço de Entrega' : 'Retirada'}
+                                 </h4>
+                                 <div className="bg-slate-50 p-3 rounded-lg border">
+                                     {viewOrder.delivery_type === 'entrega' ? (
+                                         <>
+                                            <p className="text-sm text-slate-800 leading-relaxed">{viewOrder.address}</p>
+                                            <a href={getMapsLink(viewOrder.address)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-xs font-bold flex items-center gap-1 mt-2">
+                                                <ExternalLink className="w-3 h-3" /> Abrir no Maps
+                                            </a>
+                                         </>
+                                     ) : (
+                                         <p className="text-sm font-medium text-slate-700">Cliente irá retirar no balcão.</p>
+                                     )}
+                                 </div>
+                             </div>
+
+                             <div className="space-y-2">
+                                 <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><DollarSign className="w-4 h-4" /> Pagamento</h4>
+                                 <div className="flex items-center justify-between p-3 rounded-lg border bg-slate-50">
+                                     <div>
+                                         <p className="font-bold text-sm capitalize">{viewOrder.payment_method}</p>
+                                         {viewOrder.change_for && <p className="text-xs text-slate-500">Troco para: {viewOrder.change_for}</p>}
+                                     </div>
+                                     <div className="text-right">
+                                         <p className="text-xs text-muted-foreground">Total</p>
+                                         <p className="font-bold text-lg text-green-700">{formatCurrency(viewOrder.total_price)}</p>
+                                     </div>
+                                 </div>
+                             </div>
+                        </div>
+
+                        {/* Lado Direito: Itens */}
+                        <div className="space-y-2">
+                            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Itens do Pedido</h4>
+                            <div className="border rounded-lg divide-y max-h-[400px] overflow-y-auto">
+                                {viewOrder.items.map((item: any, idx: number) => {
+                                    const removed = parseJson(item.removed_ingredients);
+                                    const addons = parseJson(item.selected_addons);
+                                    
+                                    return (
+                                        <div key={idx} className="p-3 bg-white">
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex gap-2">
+                                                    <span className="font-bold bg-slate-100 px-1.5 py-0.5 rounded text-sm h-fit">{item.quantity}x</span>
+                                                    <div>
+                                                        <p className="font-medium text-sm">{item.product_name}</p>
+                                                        {removed.length > 0 && (
+                                                            <p className="text-xs text-red-500 mt-0.5 line-through decoration-red-300">Sem: {removed.join(", ")}</p>
+                                                        )}
+                                                        {addons.length > 0 && (
+                                                            <p className="text-xs text-green-600 mt-0.5 font-medium">+ {addons.map((a:any) => a.name).join(", ")}</p>
+                                                        )}
+                                                        {item.observation && (
+                                                            <div className="mt-1.5 p-1.5 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-100 italic">
+                                                                <span className="font-bold not-italic mr-1">Obs:</span>{item.observation}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">{formatCurrency(item.total_price * item.quantity)}</span>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex flex-col sm:flex-row gap-2 border-t pt-4">
+                        {/* Ações baseadas no status */}
+                        {viewOrder.status === 'pendente' && (
+                            <>
+                                <Button variant="destructive" className="flex-1" onClick={() => handleCancelClick(viewOrder.id)}>Recusar Pedido</Button>
+                                <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => moveOrder(viewOrder.id, 'preparando')}>Aceitar e Cozinhar</Button>
+                            </>
+                        )}
+                         {viewOrder.status === 'preparando' && (
+                            <>
+                                <Button variant="outline" className="flex-1" onClick={() => moveOrder(viewOrder.id, 'pendente')}>Voltar para Pendente</Button>
+                                <Button className="flex-1 bg-orange-500 hover:bg-orange-600" onClick={() => moveOrder(viewOrder.id, 'enviado')}>Marcar como Pronto</Button>
+                            </>
+                        )}
+                        {viewOrder.status === 'enviado' && (
+                            <>
+                                <Button variant="outline" className="flex-1" onClick={() => moveOrder(viewOrder.id, 'preparando')}>Voltar para Cozinha</Button>
+                                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => moveOrder(viewOrder.id, 'entregue')}>Confirmar Entrega</Button>
+                            </>
+                        )}
+                    </DialogFooter>
+                 </>
+             )}
+         </DialogContent>
       </Dialog>
     </div>
   )
