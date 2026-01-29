@@ -47,7 +47,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
   const [uf, setUf] = useState("")
   const [isLoadingCep, setIsLoadingCep] = useState(false)
   
-  // Coordenadas (Hidden inputs)
+  // Coordenadas (Inicializadas como string vazia para evitar erro de uncontrolled)
   const [latitude, setLatitude] = useState("")
   const [longitude, setLongitude] = useState("")
 
@@ -88,14 +88,24 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
       // Carrega Valores
       const settings = store.settings || {}
       setDeliveryFeeMode(settings.delivery_fee_mode || "fixed")
-      if (settings.delivery_fee !== undefined) setDeliveryFee(formatCurrency(settings.delivery_fee))
-      if (settings.price_per_km !== undefined) setPricePerKm(formatCurrency(settings.price_per_km))
-      if (settings.minimum_order !== undefined) setMinimumOrder(formatCurrency(settings.minimum_order))
       
-      // Carrega Geolocalização Salva
+      // Garante que não é undefined
+      if (settings.delivery_fee !== undefined) setDeliveryFee(formatCurrency(settings.delivery_fee))
+      else setDeliveryFee("")
+
+      if (settings.price_per_km !== undefined) setPricePerKm(formatCurrency(settings.price_per_km))
+      else setPricePerKm("")
+
+      if (settings.minimum_order !== undefined) setMinimumOrder(formatCurrency(settings.minimum_order))
+      else setMinimumOrder("")
+      
+      // Carrega Geolocalização Salva (Proteção contra undefined)
       if (settings.location) {
-          setLatitude(settings.location.lat)
-          setLongitude(settings.location.lng)
+          setLatitude(settings.location.lat ? String(settings.location.lat) : "")
+          setLongitude(settings.location.lng ? String(settings.location.lng) : "")
+      } else {
+          setLatitude("")
+          setLongitude("")
       }
 
       const defaultHours = [
@@ -134,7 +144,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           setUf(data.uf)
           
           // 2. Busca Coordenadas (Para cálculo de KM)
-          // Tenta buscar com Logradouro + Cidade, se falhar, tenta só CEP + Cidade
+          // Tenta buscar com Logradouro + Cidade + UF
           const query = `${data.logradouro}, ${data.localidade}, ${data.uf}, Brasil`
           const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
           const geoData = await geoRes.json()
@@ -143,7 +153,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
               setLatitude(geoData[0].lat)
               setLongitude(geoData[0].lon)
           } else {
-               // Fallback só com CEP
+               // Fallback: Tenta só com CEP se o endereço for muito específico
                const cepQuery = `${cleanCep}, Brasil`
                const cepGeoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cepQuery)}&limit=1`)
                const cepGeoData = await cepGeoRes.json()
@@ -217,9 +227,9 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
 
         <form action={action} className="space-y-6 mt-2">
           
-          {/* Inputs Ocultos para Geolocalização */}
-          <input type="hidden" name="latitude" value={latitude} />
-          <input type="hidden" name="longitude" value={longitude} />
+          {/* Inputs Ocultos para Geolocalização (Com Default Value Vazio) */}
+          <input type="hidden" name="latitude" value={latitude || ""} />
+          <input type="hidden" name="longitude" value={longitude || ""} />
 
           {/* SEÇÃO 1: PERFIL */}
           <div className="space-y-4">
@@ -290,10 +300,18 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                     <div className="col-span-2 space-y-1"><Label htmlFor="complement" className="text-xs">Complemento</Label><Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} /></div>
                 </div>
                 
+                {/* Aviso visual sobre coordenadas */}
                 {(!latitude || !longitude) && !isLoadingCep && (
-                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-2 rounded text-xs">
-                        <Car className="w-4 h-4" />
-                        <span>Preencha o CEP corretamente para ativar o cálculo de KM.</span>
+                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-2 rounded text-xs border border-amber-200 mt-2">
+                        <Car className="w-4 h-4 shrink-0" />
+                        <span>Atenção: Redigite o CEP e aguarde para ativar o cálculo de KM.</span>
+                    </div>
+                )}
+                
+                {latitude && longitude && (
+                    <div className="flex items-center gap-2 text-green-600 bg-green-50 p-2 rounded text-xs border border-green-200 mt-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Localização exata da loja identificada!</span>
                     </div>
                 )}
             </div>
@@ -304,7 +322,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
             </div>
           </div>
 
-          {/* SEÇÃO 3: REGRAS DE PEDIDO E ENTREGA (NOVA LÓGICA) */}
+          {/* SEÇÃO 3: REGRAS DE PEDIDO E ENTREGA */}
           <div className="bg-slate-50 border rounded-lg p-4 space-y-4">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <DollarSign className="w-4 h-4" />
@@ -350,7 +368,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                                 <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
                                 <Input id="pricePerKm" name="pricePerKm" value={pricePerKm} onChange={(e) => handleCurrencyInput(e, setPricePerKm)} className="pl-9" placeholder="0,00" />
                             </div>
-                            <p className="text-[10px] text-muted-foreground">Distância calculada em linha reta.</p>
+                            <p className="text-[10px] text-muted-foreground">Distância calculada em linha reta (Raio).</p>
                         </div>
                     )}
 
