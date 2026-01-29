@@ -240,33 +240,3 @@ export async function updateStoreSettings(storeId: string, settings: { theme_mod
     return { error: error.message };
   }
 }
-
-// --- 5. CONFIGURAÇÕES DE ENTREGA (LOGÍSTICA) ---
-export async function updateStoreDeliverySettingsAction(storeId: string, settings: {
-    deliveryFee: number,
-    minOrderValue: number,
-    timeMin: number,
-    timeMax: number
-}) {
-    const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Não autorizado" };
-
-    const { error } = await supabase
-        .from("stores")
-        .update({ 
-            delivery_fee: settings.deliveryFee,
-            min_order_value: settings.minOrderValue,
-            estimated_time_min: settings.timeMin,
-            estimated_time_max: settings.timeMax
-        })
-        .eq("id", storeId)
-        .eq("owner_id", user.id); // Segurança adicional
-
-    if (error) return { error: "Erro ao atualizar configurações." };
-    
-    revalidatePath("/");
-    revalidatePath("/settings/store");
-    return { success: true };
-}

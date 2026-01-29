@@ -145,7 +145,7 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
-    generator: 'niutech'
+    generator: 'update'
 }
 
 export const viewport: Viewport = {
