@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { StoreSettingsForm } from "./store-settings-form"
-import { AppearanceForm } from "@/components/settings/appearance-form" // Importação nova
+import { AppearanceForm } from "@/components/settings/appearance-form" 
+import { DeliverySettings } from "@/components/modules/delivery-settings" // <--- Importamos o componente novo aqui
 
 export default async function StoreSettingsPage() {
   const supabase = await createClient()
@@ -36,15 +37,18 @@ export default async function StoreSettingsPage() {
       <div>
         <h3 className="text-2xl font-bold tracking-tight">Configurações</h3>
         <p className="text-muted-foreground">
-          Gerencie os dados do seu estabelecimento e suas preferências.
+          Gerencie os dados do seu estabelecimento, logística e aparência.
         </p>
       </div>
 
       <div className="grid gap-8">
-          {/* 1. Formulário de Dados da Loja (Nome, Logo, etc) */}
+          {/* 1. Formulário de Dados Básicos */}
           <StoreSettingsForm store={safeStore} />
 
-          {/* 2. Formulário de Aparência (O NOVO BLOCO EXPANDIDO) */}
+          {/* 2. Configurações de Entrega (AQUI ESTÁ O QUE FALTAVA) */}
+          <DeliverySettings store={safeStore} />
+
+          {/* 3. Formulário de Aparência */}
           <AppearanceForm />
       </div>
 
