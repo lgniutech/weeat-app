@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch"
 import { Loader2, Store, FileText, Phone, Check, User, MapPin } from "lucide-react"
 
 export function StoreSetupModal() {
+  // Esse modal de setup começa aberto se a loja não existir
   const [isOpen, setIsOpen] = useState(true)
   const [state, action, isPending] = useActionState(createStoreAction, null)
   
@@ -118,7 +119,7 @@ export function StoreSetupModal() {
           </div>
           <DialogTitle className="text-2xl text-center font-bold">Bem-vindo ao WeEat!</DialogTitle>
           <DialogDescription className="text-center">
-            Vamos configurar sua conta e sua loja.
+            Vamos configurar sua conta e sua loja para começar.
           </DialogDescription>
         </DialogHeader>
 

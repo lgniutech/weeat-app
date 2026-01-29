@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings, MapPin } from "lucide-react"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings, MapPin, DollarSign, CheckCircle2, Car } from "lucide-react"
 
 interface StoreSettingsModalProps {
   store: any
@@ -30,7 +31,13 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
   const [cnpj, setCnpj] = useState("")
   const [phone, setPhone] = useState("")
   
-  // States de Endereço (Novos)
+  // States de Valores e Modos
+  const [deliveryFeeMode, setDeliveryFeeMode] = useState("fixed") // fixed, per_km, fixed_plus_km
+  const [deliveryFee, setDeliveryFee] = useState("")
+  const [pricePerKm, setPricePerKm] = useState("")
+  const [minimumOrder, setMinimumOrder] = useState("")
+
+  // States de Endereço e Geolocalização
   const [zipCode, setZipCode] = useState("")
   const [street, setStreet] = useState("")
   const [number, setNumber] = useState("")
@@ -39,8 +46,29 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
   const [city, setCity] = useState("")
   const [uf, setUf] = useState("")
   const [isLoadingCep, setIsLoadingCep] = useState(false)
+  
+  // Coordenadas (Inicializadas explicitamente como string vazia)
+  const [latitude, setLatitude] = useState<string>("")
+  const [longitude, setLongitude] = useState<string>("")
 
   const [hours, setHours] = useState<any[]>([])
+
+  // Helper para formatar moeda
+  const formatCurrency = (value: string | number) => {
+    if (!value && value !== 0) return ""
+    const numberValue = typeof value === "string" ? parseFloat(value) : value
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numberValue)
+  }
+
+  // Efeito para fechar o modal automaticamente em caso de sucesso
+  useEffect(() => {
+    if (state?.success) {
+      const timer = setTimeout(() => {
+        onOpenChange(false)
+      }, 1500) 
+      return () => clearTimeout(timer)
+    }
+  }, [state, onOpenChange])
 
   // Sincroniza dados do banco com o formulário
   useEffect(() => {
@@ -56,7 +84,24 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
       setComplement(store.complement || "")
       setCity(store.city || "")
       setUf(store.state || "")
+
+      // Carrega Valores
+      const settings = store.settings || {}
+      setDeliveryFeeMode(settings.delivery_fee_mode || "fixed")
       
+      setDeliveryFee(settings.delivery_fee !== undefined ? formatCurrency(settings.delivery_fee) : "")
+      setPricePerKm(settings.price_per_km !== undefined ? formatCurrency(settings.price_per_km) : "")
+      setMinimumOrder(settings.minimum_order !== undefined ? formatCurrency(settings.minimum_order) : "")
+      
+      // Carrega Geolocalização Salva (Proteção robusta contra undefined/null)
+      if (settings.location && settings.location.lat && settings.location.lng) {
+          setLatitude(String(settings.location.lat))
+          setLongitude(String(settings.location.lng))
+      } else {
+          setLatitude("")
+          setLongitude("")
+      }
+
       const defaultHours = [
         { day: "Segunda", open: "08:00", close: "18:00", active: true },
         { day: "Terça", open: "08:00", close: "18:00", active: true },
@@ -66,11 +111,11 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
         { day: "Sábado", open: "09:00", close: "14:00", active: true },
         { day: "Domingo", open: "00:00", close: "00:00", active: false },
       ]
-      setHours(store.settings?.business_hours || defaultHours)
+      setHours(settings.business_hours || defaultHours)
     }
   }, [store, isOpen])
 
-  // Lógica de CEP (ViaCEP)
+  // Lógica de CEP (ViaCEP) + Busca de Coordenadas (Nominatim)
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
      let value = e.target.value.replace(/\D/g, "")
      if (value.length > 8) value = value.slice(0, 8)
@@ -83,6 +128,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     if (cleanCep.length === 8) {
       setIsLoadingCep(true)
       try {
+        // 1. Busca Endereço
         const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
         const data = await response.json()
         if (!data.erro) {
@@ -90,18 +136,50 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           setNeighborhood(data.bairro)
           setCity(data.localidade)
           setUf(data.uf)
-          // UX: Joga o foco para o número para agilizar
+          
+          // 2. Busca Coordenadas (Para cálculo de KM)
+          // Monta query precisa
+          const query = `${data.logradouro}, ${data.localidade}, ${data.uf}, Brasil`
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
+          const geoData = await geoRes.json()
+          
+          if (geoData && geoData.length > 0) {
+              setLatitude(String(geoData[0].lat))
+              setLongitude(String(geoData[0].lon))
+          } else {
+               // Fallback só com CEP e Cidade
+               const cepQuery = `${cleanCep}, ${data.localidade}, Brasil`
+               const cepGeoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cepQuery)}&limit=1`)
+               const cepGeoData = await cepGeoRes.json()
+               if (cepGeoData && cepGeoData.length > 0) {
+                   setLatitude(String(cepGeoData[0].lat))
+                   setLongitude(String(cepGeoData[0].lon))
+               } else {
+                   // Se não achou nada, limpa para evitar dados errados
+                   setLatitude("")
+                   setLongitude("")
+               }
+          }
+
           document.getElementById("number")?.focus()
         }
       } catch (error) {
-        console.error("Erro ao buscar CEP", error)
+        console.error("Erro ao buscar CEP/Geo", error)
       } finally {
         setIsLoadingCep(false)
       }
     }
   }
 
-  // Máscaras
+  // Máscaras e Formatação
+  const handleCurrencyInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+    let value = e.target.value
+    value = value.replace(/\D/g, "")
+    const numberValue = parseInt(value) / 100
+    if (isNaN(numberValue)) { setter(""); return }
+    setter(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numberValue))
+  }
+
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "")
     if (value.length > 14) value = value.slice(0, 14)
@@ -141,13 +219,17 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           </div>
           <DialogTitle className="text-center">Configurações & Perfil</DialogTitle>
           <DialogDescription className="text-center">
-            Gerencie seus dados e informações da loja.
+            Gerencie dados, endereço e regras de entrega.
           </DialogDescription>
         </DialogHeader>
 
         <form action={action} className="space-y-6 mt-2">
           
-          {/* SEÇÃO 1: PERFIL E SEGURANÇA */}
+          {/* Inputs Ocultos para Geolocalização (O 'value' nunca é null/undefined aqui) */}
+          <input type="hidden" name="latitude" value={latitude} />
+          <input type="hidden" name="longitude" value={longitude} />
+
+          {/* SEÇÃO 1: PERFIL */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
               <User className="w-4 h-4 text-primary" />
@@ -160,27 +242,21 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div className="space-y-2">
-                <Label htmlFor="password">Nova Senha (Opcional)</Label>
-                <div className="relative">
-                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                   <Input id="password" name="password" type="password" placeholder="********" className="pl-9"/>
-                </div>
+                <Label htmlFor="password">Nova Senha</Label>
+                <Input id="password" name="password" type="password" placeholder="********" />
                </div>
                <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
-                <div className="relative">
-                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                   <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="********" className="pl-9"/>
-                </div>
+                <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="********" />
                </div>
             </div>
           </div>
 
-          {/* SEÇÃO 2: INFORMAÇÕES DA LOJA (COM ENDEREÇO INCLUSO) */}
+          {/* SEÇÃO 2: LOJA E ENDEREÇO */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
               <Store className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Informações da Loja</h3>
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Loja e Endereço</h3>
             </div>
 
             <div className="space-y-2">
@@ -191,86 +267,116 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="cnpj">CNPJ</Label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input id="cnpj" name="cnpj" value={cnpj} onChange={handleCnpjChange} className="pl-9" disabled />
-                </div>
+                <Input id="cnpj" name="cnpj" value={cnpj} onChange={handleCnpjChange} disabled />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="whatsapp">WhatsApp</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input id="whatsapp" name="whatsapp" value={phone} onChange={handlePhoneChange} className="pl-9" required />
-                </div>
+                <Input id="whatsapp" name="whatsapp" value={phone} onChange={handlePhoneChange} required />
               </div>
             </div>
             
-            {/* BLOCO DE ENDEREÇO (INTEGRADO AQUI) */}
+            {/* ENDEREÇO */}
             <div className="bg-slate-50 border rounded-lg p-4 space-y-4 mt-2">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <MapPin className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wide">Endereço & Localização</span>
+                    <span className="text-xs font-bold uppercase tracking-wide">Endereço da Loja</span>
                 </div>
-
+                {/* Inputs de Endereço */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {/* CEP */}
                     <div className="col-span-2 md:col-span-1 space-y-1">
                         <Label htmlFor="zipCode" className="text-xs">CEP</Label>
                         <div className="relative">
-                            <Input 
-                                id="zipCode" 
-                                name="zipCode"
-                                value={zipCode} 
-                                onChange={handleCepChange} 
-                                onBlur={handleCepBlur} 
-                                placeholder="00000-000" 
-                                className="h-9"
-                                required
-                            />
+                            <Input id="zipCode" name="zipCode" value={zipCode} onChange={handleCepChange} onBlur={handleCepBlur} placeholder="00000-000" required />
                             {isLoadingCep && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-primary" />}
                         </div>
                     </div>
-                    
-                    {/* Cidade e UF */}
-                    <div className="col-span-2 md:col-span-2 space-y-1">
-                        <Label htmlFor="city" className="text-xs">Cidade</Label>
-                        <Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} readOnly className="h-9 bg-muted"/>
-                    </div>
-                    <div className="col-span-2 md:col-span-1 space-y-1">
-                        <Label htmlFor="state" className="text-xs">UF</Label>
-                        <Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} readOnly className="h-9 bg-muted"/>
-                    </div>
-
-                    {/* Rua e Número */}
-                    <div className="col-span-2 md:col-span-3 space-y-1">
-                        <Label htmlFor="street" className="text-xs">Logradouro</Label>
-                        <Input id="street" name="street" value={street} onChange={e => setStreet(e.target.value)} placeholder="Rua..." className="h-9" required />
-                    </div>
-                    <div className="col-span-2 md:col-span-1 space-y-1">
-                        <Label htmlFor="number" className="text-xs">Número</Label>
-                        <Input id="number" name="number" value={number} onChange={e => setNumber(e.target.value)} placeholder="Nº" className="h-9" required />
-                    </div>
-                    
-                    {/* Bairro e Complemento */}
-                    <div className="col-span-2 space-y-1">
-                        <Label htmlFor="neighborhood" className="text-xs">Bairro</Label>
-                        <Input id="neighborhood" name="neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} placeholder="Bairro" className="h-9" required />
-                    </div>
-                    <div className="col-span-2 space-y-1">
-                         <Label htmlFor="complement" className="text-xs">Complemento</Label>
-                         <Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} placeholder="Opcional" className="h-9" />
-                    </div>
+                    <div className="col-span-2 md:col-span-2 space-y-1"><Label htmlFor="city" className="text-xs">Cidade</Label><Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} readOnly className="bg-muted"/></div>
+                    <div className="col-span-2 md:col-span-1 space-y-1"><Label htmlFor="state" className="text-xs">UF</Label><Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} readOnly className="bg-muted"/></div>
+                    <div className="col-span-2 md:col-span-3 space-y-1"><Label htmlFor="street" className="text-xs">Logradouro</Label><Input id="street" name="street" value={street} onChange={e => setStreet(e.target.value)} required /></div>
+                    <div className="col-span-2 md:col-span-1 space-y-1"><Label htmlFor="number" className="text-xs">Número</Label><Input id="number" name="number" value={number} onChange={e => setNumber(e.target.value)} required /></div>
+                    <div className="col-span-2 space-y-1"><Label htmlFor="neighborhood" className="text-xs">Bairro</Label><Input id="neighborhood" name="neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} required /></div>
+                    <div className="col-span-2 space-y-1"><Label htmlFor="complement" className="text-xs">Complemento</Label><Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} /></div>
                 </div>
+                
+                {/* Avisos de Coordenadas */}
+                {(!latitude || !longitude) && !isLoadingCep && (
+                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-2 rounded text-xs border border-amber-200 mt-2">
+                        <Car className="w-4 h-4 shrink-0" />
+                        <span>Atenção: Digite o CEP novamente para atualizar a localização da entrega.</span>
+                    </div>
+                )}
+                {latitude && longitude && (
+                    <div className="flex items-center gap-2 text-green-600 bg-green-50 p-2 rounded text-xs border border-green-200 mt-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Localização da loja identificada com sucesso!</span>
+                    </div>
+                )}
             </div>
-
+            
             <div className="space-y-2">
               <Label htmlFor="logo">Logotipo</Label>
               <Input id="logo" name="logo" type="file" accept="image/*" className="cursor-pointer text-sm" />
             </div>
           </div>
 
-          {/* SEÇÃO 3: HORÁRIOS */}
+          {/* SEÇÃO 3: REGRAS DE PEDIDO E ENTREGA */}
+          <div className="bg-slate-50 border rounded-lg p-4 space-y-4">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                    <DollarSign className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wide">Regras de Pedido & Entrega</span>
+                </div>
+
+                <div className="space-y-3">
+                    <Label>Como você cobra a entrega?</Label>
+                    <RadioGroup defaultValue={deliveryFeeMode} name="deliveryFeeMode" onValueChange={setDeliveryFeeMode} className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="flex items-center space-x-2 border p-3 rounded-lg bg-white">
+                            <RadioGroupItem value="fixed" id="mode-fixed" />
+                            <Label htmlFor="mode-fixed" className="cursor-pointer font-normal">Valor Fixo</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 border p-3 rounded-lg bg-white">
+                            <RadioGroupItem value="per_km" id="mode-km" />
+                            <Label htmlFor="mode-km" className="cursor-pointer font-normal">Por Km</Label>
+                        </div>
+                         <div className="flex items-center space-x-2 border p-3 rounded-lg bg-white">
+                            <RadioGroupItem value="fixed_plus_km" id="mode-hybrid" />
+                            <Label htmlFor="mode-hybrid" className="cursor-pointer font-normal">Fixo + Km</Label>
+                        </div>
+                    </RadioGroup>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {(deliveryFeeMode === 'fixed' || deliveryFeeMode === 'fixed_plus_km') && (
+                         <div className="space-y-2 animate-in fade-in zoom-in-95">
+                            <Label htmlFor="deliveryFee">Taxa Fixa</Label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
+                                <Input id="deliveryFee" name="deliveryFee" value={deliveryFee} onChange={(e) => handleCurrencyInput(e, setDeliveryFee)} className="pl-9" placeholder="0,00" />
+                            </div>
+                        </div>
+                    )}
+
+                    {(deliveryFeeMode === 'per_km' || deliveryFeeMode === 'fixed_plus_km') && (
+                        <div className="space-y-2 animate-in fade-in zoom-in-95">
+                            <Label htmlFor="pricePerKm">Preço por Km</Label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
+                                <Input id="pricePerKm" name="pricePerKm" value={pricePerKm} onChange={(e) => handleCurrencyInput(e, setPricePerKm)} className="pl-9" placeholder="0,00" />
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">Distância calculada em linha reta.</p>
+                        </div>
+                    )}
+
+                    <div className="space-y-2">
+                        <Label htmlFor="minimumOrder">Pedido Mínimo</Label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
+                            <Input id="minimumOrder" name="minimumOrder" value={minimumOrder} onChange={(e) => handleCurrencyInput(e, setMinimumOrder)} className="pl-9" placeholder="0,00" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+          {/* SEÇÃO 4: HORÁRIOS */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 pb-2 border-b">
               <Clock className="w-4 h-4 text-primary" />
@@ -282,58 +388,26 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
               {hours.map((day, index) => (
                 <div key={index} className="flex items-center justify-between gap-2 text-sm">
                   <div className="flex items-center gap-3 w-32">
-                    <Switch 
-                      checked={day.active} 
-                      onCheckedChange={() => toggleDay(index)} 
-                      className="scale-75"
-                    />
-                    <span className={day.active ? "font-medium" : "text-muted-foreground"}>
-                      {day.day}
-                    </span>
+                    <Switch checked={day.active} onCheckedChange={() => toggleDay(index)} className="scale-75" />
+                    <span className={day.active ? "font-medium" : "text-muted-foreground"}>{day.day}</span>
                   </div>
-                  
                   {day.active ? (
                     <div className="flex items-center gap-2 flex-1 justify-end">
-                      <Input 
-                        type="time" 
-                        value={day.open}
-                        onChange={(e) => updateTime(index, 'open', e.target.value)}
-                        className="w-20 h-7 text-xs bg-background p-1"
-                      />
+                      <Input type="time" value={day.open} onChange={(e) => updateTime(index, 'open', e.target.value)} className="w-20 h-7 text-xs p-1" />
                       <span className="text-muted-foreground text-xs">-</span>
-                      <Input 
-                        type="time" 
-                        value={day.close}
-                        onChange={(e) => updateTime(index, 'close', e.target.value)}
-                        className="w-20 h-7 text-xs bg-background p-1"
-                      />
+                      <Input type="time" value={day.close} onChange={(e) => updateTime(index, 'close', e.target.value)} className="w-20 h-7 text-xs p-1" />
                     </div>
-                  ) : (
-                    <span className="text-muted-foreground text-xs flex-1 text-right pr-2">Fechado</span>
-                  )}
+                  ) : <span className="text-muted-foreground text-xs flex-1 text-right pr-2">Fechado</span>}
                 </div>
               ))}
             </div>
           </div>
 
-          {state?.error && (
-            <Alert variant="destructive">
-              <AlertDescription>{state.error}</AlertDescription>
-            </Alert>
-          )}
+          {state?.error && <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>}
+          {state?.success && <Alert className="bg-green-50 text-green-700 border-green-200 flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /><AlertDescription className="font-medium">{state.success}</AlertDescription></Alert>}
 
-          {state?.success && (
-            <Alert className="bg-green-50 text-green-700 border-green-200">
-              <AlertDescription>{state.success}</AlertDescription>
-            </Alert>
-          )}
-
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</>
-            ) : (
-              <><Save className="mr-2 h-4 w-4" /> Salvar Alterações</>
-            )}
+          <Button type="submit" className="w-full" disabled={isPending || state?.success}>
+            {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : state?.success ? "Salvo!" : <><Save className="mr-2 h-4 w-4" /> Salvar Alterações</>}
           </Button>
         </form>
       </DialogContent>
