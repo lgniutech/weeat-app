@@ -96,6 +96,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       logo_url: logoUrl,
       settings: { 
         business_hours: businessHours ? JSON.parse(businessHours) : [],
+        delivery_fee_mode: 'fixed', // Padrão
         delivery_fee: 0,
         minimum_order: 0
       }
@@ -127,10 +128,18 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const complement = formData.get("complement") as string;
   const city = formData.get("city") as string;
   const state = formData.get("state") as string;
+  
+  // Coordenadas (Geolocalização)
+  const lat = formData.get("latitude") as string;
+  const lng = formData.get("longitude") as string;
 
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
+  
+  // Valores e Modos
+  const deliveryFeeMode = formData.get("deliveryFeeMode") as string; // 'fixed', 'per_km', 'fixed_plus_km'
   const deliveryFee = formData.get("deliveryFee") as string;
+  const pricePerKm = formData.get("pricePerKm") as string;
   const minimumOrder = formData.get("minimumOrder") as string;
 
   const password = formData.get("password") as string;
@@ -155,6 +164,10 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       if (userError) throw new Error(translateError(userError.message));
     }
 
+    // Busca settings atuais para não perder dados se não forem enviados
+    const { data: currentStore } = await supabase.from("stores").select("settings").eq("owner_id", user.id).single();
+    const currentSettings = currentStore?.settings || {};
+
     // Prepara dados da Loja
     let updateData: any = {
       name,
@@ -167,9 +180,16 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       city,
       state,
       settings: { 
+        ...currentSettings,
         business_hours: JSON.parse(businessHours),
+        delivery_fee_mode: deliveryFeeMode || 'fixed',
         delivery_fee: parseCurrency(deliveryFee),
-        minimum_order: parseCurrency(minimumOrder)
+        price_per_km: parseCurrency(pricePerKm),
+        minimum_order: parseCurrency(minimumOrder),
+        location: {
+            lat: lat ? parseFloat(lat) : currentSettings.location?.lat,
+            lng: lng ? parseFloat(lng) : currentSettings.location?.lng
+        }
       }
     };
 
@@ -214,7 +234,7 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { error: "Sessão expirada." };
   
-      // Busca configurações atuais para não perder dados ao atualizar apenas o design
+      // Busca configurações atuais para não perder dados
       const { data: currentStore } = await supabase.from("stores").select("settings").eq("owner_id", user.id).single();
       const currentSettings = currentStore?.settings || {};
 
@@ -223,7 +243,7 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
         bio,
         primary_color: primaryColor,
         font_family: fontFamily,
-        // Mantém settings existentes (business_hours, delivery_fee, etc)
+        // Mantém settings existentes
         settings: currentSettings 
       };
   
