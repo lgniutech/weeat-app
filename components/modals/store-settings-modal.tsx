@@ -1,341 +1,253 @@
 "use client"
 
-import { useActionState, useState, useEffect } from "react"
-import { updateStoreAction } from "@/app/actions/store"
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Switch } from "@/components/ui/switch"
-import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings, MapPin } from "lucide-react"
+import { updateStoreAction, updateStoreDeliverySettingsAction } from "@/app/actions/store"
+import { Loader2, Upload, MapPin, Store, DollarSign, Clock, Bike, FileText } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
-interface StoreSettingsModalProps {
-  store: any
-  userName: string
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
-}
-
-export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: StoreSettingsModalProps) {
-  const [state, action, isPending] = useActionState(updateStoreAction, null)
+export function StoreSettingsModal({ store, triggerButton }: { store: any, triggerButton?: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
   
-  // States Básicos
-  const [cnpj, setCnpj] = useState("")
-  const [phone, setPhone] = useState("")
+  // Estados de Dados Básicos
+  const [name, setName] = useState(store.name || "")
+  const [whatsapp, setWhatsapp] = useState(store.whatsapp || "")
+  const [bio, setBio] = useState(store.bio || "")
+  const [logoUrl, setLogoUrl] = useState(store.logo_url || "")
+  const [logoFile, setLogoFile] = useState<File | null>(null)
   
-  // States de Endereço (Novos)
-  const [zipCode, setZipCode] = useState("")
-  const [street, setStreet] = useState("")
-  const [number, setNumber] = useState("")
-  const [neighborhood, setNeighborhood] = useState("")
-  const [complement, setComplement] = useState("")
-  const [city, setCity] = useState("")
-  const [uf, setUf] = useState("")
-  const [isLoadingCep, setIsLoadingCep] = useState(false)
+  // Estados de Endereço
+  const [zipCode, setZipCode] = useState(store.zip_code || "")
+  const [street, setStreet] = useState(store.street || "")
+  const [number, setNumber] = useState(store.number || "")
+  const [neighborhood, setNeighborhood] = useState(store.neighborhood || "")
+  const [city, setCity] = useState(store.city || "")
+  const [state, setState] = useState(store.state || "")
+  const [complement, setComplement] = useState(store.complement || "")
+  const [loadingCep, setLoadingCep] = useState(false)
 
-  const [hours, setHours] = useState<any[]>([])
+  // Estados de Logística (Frete/Tempo)
+  const [deliveryFee, setDeliveryFee] = useState(store.delivery_fee || 0)
+  const [minOrder, setMinOrder] = useState(store.min_order_value || 0)
+  const [timeMin, setTimeMin] = useState(store.estimated_time_min || 30)
+  const [timeMax, setTimeMax] = useState(store.estimated_time_max || 50)
 
-  // Sincroniza dados do banco com o formulário
-  useEffect(() => {
-    if (store) {
-      setCnpj(store.cnpj || "")
-      setPhone(store.whatsapp || "")
-      
-      // Carrega Endereço
-      setZipCode(store.zip_code || "")
-      setStreet(store.street || "")
-      setNumber(store.number || "")
-      setNeighborhood(store.neighborhood || "")
-      setComplement(store.complement || "")
-      setCity(store.city || "")
-      setUf(store.state || "")
-      
-      const defaultHours = [
-        { day: "Segunda", open: "08:00", close: "18:00", active: true },
-        { day: "Terça", open: "08:00", close: "18:00", active: true },
-        { day: "Quarta", open: "08:00", close: "18:00", active: true },
-        { day: "Quinta", open: "08:00", close: "18:00", active: true },
-        { day: "Sexta", open: "08:00", close: "18:00", active: true },
-        { day: "Sábado", open: "09:00", close: "14:00", active: true },
-        { day: "Domingo", open: "00:00", close: "00:00", active: false },
-      ]
-      setHours(store.settings?.business_hours || defaultHours)
-    }
-  }, [store, isOpen])
-
-  // Lógica de CEP (ViaCEP)
-  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-     let value = e.target.value.replace(/\D/g, "")
-     if (value.length > 8) value = value.slice(0, 8)
-     value = value.replace(/^(\d{5})(\d)/, "$1-$2")
-     setZipCode(value)
-  }
-
+  // Busca CEP automático
   const handleCepBlur = async () => {
     const cleanCep = zipCode.replace(/\D/g, "")
     if (cleanCep.length === 8) {
-      setIsLoadingCep(true)
+      setLoadingCep(true)
       try {
-        const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
-        const data = await response.json()
+        const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
+        const data = await res.json()
         if (!data.erro) {
           setStreet(data.logradouro)
           setNeighborhood(data.bairro)
           setCity(data.localidade)
-          setUf(data.uf)
-          // UX: Joga o foco para o número para agilizar
-          document.getElementById("number")?.focus()
+          setState(data.uf)
+          document.getElementById("num-input")?.focus()
         }
       } catch (error) {
-        console.error("Erro ao buscar CEP", error)
+        console.error("Erro CEP", error)
       } finally {
-        setIsLoadingCep(false)
+        setLoadingCep(false)
       }
     }
   }
 
-  // Máscaras
-  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, "")
-    if (value.length > 14) value = value.slice(0, 14)
-    value = value.replace(/^(\d{2})(\d)/, "$1.$2")
-    value = value.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-    value = value.replace(/\.(\d{3})(\d)/, ".$1/$2")
-    value = value.replace(/(\d{4})(\d)/, "$1-$2")
-    setCnpj(value)
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0]
+      setLogoFile(file)
+      setLogoUrl(URL.createObjectURL(file))
+    }
   }
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, "")
-    if (value.length > 11) value = value.slice(0, 11)
-    value = value.replace(/^(\d{2})(\d)/g, "($1) $2")
-    value = value.replace(/(\d)(\d{4})$/, "$1-$2")
-    setPhone(value)
-  }
+  const handleSave = async () => {
+    setLoading(true)
 
-  const toggleDay = (index: number) => {
-    const newHours = [...hours]
-    newHours[index].active = !newHours[index].active
-    setHours(newHours)
-  }
+    try {
+      // 1. Prepara FormData para dados básicos
+      const formData = new FormData()
+      formData.append("name", name)
+      formData.append("whatsapp", whatsapp)
+      formData.append("bio", bio) // Bio agora é salva via server action
+      formData.append("zipCode", zipCode)
+      formData.append("street", street)
+      formData.append("number", number)
+      formData.append("neighborhood", neighborhood)
+      formData.append("city", city)
+      formData.append("state", state)
+      formData.append("complement", complement)
+      // Mantém horas como string vazia ou atual se não editado aqui (simplificação)
+      formData.append("businessHours", JSON.stringify(store.settings?.business_hours || [])) 
+      
+      if (logoFile) {
+        formData.append("logo", logoFile)
+      }
 
-  const updateTime = (index: number, field: string, value: string) => {
-    const newHours = [...hours]
-    newHours[index][field] = value
-    setHours(newHours)
+      // 2. Dispara updates em paralelo
+      const [basicRes, deliveryRes] = await Promise.all([
+         updateStoreAction(null, formData),
+         updateStoreDeliverySettingsAction(store.id, {
+             deliveryFee: Number(deliveryFee),
+             minOrderValue: Number(minOrder),
+             timeMin: Number(timeMin),
+             timeMax: Number(timeMax)
+         })
+      ])
+
+      if (basicRes?.error) throw new Error(basicRes.error)
+      if (deliveryRes?.error) throw new Error(deliveryRes.error)
+
+      setOpen(false)
+      // Recarrega a página forçado para garantir atualização visual das imagens
+      window.location.reload()
+
+    } catch (error: any) {
+      alert("Erro ao salvar: " + error.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" onInteractOutside={e => e.preventDefault()}>
-        <DialogHeader>
-          <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
-            <Settings className="w-6 h-6 text-primary" />
-          </div>
-          <DialogTitle className="text-center">Configurações & Perfil</DialogTitle>
-          <DialogDescription className="text-center">
-            Gerencie seus dados e informações da loja.
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {triggerButton || <Button variant="outline">Editar Dados da Loja</Button>}
+      </DialogTrigger>
+      
+      {/* MODAL GRANDE E QUADRADO (max-w-4xl) */}
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+        <DialogHeader className="p-6 border-b bg-slate-50 sticky top-0 z-10">
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <Store className="w-5 h-5 text-primary" /> Editar Loja & Operação
+          </DialogTitle>
+          <DialogDescription>
+            Configure seus dados básicos e regras de logística em um só lugar.
           </DialogDescription>
         </DialogHeader>
 
-        <form action={action} className="space-y-6 mt-2">
-          
-          {/* SEÇÃO 1: PERFIL E SEGURANÇA */}
-          <div className="space-y-4">
-             <div className="flex items-center gap-2 pb-2 border-b">
-              <User className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Perfil e Segurança</h3>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Seu Nome</Label>
-              <Input id="fullName" name="fullName" defaultValue={userName} required />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div className="space-y-2">
-                <Label htmlFor="password">Nova Senha (Opcional)</Label>
-                <div className="relative">
-                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                   <Input id="password" name="password" type="password" placeholder="********" className="pl-9"/>
-                </div>
-               </div>
-               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
-                <div className="relative">
-                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                   <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="********" className="pl-9"/>
-                </div>
-               </div>
-            </div>
-          </div>
-
-          {/* SEÇÃO 2: INFORMAÇÕES DA LOJA (COM ENDEREÇO INCLUSO) */}
-          <div className="space-y-4">
-             <div className="flex items-center gap-2 pb-2 border-b">
-              <Store className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Informações da Loja</h3>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome da Loja</Label>
-              <Input id="name" name="name" defaultValue={store?.name} required />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="cnpj">CNPJ</Label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input id="cnpj" name="cnpj" value={cnpj} onChange={handleCnpjChange} className="pl-9" disabled />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="whatsapp">WhatsApp</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input id="whatsapp" name="whatsapp" value={phone} onChange={handlePhoneChange} className="pl-9" required />
-                </div>
-              </div>
-            </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
             
-            {/* BLOCO DE ENDEREÇO (INTEGRADO AQUI) */}
-            <div className="bg-slate-50 border rounded-lg p-4 space-y-4 mt-2">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                    <MapPin className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wide">Endereço & Localização</span>
+            {/* COLUNA ESQUERDA: DADOS BÁSICOS & ENDEREÇO */}
+            <div className="space-y-6">
+                <div className="flex items-center gap-2 text-primary font-bold border-b pb-2 mb-4">
+                    <MapPin className="w-4 h-4" /> Informações Básicas
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {/* CEP */}
-                    <div className="col-span-2 md:col-span-1 space-y-1">
-                        <Label htmlFor="zipCode" className="text-xs">CEP</Label>
-                        <div className="relative">
-                            <Input 
-                                id="zipCode" 
-                                name="zipCode"
-                                value={zipCode} 
-                                onChange={handleCepChange} 
-                                onBlur={handleCepBlur} 
-                                placeholder="00000-000" 
-                                className="h-9"
-                                required
-                            />
-                            {isLoadingCep && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-primary" />}
+                <div className="grid gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="h-20 w-20 shrink-0 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50 flex items-center justify-center overflow-hidden relative cursor-pointer hover:bg-muted transition-colors">
+                            {logoUrl ? <img src={logoUrl} className="w-full h-full object-cover" /> : <Upload className="w-6 h-6 text-muted-foreground" />}
+                            <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleLogoChange} />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                            <Label>Nome da Loja</Label>
+                            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Burguer King" />
                         </div>
                     </div>
-                    
-                    {/* Cidade e UF */}
-                    <div className="col-span-2 md:col-span-2 space-y-1">
-                        <Label htmlFor="city" className="text-xs">Cidade</Label>
-                        <Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} readOnly className="h-9 bg-muted"/>
-                    </div>
-                    <div className="col-span-2 md:col-span-1 space-y-1">
-                        <Label htmlFor="state" className="text-xs">UF</Label>
-                        <Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} readOnly className="h-9 bg-muted"/>
+
+                    <div className="space-y-1">
+                        <Label>WhatsApp (Somente números)</Label>
+                        <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="11999999999" />
                     </div>
 
-                    {/* Rua e Número */}
-                    <div className="col-span-2 md:col-span-3 space-y-1">
-                        <Label htmlFor="street" className="text-xs">Logradouro</Label>
-                        <Input id="street" name="street" value={street} onChange={e => setStreet(e.target.value)} placeholder="Rua..." className="h-9" required />
+                    <div className="space-y-1">
+                        <Label>Bio / Descrição Curta</Label>
+                        <Textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="O melhor hambúrguer da cidade..." className="resize-none h-20" />
                     </div>
-                    <div className="col-span-2 md:col-span-1 space-y-1">
-                        <Label htmlFor="number" className="text-xs">Número</Label>
-                        <Input id="number" name="number" value={number} onChange={e => setNumber(e.target.value)} placeholder="Nº" className="h-9" required />
+                </div>
+
+                <div className="space-y-3 pt-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Endereço</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-1 relative">
+                            <Input placeholder="CEP" value={zipCode} onChange={e => setZipCode(e.target.value)} onBlur={handleCepBlur} />
+                            {loadingCep && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin" />}
+                        </div>
+                        <div className="col-span-2"><Input placeholder="Rua" value={street} onChange={e => setStreet(e.target.value)} readOnly /></div>
                     </div>
-                    
-                    {/* Bairro e Complemento */}
-                    <div className="col-span-2 space-y-1">
-                        <Label htmlFor="neighborhood" className="text-xs">Bairro</Label>
-                        <Input id="neighborhood" name="neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} placeholder="Bairro" className="h-9" required />
+                    <div className="grid grid-cols-4 gap-2">
+                         <div className="col-span-1"><Input id="num-input" placeholder="Nº" value={number} onChange={e => setNumber(e.target.value)} /></div>
+                         <div className="col-span-3"><Input placeholder="Bairro" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} readOnly /></div>
                     </div>
-                    <div className="col-span-2 space-y-1">
-                         <Label htmlFor="complement" className="text-xs">Complemento</Label>
-                         <Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} placeholder="Opcional" className="h-9" />
+                    <div className="grid grid-cols-2 gap-2">
+                         <Input placeholder="Cidade" value={city} onChange={e => setCity(e.target.value)} readOnly />
+                         <Input placeholder="Estado" value={state} onChange={e => setState(e.target.value)} readOnly />
+                    </div>
+                    <Input placeholder="Complemento" value={complement} onChange={e => setComplement(e.target.value)} />
+                </div>
+            </div>
+
+            {/* COLUNA DIREITA: LOGÍSTICA & REGRAS */}
+            <div className="space-y-6 md:border-l md:pl-8 border-slate-100">
+                <div className="flex items-center gap-2 text-primary font-bold border-b pb-2 mb-4">
+                    <Bike className="w-4 h-4" /> Logística & Entregas
+                </div>
+
+                <div className="space-y-5">
+                    <div className="bg-slate-50 p-4 rounded-lg border space-y-4">
+                        <div className="space-y-2">
+                            <Label className="flex items-center gap-2"><DollarSign className="w-4 h-4" /> Taxa de Entrega (Fixa)</Label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-sm font-bold text-muted-foreground">R$</span>
+                                <Input type="number" className="pl-9 bg-white" value={deliveryFee} onChange={e => setDeliveryFee(e.target.value)} />
+                            </div>
+                            <p className="text-xs text-muted-foreground">Deixe 0 para frete grátis.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="flex items-center gap-2"><FileText className="w-4 h-4" /> Pedido Mínimo</Label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-sm font-bold text-muted-foreground">R$</span>
+                                <Input type="number" className="pl-9 bg-white" value={minOrder} onChange={e => setMinOrder(e.target.value)} />
+                            </div>
+                            <p className="text-xs text-muted-foreground">O cliente só consegue finalizar se atingir esse valor.</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="flex items-center gap-2"><Clock className="w-4 h-4" /> Tempo de Entrega (Minutos)</Label>
+                        <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                                <Input type="number" className="text-center font-bold" value={timeMin} onChange={e => setTimeMin(e.target.value)} />
+                                <span className="text-[10px] text-center block text-muted-foreground">Mínimo</span>
+                            </div>
+                            <span className="font-bold text-muted-foreground">-</span>
+                            <div className="relative flex-1">
+                                <Input type="number" className="text-center font-bold" value={timeMax} onChange={e => setTimeMax(e.target.value)} />
+                                <span className="text-[10px] text-center block text-muted-foreground">Máximo</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-800">
+                        <strong>Dica:</strong> Mantenha seus horários de funcionamento sempre atualizados para evitar cancelamentos.
                     </div>
                 </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="logo">Logotipo</Label>
-              <Input id="logo" name="logo" type="file" accept="image/*" className="cursor-pointer text-sm" />
-            </div>
-          </div>
+        </div>
 
-          {/* SEÇÃO 3: HORÁRIOS */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b">
-              <Clock className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Horários</h3>
-            </div>
-            <input type="hidden" name="businessHours" value={JSON.stringify(hours)} />
-            
-            <div className="bg-muted/30 border rounded-lg p-3 space-y-2">
-              {hours.map((day, index) => (
-                <div key={index} className="flex items-center justify-between gap-2 text-sm">
-                  <div className="flex items-center gap-3 w-32">
-                    <Switch 
-                      checked={day.active} 
-                      onCheckedChange={() => toggleDay(index)} 
-                      className="scale-75"
-                    />
-                    <span className={day.active ? "font-medium" : "text-muted-foreground"}>
-                      {day.day}
-                    </span>
-                  </div>
-                  
-                  {day.active ? (
-                    <div className="flex items-center gap-2 flex-1 justify-end">
-                      <Input 
-                        type="time" 
-                        value={day.open}
-                        onChange={(e) => updateTime(index, 'open', e.target.value)}
-                        className="w-20 h-7 text-xs bg-background p-1"
-                      />
-                      <span className="text-muted-foreground text-xs">-</span>
-                      <Input 
-                        type="time" 
-                        value={day.close}
-                        onChange={(e) => updateTime(index, 'close', e.target.value)}
-                        className="w-20 h-7 text-xs bg-background p-1"
-                      />
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground text-xs flex-1 text-right pr-2">Fechado</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {state?.error && (
-            <Alert variant="destructive">
-              <AlertDescription>{state.error}</AlertDescription>
-            </Alert>
-          )}
-
-          {state?.success && (
-            <Alert className="bg-green-50 text-green-700 border-green-200">
-              <AlertDescription>{state.success}</AlertDescription>
-            </Alert>
-          )}
-
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</>
-            ) : (
-              <><Save className="mr-2 h-4 w-4" /> Salvar Alterações</>
-            )}
-          </Button>
-        </form>
+        <div className="p-6 border-t bg-slate-50 flex justify-end gap-3 sticky bottom-0 z-10">
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={loading} className="px-8 font-bold">
+                {loading ? <Loader2 className="animate-spin mr-2" /> : "Salvar Alterações"}
+            </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )
