@@ -22,8 +22,13 @@ export function StoreSetupModal() {
   
   const [cnpj, setCnpj] = useState("")
   const [phone, setPhone] = useState("")
-  // Novos estados para endereço
-  const [cep, setCep] = useState("")
+  
+  // Estados de Endereço Completo
+  const [zipCode, setZipCode] = useState("")
+  const [street, setStreet] = useState("")
+  const [number, setNumber] = useState("")
+  const [neighborhood, setNeighborhood] = useState("")
+  const [complement, setComplement] = useState("")
   const [city, setCity] = useState("")
   const [uf, setUf] = useState("")
   const [isLoadingCep, setIsLoadingCep] = useState(false)
@@ -57,16 +62,28 @@ export function StoreSetupModal() {
     setPhone(value)
   }
 
+  // Lógica do ViaCEP
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     let value = e.target.value.replace(/\D/g, "")
+     if (value.length > 8) value = value.slice(0, 8)
+     value = value.replace(/^(\d{5})(\d)/, "$1-$2")
+     setZipCode(value)
+  }
+
   const handleCepBlur = async () => {
-    const cleanCep = cep.replace(/\D/g, "")
+    const cleanCep = zipCode.replace(/\D/g, "")
     if (cleanCep.length === 8) {
       setIsLoadingCep(true)
       try {
         const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
         const data = await response.json()
         if (!data.erro) {
+          setStreet(data.logradouro)
+          setNeighborhood(data.bairro)
           setCity(data.localidade)
           setUf(data.uf)
+          // Foca no campo de número automaticamente
+          document.getElementById("number")?.focus()
         }
       } catch (error) {
         console.error("Erro ao buscar CEP", error)
@@ -74,13 +91,6 @@ export function StoreSetupModal() {
         setIsLoadingCep(false)
       }
     }
-  }
-
-  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-     let value = e.target.value.replace(/\D/g, "")
-     if (value.length > 8) value = value.slice(0, 8)
-     value = value.replace(/^(\d{5})(\d)/, "$1-$2")
-     setCep(value)
   }
 
   const toggleDay = (index: number) => {
@@ -184,26 +194,51 @@ export function StoreSetupModal() {
               </div>
             </div>
 
-            {/* SEÇÃO DE ENDEREÇO DA LOJA */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-3 rounded-lg border">
+            {/* SEÇÃO DE ENDEREÇO DA LOJA (COMPLETO) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-4 rounded-lg border">
+                {/* CEP e UF */}
                 <div className="col-span-2 md:col-span-1 space-y-2">
-                    <Label htmlFor="cep">CEP</Label>
-                    <Input 
-                        id="cep" 
-                        value={cep} 
-                        onChange={handleCepChange} 
-                        onBlur={handleCepBlur} 
-                        placeholder="00000-000" 
-                        required 
-                    />
+                    <Label htmlFor="zipCode">CEP <span className="text-destructive">*</span></Label>
+                    <div className="relative">
+                        <Input 
+                            id="zipCode" 
+                            name="zipCode" 
+                            value={zipCode} 
+                            onChange={handleCepChange} 
+                            onBlur={handleCepBlur} 
+                            placeholder="00000-000" 
+                            required 
+                        />
+                        {isLoadingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-primary" />}
+                    </div>
                 </div>
                 <div className="col-span-2 md:col-span-2 space-y-2">
-                     <Label htmlFor="city">Cidade {isLoadingCep && <Loader2 className="inline w-3 h-3 animate-spin"/>}</Label>
-                     <Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} placeholder="Cidade" required readOnly={isLoadingCep}/>
+                     <Label htmlFor="city">Cidade</Label>
+                     <Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} placeholder="Cidade" required readOnly className="bg-muted"/>
                 </div>
                 <div className="col-span-2 md:col-span-1 space-y-2">
                      <Label htmlFor="state">UF</Label>
-                     <Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} placeholder="UF" maxLength={2} required readOnly={isLoadingCep}/>
+                     <Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} placeholder="UF" maxLength={2} required readOnly className="bg-muted"/>
+                </div>
+
+                {/* Rua e Número */}
+                <div className="col-span-2 md:col-span-3 space-y-2">
+                    <Label htmlFor="street">Rua / Av <span className="text-destructive">*</span></Label>
+                    <Input id="street" name="street" value={street} onChange={e => setStreet(e.target.value)} placeholder="Nome da rua" required />
+                </div>
+                <div className="col-span-2 md:col-span-1 space-y-2">
+                    <Label htmlFor="number">Número <span className="text-destructive">*</span></Label>
+                    <Input id="number" name="number" value={number} onChange={e => setNumber(e.target.value)} placeholder="123" required />
+                </div>
+
+                {/* Bairro e Complemento */}
+                <div className="col-span-2 space-y-2">
+                    <Label htmlFor="neighborhood">Bairro <span className="text-destructive">*</span></Label>
+                    <Input id="neighborhood" name="neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} placeholder="Centro" required />
+                </div>
+                <div className="col-span-2 space-y-2">
+                    <Label htmlFor="complement">Complemento</Label>
+                    <Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} placeholder="Apto, Sala..." />
                 </div>
             </div>
             

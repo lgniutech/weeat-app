@@ -26,8 +26,16 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   const name = formData.get("name") as string;
   const cnpj = formData.get("cnpj") as string;
   const whatsapp = formData.get("whatsapp") as string;
-  const city = formData.get("city") as string; // NOVO
-  const state = formData.get("state") as string; // NOVO
+  
+  // Endereço Completo
+  const zipCode = formData.get("zipCode") as string;
+  const street = formData.get("street") as string;
+  const number = formData.get("number") as string;
+  const neighborhood = formData.get("neighborhood") as string;
+  const complement = formData.get("complement") as string;
+  const city = formData.get("city") as string;
+  const state = formData.get("state") as string;
+  
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
   
@@ -72,8 +80,13 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       slug: generatedSlug,
       cnpj: cnpj.replace(/\D/g, ''),
       whatsapp: whatsapp.replace(/\D/g, ''),
-      city, // NOVO
-      state, // NOVO
+      zip_code: zipCode,
+      street,
+      number,
+      neighborhood,
+      complement,
+      city,
+      state,
       logo_url: logoUrl,
       settings: { business_hours: businessHours ? JSON.parse(businessHours) : [] }
     });
@@ -95,8 +108,16 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const fullName = formData.get("fullName") as string;
   const name = formData.get("name") as string;
   const whatsapp = formData.get("whatsapp") as string;
-  const city = formData.get("city") as string; // NOVO
-  const state = formData.get("state") as string; // NOVO
+  
+  // Endereço Completo
+  const zipCode = formData.get("zipCode") as string;
+  const street = formData.get("street") as string;
+  const number = formData.get("number") as string;
+  const neighborhood = formData.get("neighborhood") as string;
+  const complement = formData.get("complement") as string;
+  const city = formData.get("city") as string;
+  const state = formData.get("state") as string;
+
   const logoFile = formData.get("logo") as File;
   const businessHours = formData.get("businessHours") as string;
   const password = formData.get("password") as string;
@@ -125,8 +146,13 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
     let updateData: any = {
       name,
       whatsapp: whatsapp.replace(/\D/g, ''),
-      city, // NOVO
-      state, // NOVO
+      zip_code: zipCode,
+      street,
+      number,
+      neighborhood,
+      complement,
+      city,
+      state,
       settings: { business_hours: JSON.parse(businessHours) }
     };
 
@@ -156,17 +182,14 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
-// --- 3. ATUALIZAÇÃO DE DESIGN E APARÊNCIA (Otimizada para Client-Side Upload) ---
+// --- 3. ATUALIZAÇÃO DE DESIGN E APARÊNCIA ---
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
     
-    // Captura campos de texto
     const name = formData.get("name") as string;
     const bio = formData.get("bio") as string;
     const primaryColor = formData.get("primaryColor") as string;
     const fontFamily = formData.get("fontFamily") as string;
-    
-    // Captura URLs (Já processadas no Front-end)
     const logoUrl = formData.get("logoUrl") as string;
     const bannersJson = formData.get("bannersJson") as string;
     
@@ -181,36 +204,20 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
         font_family: fontFamily
       };
   
-      // Se veio URL de logo nova, atualiza
-      if (logoUrl) {
-        updateData.logo_url = logoUrl;
-      }
+      if (logoUrl) updateData.logo_url = logoUrl;
 
-      // Se vieram banners, processa e atualiza
       if (bannersJson) {
          try {
              const banners = JSON.parse(bannersJson);
              updateData.banners = banners;
-             // Define o primeiro banner como capa principal
              updateData.banner_url = banners.length > 0 ? banners[0] : null;
-         } catch (e) {
-             console.error("Erro ao processar JSON de banners", e);
-         }
+         } catch (e) { console.error(e); }
       }
   
-      // Atualiza no banco
-      const { error } = await supabase
-        .from("stores")
-        .update(updateData)
-        .eq("owner_id", user.id);
-  
-      if (error) {
-        console.error("Erro Supabase update:", error);
-        throw new Error(error.message);
-      }
+      const { error } = await supabase.from("stores").update(updateData).eq("owner_id", user.id);
+      if (error) throw new Error(error.message);
   
     } catch (error: any) {
-      console.error("Erro updateStoreDesignAction:", error);
       return { error: "Erro ao atualizar: " + error.message };
     }
   
@@ -218,27 +225,18 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
     return { success: "Loja atualizada com sucesso!" };
 }
 
-// --- 4. PREFERÊNCIAS DE TEMA (Modo Escuro/Claro) ---
+// --- 4. PREFERÊNCIAS DE TEMA ---
 export async function updateStoreSettings(storeId: string, settings: { theme_mode?: string, theme_color?: string }) {
   const supabase = await createClient();
-  
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Não autorizado" };
 
-    const { error } = await supabase
-      .from("stores")
-      .update(settings)
-      .eq("id", storeId)
-      .eq("owner_id", user.id); // Garante segurança (só o dono altera)
-
+    const { error } = await supabase.from("stores").update(settings).eq("id", storeId).eq("owner_id", user.id);
     if (error) throw new Error(error.message);
-    
     revalidatePath("/");
     return { success: true };
-
   } catch (error: any) {
-    console.error("Erro ao salvar tema:", error);
     return { error: error.message };
   }
 }

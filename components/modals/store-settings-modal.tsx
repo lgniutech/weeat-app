@@ -14,8 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-// CORREÇÃO: Adicionado 'Settings' na lista de imports abaixo
-import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings } from "lucide-react"
+import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings, MapPin } from "lucide-react"
 
 interface StoreSettingsModalProps {
   store: any
@@ -27,16 +26,36 @@ interface StoreSettingsModalProps {
 export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: StoreSettingsModalProps) {
   const [state, action, isPending] = useActionState(updateStoreAction, null)
   
-  // States locais
+  // States Básicos
   const [cnpj, setCnpj] = useState("")
   const [phone, setPhone] = useState("")
+  
+  // States de Endereço (Novos)
+  const [zipCode, setZipCode] = useState("")
+  const [street, setStreet] = useState("")
+  const [number, setNumber] = useState("")
+  const [neighborhood, setNeighborhood] = useState("")
+  const [complement, setComplement] = useState("")
+  const [city, setCity] = useState("")
+  const [uf, setUf] = useState("")
+  const [isLoadingCep, setIsLoadingCep] = useState(false)
+
   const [hours, setHours] = useState<any[]>([])
 
-  // Sincroniza dados
+  // Sincroniza dados do banco com o formulário
   useEffect(() => {
     if (store) {
       setCnpj(store.cnpj || "")
       setPhone(store.whatsapp || "")
+      
+      // Carrega Endereço
+      setZipCode(store.zip_code || "")
+      setStreet(store.street || "")
+      setNumber(store.number || "")
+      setNeighborhood(store.neighborhood || "")
+      setComplement(store.complement || "")
+      setCity(store.city || "")
+      setUf(store.state || "")
       
       const defaultHours = [
         { day: "Segunda", open: "08:00", close: "18:00", active: true },
@@ -51,12 +70,36 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     }
   }, [store, isOpen])
 
-  // Fecha modal após sucesso
-  useEffect(() => {
-    if(state?.success) {
-      // Opcional: onOpenChange(false)
+  // Lógica de CEP (ViaCEP)
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     let value = e.target.value.replace(/\D/g, "")
+     if (value.length > 8) value = value.slice(0, 8)
+     value = value.replace(/^(\d{5})(\d)/, "$1-$2")
+     setZipCode(value)
+  }
+
+  const handleCepBlur = async () => {
+    const cleanCep = zipCode.replace(/\D/g, "")
+    if (cleanCep.length === 8) {
+      setIsLoadingCep(true)
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
+        const data = await response.json()
+        if (!data.erro) {
+          setStreet(data.logradouro)
+          setNeighborhood(data.bairro)
+          setCity(data.localidade)
+          setUf(data.uf)
+          // UX: Joga o foco para o número para agilizar
+          document.getElementById("number")?.focus()
+        }
+      } catch (error) {
+        console.error("Erro ao buscar CEP", error)
+      } finally {
+        setIsLoadingCep(false)
+      }
     }
-  }, [state])
+  }
 
   // Máscaras
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,7 +134,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
             <Settings className="w-6 h-6 text-primary" />
@@ -104,7 +147,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
 
         <form action={action} className="space-y-6 mt-2">
           
-          {/* SEÇÃO 1: PESSOAL & SEGURANÇA */}
+          {/* SEÇÃO 1: PERFIL E SEGURANÇA */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
               <User className="w-4 h-4 text-primary" />
@@ -120,20 +163,20 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                 <Label htmlFor="password">Nova Senha (Opcional)</Label>
                 <div className="relative">
                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                   <Input id="password" name="password" type="password" placeholder="Mudar senha..." className="pl-9"/>
+                   <Input id="password" name="password" type="password" placeholder="********" className="pl-9"/>
                 </div>
                </div>
                <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
                 <div className="relative">
                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                   <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="Repita a senha" className="pl-9"/>
+                   <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="********" className="pl-9"/>
                 </div>
                </div>
             </div>
           </div>
 
-          {/* SEÇÃO 2: LOJA */}
+          {/* SEÇÃO 2: INFORMAÇÕES DA LOJA (COM ENDEREÇO INCLUSO) */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 pb-2 border-b">
               <Store className="w-4 h-4 text-primary" />
@@ -150,14 +193,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                 <Label htmlFor="cnpj">CNPJ</Label>
                 <div className="relative">
                   <FileText className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="cnpj" 
-                    name="cnpj" 
-                    value={cnpj} 
-                    onChange={handleCnpjChange}
-                    className="pl-9"
-                    disabled
-                  />
+                  <Input id="cnpj" name="cnpj" value={cnpj} onChange={handleCnpjChange} className="pl-9" disabled />
                 </div>
               </div>
 
@@ -165,19 +201,70 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                 <Label htmlFor="whatsapp">WhatsApp</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="whatsapp" 
-                    name="whatsapp" 
-                    value={phone} 
-                    onChange={handlePhoneChange}
-                    className="pl-9"
-                    required
-                  />
+                  <Input id="whatsapp" name="whatsapp" value={phone} onChange={handlePhoneChange} className="pl-9" required />
                 </div>
               </div>
             </div>
+            
+            {/* BLOCO DE ENDEREÇO (INTEGRADO AQUI) */}
+            <div className="bg-slate-50 border rounded-lg p-4 space-y-4 mt-2">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                    <MapPin className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wide">Endereço & Localização</span>
+                </div>
 
-             <div className="space-y-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {/* CEP */}
+                    <div className="col-span-2 md:col-span-1 space-y-1">
+                        <Label htmlFor="zipCode" className="text-xs">CEP</Label>
+                        <div className="relative">
+                            <Input 
+                                id="zipCode" 
+                                name="zipCode"
+                                value={zipCode} 
+                                onChange={handleCepChange} 
+                                onBlur={handleCepBlur} 
+                                placeholder="00000-000" 
+                                className="h-9"
+                                required
+                            />
+                            {isLoadingCep && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-primary" />}
+                        </div>
+                    </div>
+                    
+                    {/* Cidade e UF */}
+                    <div className="col-span-2 md:col-span-2 space-y-1">
+                        <Label htmlFor="city" className="text-xs">Cidade</Label>
+                        <Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} readOnly className="h-9 bg-muted"/>
+                    </div>
+                    <div className="col-span-2 md:col-span-1 space-y-1">
+                        <Label htmlFor="state" className="text-xs">UF</Label>
+                        <Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} readOnly className="h-9 bg-muted"/>
+                    </div>
+
+                    {/* Rua e Número */}
+                    <div className="col-span-2 md:col-span-3 space-y-1">
+                        <Label htmlFor="street" className="text-xs">Logradouro</Label>
+                        <Input id="street" name="street" value={street} onChange={e => setStreet(e.target.value)} placeholder="Rua..." className="h-9" required />
+                    </div>
+                    <div className="col-span-2 md:col-span-1 space-y-1">
+                        <Label htmlFor="number" className="text-xs">Número</Label>
+                        <Input id="number" name="number" value={number} onChange={e => setNumber(e.target.value)} placeholder="Nº" className="h-9" required />
+                    </div>
+                    
+                    {/* Bairro e Complemento */}
+                    <div className="col-span-2 space-y-1">
+                        <Label htmlFor="neighborhood" className="text-xs">Bairro</Label>
+                        <Input id="neighborhood" name="neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} placeholder="Bairro" className="h-9" required />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                         <Label htmlFor="complement" className="text-xs">Complemento</Label>
+                         <Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} placeholder="Opcional" className="h-9" />
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="logo">Logotipo</Label>
               <Input id="logo" name="logo" type="file" accept="image/*" className="cursor-pointer text-sm" />
             </div>

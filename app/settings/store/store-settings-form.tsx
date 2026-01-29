@@ -9,9 +9,10 @@ import { Store, Phone, Clock, MapPin, Edit } from "lucide-react"
 
 interface StoreSettingsFormProps {
   store: any
+  userName: string
 }
 
-export function StoreSettingsForm({ store }: StoreSettingsFormProps) {
+export function StoreSettingsForm({ store, userName }: StoreSettingsFormProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Formata o telefone para visualização
@@ -22,6 +23,11 @@ export function StoreSettingsForm({ store }: StoreSettingsFormProps) {
 
   // Organiza horários para exibição
   const activeDays = store.settings?.business_hours?.filter((h: any) => h.active) || []
+
+  // Monta endereço completo para exibição
+  const fullAddress = store.street 
+    ? `${store.street}, ${store.number}${store.complement ? ` - ${store.complement}` : ''}, ${store.neighborhood}`
+    : null
 
   return (
     <>
@@ -68,19 +74,26 @@ export function StoreSettingsForm({ store }: StoreSettingsFormProps) {
               </div>
             </div>
             
-            {/* NOVO: Exibição da Cidade/Estado */}
+            {/* Exibição da Localização Completa */}
             <div className="flex items-start gap-3 md:col-span-2">
               <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                 <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Localização</p>
-                <p className="font-semibold text-lg">
-                    {store.city ? `${store.city} - ${store.state}` : "Endereço não configurado"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Base para cálculo de frete (Futuro)
-                </p>
+                {store.city ? (
+                    <>
+                        <p className="font-semibold text-lg">{store.city} - {store.state}</p>
+                        {fullAddress && (
+                            <p className="text-sm text-muted-foreground">{fullAddress}</p>
+                        )}
+                        {store.zip_code && (
+                            <p className="text-xs text-muted-foreground mt-1">CEP: {store.zip_code}</p>
+                        )}
+                    </>
+                ) : (
+                    <p className="text-muted-foreground italic">Endereço não configurado</p>
+                )}
               </div>
             </div>
           </div>
@@ -113,9 +126,10 @@ export function StoreSettingsForm({ store }: StoreSettingsFormProps) {
         </CardContent>
       </Card>
 
-      {/* O Modal (Pop-up) é renderizado aqui, mas só aparece quando isModalOpen é true */}
+      {/* Modal */}
       <StoreSettingsModal 
         store={store} 
+        userName={userName}
         isOpen={isModalOpen} 
         onOpenChange={setIsModalOpen} 
       />
