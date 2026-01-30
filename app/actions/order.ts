@@ -16,7 +16,10 @@ interface OrderInput {
   storeId: string;
   customerName: string;
   customerPhone: string;
-  deliveryType: "entrega" | "retirada";
+  // Adicionado 'mesa' como opção
+  deliveryType: "entrega" | "retirada" | "mesa"; 
+  // Novo campo para o número da mesa
+  tableNumber?: string; 
   address?: string;
   paymentMethod: string;
   changeFor?: string;
@@ -28,20 +31,25 @@ interface OrderInput {
 export async function createOrderAction(order: OrderInput) {
   const supabase = await createClient();
 
+  // Preparar objeto para inserção
+  const orderData = {
+    store_id: order.storeId,
+    status: "pendente",
+    customer_name: order.customerName,
+    customer_phone: order.customerPhone,
+    delivery_type: order.deliveryType,
+    address: order.address,
+    payment_method: order.paymentMethod,
+    change_for: order.changeFor,
+    total_price: order.totalPrice,
+    last_status_change: new Date().toISOString(),
+    // Salva o número da mesa se existir
+    table_number: order.tableNumber || null 
+  };
+
   const { data: newOrder, error: orderError } = await supabase
     .from("orders")
-    .insert({
-      store_id: order.storeId,
-      status: "pendente",
-      customer_name: order.customerName,
-      customer_phone: order.customerPhone,
-      delivery_type: order.deliveryType,
-      address: order.address,
-      payment_method: order.paymentMethod,
-      change_for: order.changeFor,
-      total_price: order.totalPrice,
-      last_status_change: new Date().toISOString()
-    })
+    .insert(orderData)
     .select()
     .single();
 
@@ -78,7 +86,7 @@ export async function createOrderAction(order: OrderInput) {
   return { success: true, orderId: newOrder.id };
 }
 
-// BUSCAR PEDIDOS
+// BUSCAR PEDIDOS (PAINEL LOJISTA)
 export async function getStoreOrdersAction(storeId: string, dateFilter?: string) {
     const supabase = await createClient();
     
@@ -103,7 +111,7 @@ export async function getStoreOrdersAction(storeId: string, dateFilter?: string)
     return data || [];
 }
 
-// ATUALIZAR STATUS (AGORA COM MOTIVO)
+// ATUALIZAR STATUS (COM MOTIVO OPCIONAL)
 export async function updateOrderStatusAction(orderId: string, newStatus: string, reason?: string) {
     const supabase = await createClient();
 
@@ -122,7 +130,7 @@ export async function updateOrderStatusAction(orderId: string, newStatus: string
         last_status_change: new Date().toISOString() 
     };
 
-    // Se tiver motivo, salva
+    // Se tiver motivo (cancelamento), salva
     if (reason) {
         updateData.cancellation_reason = reason;
     }
@@ -145,7 +153,7 @@ export async function updateOrderStatusAction(orderId: string, newStatus: string
     return { success: true };
 }
 
-// RASTREIO
+// RASTREIO (CLIENTE)
 export async function getCustomerOrdersAction(phone: string) {
   const supabase = await createClient();
   const clean = phone.replace(/\D/g, "")
