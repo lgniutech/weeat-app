@@ -64,7 +64,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
 
     let logoUrl = "";
     if (logoFile && logoFile.size > 0) {
-      const fileExt = logoFile.name.split('.').pop();
+      const fileExt = logoFile.name.split('.').pop(); // O front mandará .webp
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('store-assets').upload(fileName, logoFile);
       if (!uploadError) {
@@ -130,6 +130,9 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const pricePerKm = formData.get("pricePerKm") as string;
   const minimumOrder = formData.get("minimumOrder") as string;
 
+  // NOVO CAMPO: Total de Mesas
+  const totalTables = formData.get("totalTables") as string;
+
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
@@ -184,6 +187,10 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       }
     };
 
+    if (totalTables) {
+        updateData.total_tables = parseInt(totalTables);
+    }
+
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
@@ -209,6 +216,7 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
+// --- 3. ATUALIZAÇÃO DE DESIGN (Mantida) ---
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
     const name = formData.get("name") as string;
@@ -246,6 +254,7 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
     return { success: "Loja atualizada com sucesso!" };
 }
 
+// --- 4. ATUALIZAÇÃO DE TEMA (Mantida) ---
 export async function updateStoreSettings(storeId: string, settings: { theme_mode?: string, theme_color?: string }) {
   const supabase = await createClient();
   try {
@@ -260,7 +269,7 @@ export async function updateStoreSettings(storeId: string, settings: { theme_mod
   }
 }
 
-// --- NOVA FUNÇÃO SEGURA PARA ATUALIZAR MESAS ---
+// --- 5. ATUALIZAÇÃO DE MESAS (Mantida) ---
 export async function updateStoreTablesAction(tableCount: number) {
     const supabase = await createClient();
     try {

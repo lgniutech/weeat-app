@@ -15,6 +15,7 @@ import {
     createAddonAction,
     updateCategoryOrderAction
 } from "@/app/actions/menu"
+import { compressImage } from "@/lib/client-image-compression" 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,7 +28,6 @@ import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2, X, Pencil, 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 
-// --- SELETOR DE INGREDIENTES (CONTROLADO) ---
 function IngredientSelector({ storeId, value = [], onChange }: { storeId: string, value: string[], onChange: (ids: string[]) => void }) {
     const [input, setInput] = useState("")
     const [allIngredients, setAllIngredients] = useState<any[]>([])
@@ -105,7 +105,6 @@ function IngredientSelector({ storeId, value = [], onChange }: { storeId: string
     )
 }
 
-// --- SELETOR DE ACRÉSCIMOS (CONTROLADO) ---
 function AddonSelector({ storeId, value = [], onChange }: { storeId: string, value: {id: string, price: number}[], onChange: (addons: any[]) => void }) {
     const [nameInput, setNameInput] = useState("")
     const [allAddons, setAllAddons] = useState<any[]>([])
@@ -232,13 +231,12 @@ function ImageUploadPreview({ initialImage, name }: { initialImage?: string, nam
     )
 }
 
-// --- FORMULÁRIOS DE PRODUTO (MODAL OTIMIZADO) ---
-
 function ProductForm({ storeId, categories, product }: { storeId: string, categories: any[], product?: any }) {
     const isEdit = !!product
-    const [state, action, isPending] = useActionState(isEdit ? updateProductAction : createProductAction, null)
+    const [state, formAction, isPending] = useActionState(isEdit ? updateProductAction : createProductAction, null)
     
     const [isOpen, setIsOpen] = useState(false)
+    const [isCompressing, setIsCompressing] = useState(false)
     const [selectedIngredients, setSelectedIngredients] = useState<string[]>([])
     const [selectedAddons, setSelectedAddons] = useState<any[]>([])
 
@@ -257,6 +255,23 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
         }
     }
 
+    const handleSubmit = async (formData: FormData) => {
+        setIsCompressing(true)
+        try {
+            const image = formData.get("image") as File
+            if (image && image.size > 0 && image.type.startsWith('image/')) {
+                const compressedImage = await compressImage(image)
+                formData.set("image", compressedImage)
+            }
+            formAction(formData)
+        } catch (error) {
+            console.error("Erro ao comprimir imagem:", error)
+            formAction(formData)
+        } finally {
+            setIsCompressing(false)
+        }
+    }
+
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
@@ -272,7 +287,7 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
                     <DialogTitle className="dark:text-slate-100">{isEdit ? "Editar Produto" : "Adicionar Produto"}</DialogTitle>
                     <DialogDescription className="sr-only">Preencha os detalhes do produto abaixo.</DialogDescription>
                 </DialogHeader>
-                <form action={action} className="space-y-6">
+                <form action={handleSubmit} className="space-y-6">
                     <input type="hidden" name="storeId" value={storeId} />
                     {isEdit && <input type="hidden" name="productId" value={product.id} />}
                     <input type="hidden" name="ingredients" value={JSON.stringify(selectedIngredients)} />
@@ -314,16 +329,14 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
 
                     {state?.error && <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>}
                     
-                    <Button type="submit" className="w-full" disabled={isPending}>
-                        {isPending ? <Loader2 className="animate-spin" /> : (isEdit ? "Salvar Alterações" : "Criar Produto")}
+                    <Button type="submit" className="w-full" disabled={isPending || isCompressing}>
+                        {isCompressing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Otimizando...</> : isPending ? <Loader2 className="animate-spin" /> : (isEdit ? "Salvar Alterações" : "Criar Produto")}
                     </Button>
                 </form>
             </DialogContent>
         </Dialog>
     )
 }
-
-// --- GESTÃO DE CATEGORIAS ---
 
 function AddCategoryForm({ storeId }: { storeId: string }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -364,8 +377,6 @@ function DeleteProductBtn({ id }: { id: string }) {
 function ProductToggle({ id, isAvailable }: { id: string, isAvailable: boolean }) {
     return (<Switch checked={isAvailable} onCheckedChange={(checked) => toggleProductAvailabilityAction(id, checked)} />)
 }
-
-// --- COMPONENTE PRINCIPAL ---
 
 export function MenuManager({ store, categories }: { store: any, categories: any[] }) {
   const [productSearch, setProductSearch] = useState("")
@@ -420,7 +431,6 @@ export function MenuManager({ store, categories }: { store: any, categories: any
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
-      {/* Header com Busca */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-zinc-900 p-4 rounded-xl border dark:border-zinc-800 shadow-sm sticky top-0 z-10 transition-colors">
         <div>
             <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Cardápio Digital</h2>
@@ -436,7 +446,6 @@ export function MenuManager({ store, categories }: { store: any, categories: any
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Coluna Categorias */}
         <div className="lg:col-span-1 space-y-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Categorias</h3>
@@ -471,7 +480,6 @@ export function MenuManager({ store, categories }: { store: any, categories: any
             <AddCategoryForm storeId={store.id} />
         </div>
 
-        {/* Lista de Produtos */}
         <div className="lg:col-span-3 space-y-8">
             {localCategories.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed dark:border-zinc-800 rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 text-center">

@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useEffect } from "react"
 import { updateStoreAction } from "@/app/actions/store"
+import { compressImage } from "@/lib/client-image-compression" 
 import {
   Dialog,
   DialogContent,
@@ -25,19 +26,15 @@ interface StoreSettingsModalProps {
 }
 
 export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: StoreSettingsModalProps) {
-  const [state, action, isPending] = useActionState(updateStoreAction, null)
-  
-  // States Básicos
+  const [state, formAction, isPending] = useActionState(updateStoreAction, null)
+  const [isCompressing, setIsCompressing] = useState(false) // Estado de carregamento da compressão
+
   const [cnpj, setCnpj] = useState("")
   const [phone, setPhone] = useState("")
-  
-  // States de Valores e Modos
-  const [deliveryFeeMode, setDeliveryFeeMode] = useState("fixed") // fixed, per_km, fixed_plus_km
+  const [deliveryFeeMode, setDeliveryFeeMode] = useState("fixed") 
   const [deliveryFee, setDeliveryFee] = useState("")
   const [pricePerKm, setPricePerKm] = useState("")
   const [minimumOrder, setMinimumOrder] = useState("")
-
-  // States de Endereço e Geolocalização
   const [zipCode, setZipCode] = useState("")
   const [street, setStreet] = useState("")
   const [number, setNumber] = useState("")
@@ -46,37 +43,27 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
   const [city, setCity] = useState("")
   const [uf, setUf] = useState("")
   const [isLoadingCep, setIsLoadingCep] = useState(false)
-  
-  // Coordenadas
   const [latitude, setLatitude] = useState<string>("")
   const [longitude, setLongitude] = useState<string>("")
-
   const [hours, setHours] = useState<any[]>([])
 
-  // Helper para formatar moeda
   const formatCurrency = (value: string | number) => {
     if (!value && value !== 0) return ""
     const numberValue = typeof value === "string" ? parseFloat(value) : value
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numberValue)
   }
 
-  // Efeito para fechar o modal automaticamente em caso de sucesso
   useEffect(() => {
     if (state?.success) {
-      const timer = setTimeout(() => {
-        onOpenChange(false)
-      }, 1500) 
+      const timer = setTimeout(() => { onOpenChange(false) }, 1500) 
       return () => clearTimeout(timer)
     }
   }, [state, onOpenChange])
 
-  // Sincroniza dados do banco com o formulário
   useEffect(() => {
     if (store) {
       setCnpj(store.cnpj || "")
       setPhone(store.whatsapp || "")
-      
-      // Carrega Endereço
       setZipCode(store.zip_code || "")
       setStreet(store.street || "")
       setNumber(store.number || "")
@@ -85,15 +72,12 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
       setCity(store.city || "")
       setUf(store.state || "")
 
-      // Carrega Valores
       const settings = store.settings || {}
       setDeliveryFeeMode(settings.delivery_fee_mode || "fixed")
-      
       setDeliveryFee(settings.delivery_fee !== undefined ? formatCurrency(settings.delivery_fee) : "")
       setPricePerKm(settings.price_per_km !== undefined ? formatCurrency(settings.price_per_km) : "")
       setMinimumOrder(settings.minimum_order !== undefined ? formatCurrency(settings.minimum_order) : "")
       
-      // Carrega Geolocalização Salva
       if (settings.location && settings.location.lat && settings.location.lng) {
           setLatitude(String(settings.location.lat))
           setLongitude(String(settings.location.lng))
@@ -115,7 +99,6 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     }
   }, [store, isOpen])
 
-  // Lógica de CEP (ViaCEP) + Busca de Coordenadas (Nominatim)
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
      let value = e.target.value.replace(/\D/g, "")
      if (value.length > 8) value = value.slice(0, 8)
@@ -128,7 +111,6 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     if (cleanCep.length === 8) {
       setIsLoadingCep(true)
       try {
-        // 1. Busca Endereço
         const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
         const data = await response.json()
         if (!data.erro) {
@@ -136,17 +118,13 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           setNeighborhood(data.bairro)
           setCity(data.localidade)
           setUf(data.uf)
-          
-          // 2. Busca Coordenadas (Para cálculo de KM)
           const query = `${data.logradouro}, ${data.localidade}, ${data.uf}, Brasil`
           const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
           const geoData = await geoRes.json()
-          
           if (geoData && geoData.length > 0) {
               setLatitude(String(geoData[0].lat))
               setLongitude(String(geoData[0].lon))
           } else {
-               // Fallback só com CEP e Cidade
                const cepQuery = `${cleanCep}, ${data.localidade}, Brasil`
                const cepGeoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cepQuery)}&limit=1`)
                const cepGeoData = await cepGeoRes.json()
@@ -158,18 +136,12 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                    setLongitude("")
                }
           }
-
           document.getElementById("number")?.focus()
         }
-      } catch (error) {
-        console.error("Erro ao buscar CEP/Geo", error)
-      } finally {
-        setIsLoadingCep(false)
-      }
+      } catch (error) { console.error("Erro ao buscar CEP/Geo", error) } finally { setIsLoadingCep(false) }
     }
   }
 
-  // Máscaras e Formatação
   const handleCurrencyInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     let value = e.target.value
     value = value.replace(/\D/g, "")
@@ -208,12 +180,26 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
     setHours(newHours)
   }
 
+  // --- LÓGICA DE COMPRESSÃO ---
+  const handleSubmit = async (formData: FormData) => {
+      setIsCompressing(true)
+      try {
+          const logo = formData.get("logo") as File
+          if (logo && logo.size > 0 && logo.type.startsWith('image/')) {
+              const compressedLogo = await compressImage(logo)
+              formData.set("logo", compressedLogo)
+          }
+          formAction(formData)
+      } catch (error) {
+          console.error("Erro ao comprimir:", error)
+          formAction(formData)
+      } finally {
+          setIsCompressing(false)
+      }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      {/* Ajuste Dark Mode:
-        - dark:bg-zinc-950: Fundo do modal escuro
-        - dark:border-zinc-800: Bordas sutis no escuro
-      */}
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto dark:bg-zinc-950 dark:border-zinc-800" onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
@@ -225,7 +211,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           </DialogDescription>
         </DialogHeader>
 
-        <form action={action} className="space-y-6 mt-2">
+        <form action={handleSubmit} className="space-y-6 mt-2">
           
           <input type="hidden" name="latitude" value={latitude} />
           <input type="hidden" name="longitude" value={longitude} />
@@ -276,14 +262,11 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
               </div>
             </div>
             
-            {/* ENDEREÇO */}
-            {/* Ajuste Dark Mode: Fundo do container e borda */}
             <div className="bg-slate-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg p-4 space-y-4 mt-2 transition-colors">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <MapPin className="w-4 h-4" />
                     <span className="text-xs font-bold uppercase tracking-wide">Endereço da Loja</span>
                 </div>
-                {/* Inputs de Endereço */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="col-span-2 md:col-span-1 space-y-1">
                         <Label htmlFor="zipCode" className="text-xs dark:text-slate-400">CEP</Label>
@@ -299,8 +282,6 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                     <div className="col-span-2 space-y-1"><Label htmlFor="neighborhood" className="text-xs dark:text-slate-400">Bairro</Label><Input id="neighborhood" name="neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} required className="dark:bg-zinc-950 dark:border-zinc-700" /></div>
                     <div className="col-span-2 space-y-1"><Label htmlFor="complement" className="text-xs dark:text-slate-400">Complemento</Label><Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} className="dark:bg-zinc-950 dark:border-zinc-700" /></div>
                 </div>
-                
-                {/* Avisos de Coordenadas (Ajustados para Dark Mode) */}
                 {(!latitude || !longitude) && !isLoadingCep && (
                     <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded text-xs border border-amber-200 dark:border-amber-900/50 mt-2">
                         <Car className="w-4 h-4 shrink-0" />
@@ -408,8 +389,8 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           {state?.error && <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>}
           {state?.success && <Alert className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900/50 flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /><AlertDescription className="font-medium">{state.success}</AlertDescription></Alert>}
 
-          <Button type="submit" className="w-full" disabled={isPending || state?.success}>
-            {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : state?.success ? "Salvo!" : <><Save className="mr-2 h-4 w-4" /> Salvar Alterações</>}
+          <Button type="submit" className="w-full" disabled={isPending || isCompressing || state?.success}>
+            {isCompressing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Otimizando Imagem...</> : isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : state?.success ? "Salvo!" : <><Save className="mr-2 h-4 w-4" /> Salvar Alterações</>}
           </Button>
         </form>
       </DialogContent>
