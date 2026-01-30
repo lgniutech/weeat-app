@@ -124,7 +124,7 @@ const poppins = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'weMenu', // Mantido conforme seu código
+  title: 'weeat', // Mantido conforme seu código
   description: 'Gerencie seu restaurante com a melhor plataforma de delivery do mercado',
   icons: {
     // Configuração simplificada para usar apenas o favicon.png
