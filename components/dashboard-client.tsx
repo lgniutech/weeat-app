@@ -14,7 +14,8 @@ import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
 // Importação dos Módulos
 import { StoreAppearance } from "@/components/modules/store-appearance"
 import { MenuManager } from "@/components/modules/menu-manager"
-import { OrderManager } from "@/components/modules/order-manager" // <--- IMPORT NOVO
+import { OrderManager } from "@/components/modules/order-manager"
+import { TablesManager } from "@/components/modules/tables-manager" // <--- IMPORTANTE: Import do módulo de mesas
 import { AppearanceForm } from "@/components/settings/appearance-form"
 
 interface DashboardClientProps {
@@ -68,8 +69,10 @@ export default function DashboardClient({
 
   const renderContent = () => {
     switch (activeModule) {
-      case 'orders': // <--- CASE NOVO
+      case 'orders':
         return <OrderManager store={store} />
+      case 'tables': // <--- IMPORTANTE: Conecta o botão 'tables' ao componente TablesManager
+        return <TablesManager store={store} />
       case 'tema':
         return <AppearanceForm storeId={store?.id} />
       case 'store-appearance':
