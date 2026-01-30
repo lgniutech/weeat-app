@@ -25,7 +25,7 @@ function parseCurrency(value: string) {
 // --- 1. CRIAÇÃO DE LOJA ---
 export async function createStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
-  // ... (código de criação mantido igual ao anterior, pois o foco é update)
+  
   const fullName = formData.get("fullName") as string;
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
@@ -64,7 +64,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
 
     let logoUrl = "";
     if (logoFile && logoFile.size > 0) {
-      const fileExt = logoFile.name.split('.').pop();
+      const fileExt = logoFile.name.split('.').pop(); // O front mandará .webp
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('store-assets').upload(fileName, logoFile);
       if (!uploadError) {
@@ -87,6 +87,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       city,
       state,
       logo_url: logoUrl,
+      total_tables: 10, 
       settings: { 
         business_hours: businessHours ? JSON.parse(businessHours) : [],
         delivery_fee: 0,
@@ -104,7 +105,7 @@ export async function createStoreAction(prevState: any, formData: FormData) {
   redirect("/");
 }
 
-// --- 2. ATUALIZAÇÃO BÁSICA (AQUI FOI A CORREÇÃO PRINCIPAL) ---
+// --- 2. ATUALIZAÇÃO BÁSICA ---
 export async function updateStoreAction(prevState: any, formData: FormData) {
   const supabase = await createClient();
   
@@ -128,6 +129,9 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const deliveryFee = formData.get("deliveryFee") as string;
   const pricePerKm = formData.get("pricePerKm") as string;
   const minimumOrder = formData.get("minimumOrder") as string;
+
+  // NOVO CAMPO: Total de Mesas
+  const totalTables = formData.get("totalTables") as string;
 
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
@@ -153,11 +157,9 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
     const { data: currentStore } = await supabase.from("stores").select("settings").eq("owner_id", user.id).single();
     const currentSettings = currentStore?.settings || {};
 
-    // Lógica segura para converter lat/lng
     let finalLat = currentSettings.location?.lat;
     let finalLng = currentSettings.location?.lng;
 
-    // Se o formulário mandou algo que não seja vazio, usa o novo. Se vazio, mantemos o antigo (fallback) ou definimos null se quisermos limpar (mas manter é mais seguro para UX)
     if (latStr && latStr.trim() !== "") finalLat = parseFloat(latStr);
     if (lngStr && lngStr.trim() !== "") finalLng = parseFloat(lngStr);
 
@@ -185,6 +187,10 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       }
     };
 
+    if (totalTables) {
+        updateData.total_tables = parseInt(totalTables);
+    }
+
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
@@ -210,7 +216,7 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
-// ... (Resto das funções mantidas iguais)
+// --- 3. ATUALIZAÇÃO DE DESIGN (Mantida) ---
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
     const name = formData.get("name") as string;
@@ -248,6 +254,7 @@ export async function updateStoreDesignAction(prevState: any, formData: FormData
     return { success: "Loja atualizada com sucesso!" };
 }
 
+// --- 4. ATUALIZAÇÃO DE TEMA (Mantida) ---
 export async function updateStoreSettings(storeId: string, settings: { theme_mode?: string, theme_color?: string }) {
   const supabase = await createClient();
   try {
@@ -260,4 +267,25 @@ export async function updateStoreSettings(storeId: string, settings: { theme_mod
   } catch (error: any) {
     return { error: error.message };
   }
+}
+
+// --- 5. ATUALIZAÇÃO DE MESAS (Mantida) ---
+export async function updateStoreTablesAction(tableCount: number) {
+    const supabase = await createClient();
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { error: "Não autorizado" };
+        
+        const { error } = await supabase
+            .from("stores")
+            .update({ total_tables: tableCount })
+            .eq("owner_id", user.id);
+            
+        if (error) throw new Error(error.message);
+        
+        revalidatePath("/");
+        return { success: true };
+    } catch (error: any) {
+        return { error: "Erro ao salvar mesas: " + error.message };
+    }
 }

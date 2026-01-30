@@ -6,7 +6,6 @@ import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider"
 
 // Configuração da fonte Gate (Principal - Local)
-// AJUSTE: Mudei para '../fonts' pois a pasta está na raiz, fora de 'app'
 const gate = localFont({
   src: [
     {
@@ -125,27 +124,14 @@ const poppins = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'weeat', // Corrigido para a marca atual
+  title: 'weeat', // Mantido conforme seu código
   description: 'Gerencie seu restaurante com a melhor plataforma de delivery do mercado',
-  // generator: 'v0.dev', // Removido para limpar
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    // Configuração simplificada para usar apenas o favicon.png
+    icon: '/favicon.png',
+    apple: '/favicon.png',
   },
-    generator: 'update'
+  generator: 'update2'
 }
 
 export const viewport: Viewport = {
