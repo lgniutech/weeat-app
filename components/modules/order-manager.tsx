@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 
 const BASE_COLUMNS = [
@@ -69,7 +68,6 @@ export function OrderManager({ store }: { store: any }) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-        console.log("Auto-refreshing orders...")
         fetchOrders()
     }, 30000) 
     return () => clearInterval(interval)
@@ -97,9 +95,7 @@ export function OrderManager({ store }: { store: any }) {
         { event: 'UPDATE', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
         (payload) => {
            fetchOrders()
-           // Se o pedido aberto no modal for atualizado, atualiza o modal também
            if (viewOrder && payload.new.id === viewOrder.id) {
-               // Pequeno delay para garantir que o fetch pegue os dados novos
                setTimeout(async () => {
                    const dateStr = format(selectedDate, 'yyyy-MM-dd')
                    const data = await getStoreOrdersAction(store.id, dateStr)
@@ -114,9 +110,7 @@ export function OrderManager({ store }: { store: any }) {
     return () => { supabase.removeChannel(channel) }
   }, [store.id, soundEnabled, selectedDate, viewOrder])
 
-  // Função genérica de mover
   const moveOrder = async (orderId: string, nextStatus: string) => {
-    // Fecha o modal se estiver aberto e movemos o status
     if (viewOrder?.id === orderId) setViewOrder(null)
 
     const nowISO = new Date().toISOString()
@@ -126,13 +120,11 @@ export function OrderManager({ store }: { store: any }) {
     if (res?.error) fetchOrders()
   }
 
-  // Abre o modal de cancelamento
   const handleCancelClick = (orderId: string, e?: React.MouseEvent) => {
-      e?.stopPropagation() // Evita abrir o modal de detalhes
+      e?.stopPropagation()
       setOrderToCancel(orderId)
       setCancelReason("")
       setIsCancelOpen(true)
-      // Se estiver vendo detalhes, fecha
       setViewOrder(null) 
   }
 
@@ -150,7 +142,6 @@ export function OrderManager({ store }: { store: any }) {
       }
   }
 
-  // LÓGICA DE IMPRESSÃO TÉRMICA
   const handlePrint = (order: any) => {
       const w = window.open('', '_blank', 'width=400,height=600')
       if (!w) return
@@ -194,7 +185,7 @@ export function OrderManager({ store }: { store: any }) {
             <div>
                 <div class="bold">${order.customer_name}</div>
                 <div>${order.customer_phone}</div>
-                <div style="margin-top: 5px;">${order.delivery_type === 'entrega' ? `Entrega: ${order.address}` : 'RETIRADA NO BALCÃO'}</div>
+                <div style="margin-top: 5px;">${order.delivery_type === 'entrega' ? `Entrega: ${order.address}` : (order.delivery_type === 'mesa' ? `Mesa: ${order.table_number}` : 'RETIRADA NO BALCÃO')}</div>
             </div>
 
             <div class="divider"></div>
@@ -262,13 +253,11 @@ export function OrderManager({ store }: { store: any }) {
   const handleSetToday = () => setSelectedDate(new Date())
   const isFilterToday = isToday(selectedDate)
 
-  // Link WhatsApp
   const getWhatsappLink = (phone: string, name: string) => {
       const clean = phone.replace(/\D/g, "")
       return `https://wa.me/55${clean}?text=Olá ${name}, sobre seu pedido no ${store.name}...`
   }
 
-  // Link Maps
   const getMapsLink = (address: string) => {
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
   }
@@ -305,7 +294,14 @@ export function OrderManager({ store }: { store: any }) {
                  <div className={cn("h-7 px-3 flex items-center justify-center text-xs font-bold text-slate-700 rounded cursor-pointer transition-colors min-w-[90px] pointer-events-none select-none", !isFilterToday && "bg-white shadow-sm border border-slate-200/50 group-hover:bg-slate-50")}>
                     {format(selectedDate, 'dd/MM/yyyy')}
                  </div>
-                 <input type="date" className="full-picker-input z-10" value={format(selectedDate, 'yyyy-MM-dd')} onChange={handleDateChange} onClick={(e) => {try{e.currentTarget.showPicker()}catch(err){}}} />
+                 {/* CORREÇÃO AQUI: Adicionado opacity-0 e absolute para o input não duplicar o texto visualmente */}
+                 <input 
+                    type="date" 
+                    className="full-picker-input absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" 
+                    value={format(selectedDate, 'yyyy-MM-dd')} 
+                    onChange={handleDateChange} 
+                    onClick={(e) => {try{e.currentTarget.showPicker()}catch(err){}}} 
+                 />
              </div>
           </div>
         </div>
@@ -354,31 +350,39 @@ export function OrderManager({ store }: { store: any }) {
                                 return (
                                 <Card key={order.id} className={cn("shadow-[0_1px_2px_rgba(0,0,0,0.05)] border-0 rounded overflow-hidden group bg-white hover:ring-2 hover:ring-primary/50 transition-all cursor-pointer", isLongWait ? "ring-1 ring-red-200" : "")}>
                                     
-                                    {/* CLIQUE AQUI ABRE O MODAL */}
                                     <div onClick={() => setViewOrder(order)}>
-                                        {/* Linha Superior: ID, Cliente e Tempos */}
-                                        <div className="flex justify-between items-center bg-slate-50 px-2 py-1 border-b border-slate-100">
-                                            <div className="flex items-center gap-2 overflow-hidden">
-                                                <span className="font-mono font-bold text-[10px] text-slate-500 shrink-0">#{order.id.slice(0, 4)}</span>
-                                                <span className="text-[10px] font-bold text-slate-700 truncate max-w-[80px]" title={order.customer_name}>{order.customer_name.split(' ')[0]}</span>
+                                        {/* CABEÇALHO DO CARD (REDESENHADO) */}
+                                        <div className="flex justify-between items-start bg-slate-50 px-2 py-1.5 border-b border-slate-100">
+                                            
+                                            {/* Lado Esquerdo: ID, Hora e Nome */}
+                                            <div className="flex flex-col gap-0.5 overflow-hidden flex-1 mr-2">
+                                                <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                                     <span className="font-mono font-bold shrink-0">#{order.id.slice(0, 4)}</span>
+                                                     <div className="flex items-center gap-1 text-[9px] opacity-80" title="Horário do Pedido">
+                                                        <Clock className="w-2.5 h-2.5" /> {format(new Date(order.created_at), "HH:mm")}
+                                                     </div>
+                                                </div>
+                                                <span className="text-[11px] font-bold text-slate-800 truncate" title={order.customer_name}>
+                                                    {order.customer_name.split(' ')[0]}
+                                                </span>
                                             </div>
                                             
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                <div className="flex items-center gap-0.5 text-[9px] text-slate-400" title="Criado às">
-                                                    <Clock className="w-2.5 h-2.5" /> {format(new Date(order.created_at), "HH:mm")}
-                                                </div>
-
-                                                <div className={cn("flex items-center gap-0.5 text-[9px] font-bold px-1 rounded border", 
+                                            {/* Lado Direito: Tempo na Etapa e Botão Cancelar */}
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <div className={cn("flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border", 
                                                     isLongWait ? "bg-red-50 text-red-600 border-red-100 animate-pulse" : "bg-white text-slate-600 border-slate-100")} 
                                                     title={order.status === 'entregue' ? "Finalizado às" : "Tempo nesta etapa"}>
+                                                    
+                                                    {/* Label "Tempo:" adicionado */}
+                                                    <span className="font-normal text-slate-400 mr-1 hidden sm:inline">Tempo:</span>
+                                                    
                                                     {order.status === 'entregue' ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
                                                     {timeInStage}
                                                 </div>
                                                 
-                                                {/* Botão de Cancelar (Fora do clique do modal, via propagation stop) */}
                                                 {['pendente', 'preparando', 'enviado'].includes(order.status) && (
                                                     <button 
-                                                        className="text-slate-300 hover:text-red-500 transition-colors ml-0.5 p-0.5 rounded hover:bg-red-50" 
+                                                        className="text-slate-300 hover:text-red-500 transition-colors p-0.5 rounded hover:bg-red-50" 
                                                         onClick={(e) => handleCancelClick(order.id, e)}
                                                         title="Cancelar Pedido"
                                                     >
@@ -389,7 +393,7 @@ export function OrderManager({ store }: { store: any }) {
                                         </div>
 
                                         {/* Conteúdo: Itens Compactos */}
-                                        <div className="px-2 py-1.5 space-y-0.5 pointer-events-none"> {/* pointer-events-none para garantir que o click vá para o container pai */}
+                                        <div className="px-2 py-1.5 space-y-0.5 pointer-events-none">
                                             {order.status === 'cancelado' && order.cancellation_reason && (
                                                 <div className="bg-red-50 text-red-700 p-1 rounded text-[10px] mb-1 flex items-start gap-1">
                                                     <MessageSquareWarning className="w-3 h-3 shrink-0 mt-0.5" />
@@ -418,15 +422,17 @@ export function OrderManager({ store }: { store: any }) {
                                             
                                             <div className="flex justify-between items-center pt-1.5 mt-0.5 border-t border-dashed border-slate-100">
                                                 <div className="flex items-center gap-1 text-[9px] text-slate-400 max-w-[60%]">
-                                                    {order.delivery_type === 'entrega' ? <Bike className="w-2.5 h-2.5 shrink-0" /> : <Store className="w-2.5 h-2.5 shrink-0" />}
+                                                    {order.delivery_type === 'entrega' ? <Bike className="w-2.5 h-2.5 shrink-0" /> : (order.delivery_type === 'mesa' ? <UtensilsIcon className="w-2.5 h-2.5 shrink-0" /> : <Store className="w-2.5 h-2.5 shrink-0" />)}
                                                     {order.delivery_type === 'entrega' && <span className="truncate">{order.address}</span>}
+                                                    {order.delivery_type === 'mesa' && <span className="truncate font-bold text-blue-600">Mesa {order.table_number}</span>}
+                                                    {order.delivery_type === 'retirada' && <span className="truncate">Balcão</span>}
                                                 </div>
                                                 <span className="text-[10px] font-bold text-slate-900 bg-slate-100 px-1 rounded">{formatCurrency(order.total_price)}</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Botões de Ação (Abaixo, fora do clique de detalhes) */}
+                                    {/* Botões de Ação */}
                                     {col.id === 'pendente' && (
                                         <div className="grid grid-cols-2 h-6 mt-px">
                                             <button onClick={(e) => handleCancelClick(order.id, e)} className="bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 text-[10px] font-bold border-t border-r border-slate-100 transition-colors">RECUSAR</button>
@@ -493,7 +499,7 @@ export function OrderManager({ store }: { store: any }) {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL DE DETALHES DO PEDIDO (OTIMIZAÇÃO) */}
+      {/* MODAL DE DETALHES DO PEDIDO */}
       <Dialog open={!!viewOrder} onOpenChange={(open) => !open && setViewOrder(null)}>
          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
              {viewOrder && (
@@ -517,7 +523,6 @@ export function OrderManager({ store }: { store: any }) {
                     </DialogHeader>
 
                     <div className="grid md:grid-cols-2 gap-6 py-4">
-                        {/* Lado Esquerdo: Cliente e Entrega */}
                         <div className="space-y-6">
                              <div className="space-y-2">
                                  <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Phone className="w-4 h-4" /> Cliente</h4>
@@ -534,8 +539,8 @@ export function OrderManager({ store }: { store: any }) {
 
                              <div className="space-y-2">
                                  <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                                     {viewOrder.delivery_type === 'entrega' ? <Bike className="w-4 h-4" /> : <Store className="w-4 h-4" />} 
-                                     {viewOrder.delivery_type === 'entrega' ? 'Endereço de Entrega' : 'Retirada'}
+                                     {viewOrder.delivery_type === 'entrega' ? <Bike className="w-4 h-4" /> : (viewOrder.delivery_type === 'mesa' ? <UtensilsIcon className="w-4 h-4" /> : <Store className="w-4 h-4" />)} 
+                                     {viewOrder.delivery_type === 'entrega' ? 'Endereço de Entrega' : (viewOrder.delivery_type === 'mesa' ? 'Mesa' : 'Retirada')}
                                  </h4>
                                  <div className="bg-slate-50 p-3 rounded-lg border">
                                      {viewOrder.delivery_type === 'entrega' ? (
@@ -545,8 +550,9 @@ export function OrderManager({ store }: { store: any }) {
                                                 <ExternalLink className="w-3 h-3" /> Abrir no Maps
                                             </a>
                                          </>
-                                     ) : (
-                                         <p className="text-sm font-medium text-slate-700">Cliente irá retirar no balcão.</p>
+                                     ) : (viewOrder.delivery_type === 'mesa' ? 
+                                        <p className="text-sm font-medium text-slate-700">Mesa {viewOrder.table_number}</p>
+                                      : <p className="text-sm font-medium text-slate-700">Cliente irá retirar no balcão.</p>
                                      )}
                                  </div>
                              </div>
@@ -566,7 +572,6 @@ export function OrderManager({ store }: { store: any }) {
                              </div>
                         </div>
 
-                        {/* Lado Direito: Itens */}
                         <div className="space-y-2">
                             <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Itens do Pedido</h4>
                             <div className="border rounded-lg divide-y max-h-[400px] overflow-y-auto">
@@ -604,7 +609,6 @@ export function OrderManager({ store }: { store: any }) {
                     </div>
 
                     <DialogFooter className="flex flex-col sm:flex-row gap-2 border-t pt-4">
-                        {/* Ações baseadas no status */}
                         {viewOrder.status === 'pendente' && (
                             <>
                                 <Button variant="destructive" className="flex-1" onClick={() => handleCancelClick(viewOrder.id)}>Recusar Pedido</Button>
@@ -631,3 +635,24 @@ export function OrderManager({ store }: { store: any }) {
     </div>
   )
 }
+
+function UtensilsIcon(props: any) {
+    return (
+      <svg
+        {...props}
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+        <path d="M7 2v20" />
+        <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
+      </svg>
+    )
+  }
