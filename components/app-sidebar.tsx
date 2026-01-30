@@ -45,7 +45,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { logoutAction } from "@/app/actions/auth"
 
-// --- IDs Atualizados para incluir 'tables' ---
 const navigationItems = [
   {
     title: "Dashboard",
@@ -59,7 +58,6 @@ const navigationItems = [
     id: "operacao",
     items: [
       { title: "Gestão de Pedidos", url: "#", badge: "12", id: "orders" },
-      // Adicionado ID 'tables' para funcionar a navegação
       { title: "Mesas & QR Code", url: "#", icon: QrCode, id: "tables" }, 
       { title: "Tela da Cozinha", url: "#", icon: ChefHat },
     ],
@@ -90,7 +88,8 @@ const navigationItems = [
     id: "financeiro",
     items: [
       { title: "Fluxo de Caixa", url: "#" },
-      { title: "Relatórios Detalhados", url: "#", icon: BarChart3 },
+      // ADICIONADO ID: financial
+      { title: "Relatórios Detalhados", url: "#", icon: BarChart3, id: "financial" }, 
       { title: "Entregadores & Fretes", url: "#" },
     ],
   },
@@ -124,7 +123,7 @@ export function AppSidebar({
   userName, 
   userEmail 
 }: AppSidebarProps) {
-  const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes"]) // Deixei 'operacao' aberto por padrão
+  const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes", "financeiro"]) 
   const { state, setOpen } = useSidebar()
 
   const getInitials = (name: string) => {
