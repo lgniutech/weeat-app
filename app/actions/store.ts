@@ -87,7 +87,6 @@ export async function createStoreAction(prevState: any, formData: FormData) {
       city,
       state,
       logo_url: logoUrl,
-      // Adicionado total_tables padrão na criação
       total_tables: 10, 
       settings: { 
         business_hours: businessHours ? JSON.parse(businessHours) : [],
@@ -130,9 +129,6 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   const deliveryFee = formData.get("deliveryFee") as string;
   const pricePerKm = formData.get("pricePerKm") as string;
   const minimumOrder = formData.get("minimumOrder") as string;
-
-  // NOVO CAMPO: Total de Mesas
-  const totalTables = formData.get("totalTables") as string;
 
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
@@ -188,11 +184,6 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
       }
     };
 
-    // Atualiza quantidade de mesas se vier no formulário
-    if (totalTables) {
-        updateData.total_tables = parseInt(totalTables);
-    }
-
     if (logoFile && logoFile.size > 0) {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
@@ -218,7 +209,6 @@ export async function updateStoreAction(prevState: any, formData: FormData) {
   return { success: "Dados atualizados com sucesso!" };
 }
 
-// ... (Manter resto das funções auxiliares se houver, ou apenas fechar o arquivo aqui se não houver mais nada)
 export async function updateStoreDesignAction(prevState: any, formData: FormData) {
     const supabase = await createClient();
     const name = formData.get("name") as string;
@@ -268,4 +258,25 @@ export async function updateStoreSettings(storeId: string, settings: { theme_mod
   } catch (error: any) {
     return { error: error.message };
   }
+}
+
+// --- NOVA FUNÇÃO SEGURA PARA ATUALIZAR MESAS ---
+export async function updateStoreTablesAction(tableCount: number) {
+    const supabase = await createClient();
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { error: "Não autorizado" };
+        
+        const { error } = await supabase
+            .from("stores")
+            .update({ total_tables: tableCount })
+            .eq("owner_id", user.id);
+            
+        if (error) throw new Error(error.message);
+        
+        revalidatePath("/");
+        return { success: true };
+    } catch (error: any) {
+        return { error: "Erro ao salvar mesas: " + error.message };
+    }
 }
