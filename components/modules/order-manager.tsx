@@ -374,7 +374,7 @@ export function OrderManager({ store }: { store: any }) {
                                                     title={order.status === 'entregue' ? "Finalizado às" : "Tempo nesta etapa"}>
                                                     
                                                     {/* Label "Tempo:" adicionado */}
-                                                    <span className="font-normal text-slate-400 mr-1 hidden sm:inline">Tempo:</span>
+                                                    <span className="font-normal text-slate-400 mr-1 hidden sm:inline">Tempo na Etapa:</span>
                                                     
                                                     {order.status === 'entregue' ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
                                                     {timeInStage}
