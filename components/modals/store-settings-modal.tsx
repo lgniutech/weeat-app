@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Loader2, Save, Store, Phone, FileText, Clock, User, Lock, Settings, MapPin, DollarSign, CheckCircle2, Car } from "lucide-react"
+import { Loader2, Save, Store, Phone, Clock, User, Settings, MapPin, DollarSign, CheckCircle2, Car } from "lucide-react"
 
 interface StoreSettingsModalProps {
   store: any
@@ -47,7 +47,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
   const [uf, setUf] = useState("")
   const [isLoadingCep, setIsLoadingCep] = useState(false)
   
-  // Coordenadas (Inicializadas explicitamente como string vazia)
+  // Coordenadas
   const [latitude, setLatitude] = useState<string>("")
   const [longitude, setLongitude] = useState<string>("")
 
@@ -93,7 +93,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
       setPricePerKm(settings.price_per_km !== undefined ? formatCurrency(settings.price_per_km) : "")
       setMinimumOrder(settings.minimum_order !== undefined ? formatCurrency(settings.minimum_order) : "")
       
-      // Carrega Geolocalização Salva (Proteção robusta contra undefined/null)
+      // Carrega Geolocalização Salva
       if (settings.location && settings.location.lat && settings.location.lng) {
           setLatitude(String(settings.location.lat))
           setLongitude(String(settings.location.lng))
@@ -138,7 +138,6 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           setUf(data.uf)
           
           // 2. Busca Coordenadas (Para cálculo de KM)
-          // Monta query precisa
           const query = `${data.logradouro}, ${data.localidade}, ${data.uf}, Brasil`
           const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
           const geoData = await geoRes.json()
@@ -155,7 +154,6 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                    setLatitude(String(cepGeoData[0].lat))
                    setLongitude(String(cepGeoData[0].lon))
                } else {
-                   // Se não achou nada, limpa para evitar dados errados
                    setLatitude("")
                    setLongitude("")
                }
@@ -212,71 +210,75 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" onInteractOutside={e => e.preventDefault()}>
+      {/* Ajuste Dark Mode:
+        - dark:bg-zinc-950: Fundo do modal escuro
+        - dark:border-zinc-800: Bordas sutis no escuro
+      */}
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto dark:bg-zinc-950 dark:border-zinc-800" onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
             <Settings className="w-6 h-6 text-primary" />
           </div>
-          <DialogTitle className="text-center">Configurações & Perfil</DialogTitle>
-          <DialogDescription className="text-center">
+          <DialogTitle className="text-center dark:text-slate-100">Configurações & Perfil</DialogTitle>
+          <DialogDescription className="text-center dark:text-slate-400">
             Gerencie dados, endereço e regras de entrega.
           </DialogDescription>
         </DialogHeader>
 
         <form action={action} className="space-y-6 mt-2">
           
-          {/* Inputs Ocultos para Geolocalização (O 'value' nunca é null/undefined aqui) */}
           <input type="hidden" name="latitude" value={latitude} />
           <input type="hidden" name="longitude" value={longitude} />
 
           {/* SEÇÃO 1: PERFIL */}
           <div className="space-y-4">
-             <div className="flex items-center gap-2 pb-2 border-b">
+             <div className="flex items-center gap-2 pb-2 border-b dark:border-zinc-800">
               <User className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Perfil e Segurança</h3>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fullName">Seu Nome</Label>
-              <Input id="fullName" name="fullName" defaultValue={userName} required />
+              <Label htmlFor="fullName" className="dark:text-slate-300">Seu Nome</Label>
+              <Input id="fullName" name="fullName" defaultValue={userName} required className="dark:bg-zinc-900 dark:border-zinc-700" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div className="space-y-2">
-                <Label htmlFor="password">Nova Senha</Label>
-                <Input id="password" name="password" type="password" placeholder="********" />
+                <Label htmlFor="password" className="dark:text-slate-300">Nova Senha</Label>
+                <Input id="password" name="password" type="password" placeholder="********" className="dark:bg-zinc-900 dark:border-zinc-700" />
                </div>
                <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-                <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="********" />
+                <Label htmlFor="confirmPassword" className="dark:text-slate-300">Confirmar Senha</Label>
+                <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="********" className="dark:bg-zinc-900 dark:border-zinc-700" />
                </div>
             </div>
           </div>
 
           {/* SEÇÃO 2: LOJA E ENDEREÇO */}
           <div className="space-y-4">
-             <div className="flex items-center gap-2 pb-2 border-b">
+             <div className="flex items-center gap-2 pb-2 border-b dark:border-zinc-800">
               <Store className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Loja e Endereço</h3>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="name">Nome da Loja</Label>
-              <Input id="name" name="name" defaultValue={store?.name} required />
+              <Label htmlFor="name" className="dark:text-slate-300">Nome da Loja</Label>
+              <Input id="name" name="name" defaultValue={store?.name} required className="dark:bg-zinc-900 dark:border-zinc-700" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="cnpj">CNPJ</Label>
-                <Input id="cnpj" name="cnpj" value={cnpj} onChange={handleCnpjChange} disabled />
+                <Label htmlFor="cnpj" className="dark:text-slate-300">CNPJ</Label>
+                <Input id="cnpj" name="cnpj" value={cnpj} onChange={handleCnpjChange} disabled className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-slate-400" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="whatsapp">WhatsApp</Label>
-                <Input id="whatsapp" name="whatsapp" value={phone} onChange={handlePhoneChange} required />
+                <Label htmlFor="whatsapp" className="dark:text-slate-300">WhatsApp</Label>
+                <Input id="whatsapp" name="whatsapp" value={phone} onChange={handlePhoneChange} required className="dark:bg-zinc-900 dark:border-zinc-700" />
               </div>
             </div>
             
             {/* ENDEREÇO */}
-            <div className="bg-slate-50 border rounded-lg p-4 space-y-4 mt-2">
+            {/* Ajuste Dark Mode: Fundo do container e borda */}
+            <div className="bg-slate-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg p-4 space-y-4 mt-2 transition-colors">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <MapPin className="w-4 h-4" />
                     <span className="text-xs font-bold uppercase tracking-wide">Endereço da Loja</span>
@@ -284,29 +286,29 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                 {/* Inputs de Endereço */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="col-span-2 md:col-span-1 space-y-1">
-                        <Label htmlFor="zipCode" className="text-xs">CEP</Label>
+                        <Label htmlFor="zipCode" className="text-xs dark:text-slate-400">CEP</Label>
                         <div className="relative">
-                            <Input id="zipCode" name="zipCode" value={zipCode} onChange={handleCepChange} onBlur={handleCepBlur} placeholder="00000-000" required />
+                            <Input id="zipCode" name="zipCode" value={zipCode} onChange={handleCepChange} onBlur={handleCepBlur} placeholder="00000-000" required className="dark:bg-zinc-950 dark:border-zinc-700" />
                             {isLoadingCep && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-primary" />}
                         </div>
                     </div>
-                    <div className="col-span-2 md:col-span-2 space-y-1"><Label htmlFor="city" className="text-xs">Cidade</Label><Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} readOnly className="bg-muted"/></div>
-                    <div className="col-span-2 md:col-span-1 space-y-1"><Label htmlFor="state" className="text-xs">UF</Label><Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} readOnly className="bg-muted"/></div>
-                    <div className="col-span-2 md:col-span-3 space-y-1"><Label htmlFor="street" className="text-xs">Logradouro</Label><Input id="street" name="street" value={street} onChange={e => setStreet(e.target.value)} required /></div>
-                    <div className="col-span-2 md:col-span-1 space-y-1"><Label htmlFor="number" className="text-xs">Número</Label><Input id="number" name="number" value={number} onChange={e => setNumber(e.target.value)} required /></div>
-                    <div className="col-span-2 space-y-1"><Label htmlFor="neighborhood" className="text-xs">Bairro</Label><Input id="neighborhood" name="neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} required /></div>
-                    <div className="col-span-2 space-y-1"><Label htmlFor="complement" className="text-xs">Complemento</Label><Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} /></div>
+                    <div className="col-span-2 md:col-span-2 space-y-1"><Label htmlFor="city" className="text-xs dark:text-slate-400">Cidade</Label><Input id="city" name="city" value={city} onChange={e => setCity(e.target.value)} readOnly className="bg-muted dark:bg-zinc-800 dark:border-zinc-700"/></div>
+                    <div className="col-span-2 md:col-span-1 space-y-1"><Label htmlFor="state" className="text-xs dark:text-slate-400">UF</Label><Input id="state" name="state" value={uf} onChange={e => setUf(e.target.value)} readOnly className="bg-muted dark:bg-zinc-800 dark:border-zinc-700"/></div>
+                    <div className="col-span-2 md:col-span-3 space-y-1"><Label htmlFor="street" className="text-xs dark:text-slate-400">Logradouro</Label><Input id="street" name="street" value={street} onChange={e => setStreet(e.target.value)} required className="dark:bg-zinc-950 dark:border-zinc-700" /></div>
+                    <div className="col-span-2 md:col-span-1 space-y-1"><Label htmlFor="number" className="text-xs dark:text-slate-400">Número</Label><Input id="number" name="number" value={number} onChange={e => setNumber(e.target.value)} required className="dark:bg-zinc-950 dark:border-zinc-700" /></div>
+                    <div className="col-span-2 space-y-1"><Label htmlFor="neighborhood" className="text-xs dark:text-slate-400">Bairro</Label><Input id="neighborhood" name="neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} required className="dark:bg-zinc-950 dark:border-zinc-700" /></div>
+                    <div className="col-span-2 space-y-1"><Label htmlFor="complement" className="text-xs dark:text-slate-400">Complemento</Label><Input id="complement" name="complement" value={complement} onChange={e => setComplement(e.target.value)} className="dark:bg-zinc-950 dark:border-zinc-700" /></div>
                 </div>
                 
-                {/* Avisos de Coordenadas */}
+                {/* Avisos de Coordenadas (Ajustados para Dark Mode) */}
                 {(!latitude || !longitude) && !isLoadingCep && (
-                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-2 rounded text-xs border border-amber-200 mt-2">
+                    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded text-xs border border-amber-200 dark:border-amber-900/50 mt-2">
                         <Car className="w-4 h-4 shrink-0" />
                         <span>Atenção: Digite o CEP novamente para atualizar a localização da entrega.</span>
                     </div>
                 )}
                 {latitude && longitude && (
-                    <div className="flex items-center gap-2 text-green-600 bg-green-50 p-2 rounded text-xs border border-green-200 mt-2">
+                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-2 rounded text-xs border border-green-200 dark:border-green-900/50 mt-2">
                         <CheckCircle2 className="w-4 h-4 shrink-0" />
                         <span>Localização da loja identificada com sucesso!</span>
                     </div>
@@ -314,32 +316,32 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="logo">Logotipo</Label>
-              <Input id="logo" name="logo" type="file" accept="image/*" className="cursor-pointer text-sm" />
+              <Label htmlFor="logo" className="dark:text-slate-300">Logotipo</Label>
+              <Input id="logo" name="logo" type="file" accept="image/*" className="cursor-pointer text-sm dark:bg-zinc-900 dark:border-zinc-700" />
             </div>
           </div>
 
           {/* SEÇÃO 3: REGRAS DE PEDIDO E ENTREGA */}
-          <div className="bg-slate-50 border rounded-lg p-4 space-y-4">
+          <div className="bg-slate-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg p-4 space-y-4 transition-colors">
                 <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <DollarSign className="w-4 h-4" />
                     <span className="text-xs font-bold uppercase tracking-wide">Regras de Pedido & Entrega</span>
                 </div>
 
                 <div className="space-y-3">
-                    <Label>Como você cobra a entrega?</Label>
+                    <Label className="dark:text-slate-300">Como você cobra a entrega?</Label>
                     <RadioGroup defaultValue={deliveryFeeMode} name="deliveryFeeMode" onValueChange={setDeliveryFeeMode} className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="flex items-center space-x-2 border p-3 rounded-lg bg-white">
+                        <div className="flex items-center space-x-2 border dark:border-zinc-700 p-3 rounded-lg bg-white dark:bg-zinc-950">
                             <RadioGroupItem value="fixed" id="mode-fixed" />
-                            <Label htmlFor="mode-fixed" className="cursor-pointer font-normal">Valor Fixo</Label>
+                            <Label htmlFor="mode-fixed" className="cursor-pointer font-normal dark:text-slate-300">Valor Fixo</Label>
                         </div>
-                        <div className="flex items-center space-x-2 border p-3 rounded-lg bg-white">
+                        <div className="flex items-center space-x-2 border dark:border-zinc-700 p-3 rounded-lg bg-white dark:bg-zinc-950">
                             <RadioGroupItem value="per_km" id="mode-km" />
-                            <Label htmlFor="mode-km" className="cursor-pointer font-normal">Por Km</Label>
+                            <Label htmlFor="mode-km" className="cursor-pointer font-normal dark:text-slate-300">Por Km</Label>
                         </div>
-                         <div className="flex items-center space-x-2 border p-3 rounded-lg bg-white">
+                         <div className="flex items-center space-x-2 border dark:border-zinc-700 p-3 rounded-lg bg-white dark:bg-zinc-950">
                             <RadioGroupItem value="fixed_plus_km" id="mode-hybrid" />
-                            <Label htmlFor="mode-hybrid" className="cursor-pointer font-normal">Fixo + Km</Label>
+                            <Label htmlFor="mode-hybrid" className="cursor-pointer font-normal dark:text-slate-300">Fixo + Km</Label>
                         </div>
                     </RadioGroup>
                 </div>
@@ -347,30 +349,30 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {(deliveryFeeMode === 'fixed' || deliveryFeeMode === 'fixed_plus_km') && (
                          <div className="space-y-2 animate-in fade-in zoom-in-95">
-                            <Label htmlFor="deliveryFee">Taxa Fixa</Label>
+                            <Label htmlFor="deliveryFee" className="dark:text-slate-300">Taxa Fixa</Label>
                             <div className="relative">
                                 <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
-                                <Input id="deliveryFee" name="deliveryFee" value={deliveryFee} onChange={(e) => handleCurrencyInput(e, setDeliveryFee)} className="pl-9" placeholder="0,00" />
+                                <Input id="deliveryFee" name="deliveryFee" value={deliveryFee} onChange={(e) => handleCurrencyInput(e, setDeliveryFee)} className="pl-9 dark:bg-zinc-950 dark:border-zinc-700" placeholder="0,00" />
                             </div>
                         </div>
                     )}
 
                     {(deliveryFeeMode === 'per_km' || deliveryFeeMode === 'fixed_plus_km') && (
                         <div className="space-y-2 animate-in fade-in zoom-in-95">
-                            <Label htmlFor="pricePerKm">Preço por Km</Label>
+                            <Label htmlFor="pricePerKm" className="dark:text-slate-300">Preço por Km</Label>
                             <div className="relative">
                                 <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
-                                <Input id="pricePerKm" name="pricePerKm" value={pricePerKm} onChange={(e) => handleCurrencyInput(e, setPricePerKm)} className="pl-9" placeholder="0,00" />
+                                <Input id="pricePerKm" name="pricePerKm" value={pricePerKm} onChange={(e) => handleCurrencyInput(e, setPricePerKm)} className="pl-9 dark:bg-zinc-950 dark:border-zinc-700" placeholder="0,00" />
                             </div>
                             <p className="text-[10px] text-muted-foreground">Distância calculada em linha reta.</p>
                         </div>
                     )}
 
                     <div className="space-y-2">
-                        <Label htmlFor="minimumOrder">Pedido Mínimo</Label>
+                        <Label htmlFor="minimumOrder" className="dark:text-slate-300">Pedido Mínimo</Label>
                         <div className="relative">
                             <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
-                            <Input id="minimumOrder" name="minimumOrder" value={minimumOrder} onChange={(e) => handleCurrencyInput(e, setMinimumOrder)} className="pl-9" placeholder="0,00" />
+                            <Input id="minimumOrder" name="minimumOrder" value={minimumOrder} onChange={(e) => handleCurrencyInput(e, setMinimumOrder)} className="pl-9 dark:bg-zinc-950 dark:border-zinc-700" placeholder="0,00" />
                         </div>
                     </div>
                 </div>
@@ -378,24 +380,24 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
 
           {/* SEÇÃO 4: HORÁRIOS */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b">
+            <div className="flex items-center gap-2 pb-2 border-b dark:border-zinc-800">
               <Clock className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Horários</h3>
             </div>
             <input type="hidden" name="businessHours" value={JSON.stringify(hours)} />
             
-            <div className="bg-muted/30 border rounded-lg p-3 space-y-2">
+            <div className="bg-muted/30 dark:bg-zinc-900/50 border dark:border-zinc-800 rounded-lg p-3 space-y-2">
               {hours.map((day, index) => (
                 <div key={index} className="flex items-center justify-between gap-2 text-sm">
                   <div className="flex items-center gap-3 w-32">
                     <Switch checked={day.active} onCheckedChange={() => toggleDay(index)} className="scale-75" />
-                    <span className={day.active ? "font-medium" : "text-muted-foreground"}>{day.day}</span>
+                    <span className={day.active ? "font-medium dark:text-slate-200" : "text-muted-foreground"}>{day.day}</span>
                   </div>
                   {day.active ? (
                     <div className="flex items-center gap-2 flex-1 justify-end">
-                      <Input type="time" value={day.open} onChange={(e) => updateTime(index, 'open', e.target.value)} className="w-20 h-7 text-xs p-1" />
+                      <Input type="time" value={day.open} onChange={(e) => updateTime(index, 'open', e.target.value)} className="w-20 h-7 text-xs p-1 dark:bg-zinc-950 dark:border-zinc-700" />
                       <span className="text-muted-foreground text-xs">-</span>
-                      <Input type="time" value={day.close} onChange={(e) => updateTime(index, 'close', e.target.value)} className="w-20 h-7 text-xs p-1" />
+                      <Input type="time" value={day.close} onChange={(e) => updateTime(index, 'close', e.target.value)} className="w-20 h-7 text-xs p-1 dark:bg-zinc-950 dark:border-zinc-700" />
                     </div>
                   ) : <span className="text-muted-foreground text-xs flex-1 text-right pr-2">Fechado</span>}
                 </div>
@@ -404,7 +406,7 @@ export function StoreSettingsModal({ store, userName, isOpen, onOpenChange }: St
           </div>
 
           {state?.error && <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>}
-          {state?.success && <Alert className="bg-green-50 text-green-700 border-green-200 flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /><AlertDescription className="font-medium">{state.success}</AlertDescription></Alert>}
+          {state?.success && <Alert className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900/50 flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /><AlertDescription className="font-medium">{state.success}</AlertDescription></Alert>}
 
           <Button type="submit" className="w-full" disabled={isPending || state?.success}>
             {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : state?.success ? "Salvo!" : <><Save className="mr-2 h-4 w-4" /> Salvar Alterações</>}
