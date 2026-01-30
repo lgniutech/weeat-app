@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link" 
-import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, Loader2, Package, Clock, ChevronRight, Ban, AlertCircle, Trash2, ArrowRight } from "lucide-react" 
+import { useSearchParams } from "next/navigation" // IMPORT NOVO
+import { ShoppingBag, Search, X, Check, MessageSquare, Plus, Bike, Store, MapPin, Loader2, Package, Clock, ChevronRight, Ban, AlertCircle, Trash2, ArrowRight, Utensils, Wallet } from "lucide-react" 
 import { Button } from "@/components/ui/button"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -41,20 +42,22 @@ interface CartItem extends Product {
 interface CheckoutData {
     name: string
     phone: string
-    deliveryType: "entrega" | "retirada"
+    deliveryType: "entrega" | "retirada" | "mesa" // Adicionado "mesa"
+    tableNumber?: string // Adicionado tableNumber
     cep: string
     street: string
     number: string
     neighborhood: string
     city: string
     complement: string
-    paymentMethod: "pix" | "cartao" | "dinheiro"
+    paymentMethod: "pix" | "cartao" | "dinheiro" | "caixa" // Adicionado "caixa"
     changeFor: string
 }
 
 export function StoreFront({ store, categories }: { store: any, categories: any[] }) {
   // Estado de montagem para evitar Hydration Error com localStorage
   const [isMounted, setIsMounted] = useState(false)
+  const searchParams = useSearchParams() // Hook para ler URL
   
   const [cart, setCart] = useState<CartItem[]>([])
   const [isCartOpen, setIsCartOpen] = useState(false)
@@ -62,12 +65,16 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isInfoOpen, setIsInfoOpen] = useState(false)
   
+  // Detecção de Mesa (Query Param ?mesa=X)
+  const tableParam = searchParams.get("mesa")
+  const isTableSession = !!tableParam
+
   // Checkout States
   const [step, setStep] = useState<"cart" | "checkout" | "success">("cart")
   const [checkoutData, setCheckoutData] = useState<CheckoutData>({
-    name: "", phone: "", deliveryType: "entrega", 
+    name: "", phone: "", deliveryType: isTableSession ? "mesa" : "entrega", tableNumber: tableParam || "",
     cep: "", street: "", number: "", neighborhood: "", city: "", complement: "",
-    paymentMethod: "pix", changeFor: ""
+    paymentMethod: isTableSession ? "caixa" : "pix", changeFor: ""
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingCep, setIsLoadingCep] = useState(false)
@@ -97,7 +104,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const storeLat = settings.location?.lat ? Number(settings.location.lat) : null
   const storeLng = settings.location?.lng ? Number(settings.location.lng) : null
 
-  // 1. CARREGAR CARRINHO DO LOCALSTORAGE (Apenas no cliente)
+  // 1. CARREGAR CARRINHO DO LOCALSTORAGE
   useEffect(() => {
     setIsMounted(true)
     const savedCart = localStorage.getItem(`cart-${store.id}`)
@@ -108,20 +115,24 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     if (savedData) {
         try { 
             const parsed = JSON.parse(savedData)
-            // Mantemos o endereço salvo, mas resetamos o pagamento para segurança
-            setCheckoutData(prev => ({ ...prev, ...parsed, paymentMethod: "pix", changeFor: "" })) 
+            // Se estiver em modo mesa, força os dados de mesa, senão usa o salvo
+            if (isTableSession) {
+                setCheckoutData(prev => ({ ...prev, name: parsed.name, phone: parsed.phone, deliveryType: "mesa", tableNumber: tableParam!, paymentMethod: "caixa" }))
+            } else {
+                setCheckoutData(prev => ({ ...prev, ...parsed, paymentMethod: "pix", changeFor: "" })) 
+            }
         } catch (e) {}
     }
-  }, [store.id])
+  }, [store.id, isTableSession, tableParam])
 
-  // 2. SALVAR CARRINHO NO LOCALSTORAGE
+  // 2. SALVAR CARRINHO
   useEffect(() => {
     if (isMounted) {
         localStorage.setItem(`cart-${store.id}`, JSON.stringify(cart))
     }
   }, [cart, isMounted, store.id])
 
-  // 3. SALVAR DADOS PESSOAIS (exceto sensíveis)
+  // 3. SALVAR DADOS PESSOAIS
   useEffect(() => {
       if (isMounted) {
           const { paymentMethod, changeFor, ...safeData } = checkoutData
@@ -135,9 +146,9 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     return () => clearInterval(interval)
   }, [banners.length])
 
-  // Recalcula taxa
+  // Recalcula taxa (ignora se for mesa ou retirada)
   useEffect(() => {
-      if (checkoutData.deliveryType === 'retirada') {
+      if (checkoutData.deliveryType === 'retirada' || checkoutData.deliveryType === 'mesa') {
           setCalculatedFee(0)
           setCalcStatus("")
           return
@@ -215,7 +226,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     }
     setCart(prev => [...prev, newItem])
     setSelectedProduct(null)
-    // Pequeno feedback tátil/visual poderia ser adicionado aqui
   }
 
   const removeFromCart = (cartId: string) => setCart(prev => prev.filter(item => item.cartId !== cartId))
@@ -301,11 +311,17 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const cartSubtotal = cart.reduce((acc, item) => acc + (item.totalPrice * item.quantity), 0)
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0)
   const finalTotal = cartSubtotal + calculatedFee
-  const remainingForMinimum = Math.max(0, minimumOrder - cartSubtotal)
-  const isBelowMinimum = cartSubtotal < minimumOrder
+  // Se for mesa, não tem pedido mínimo
+  const remainingForMinimum = isTableSession ? 0 : Math.max(0, minimumOrder - cartSubtotal)
+  const isBelowMinimum = isTableSession ? false : cartSubtotal < minimumOrder
 
   const handleFinishOrder = async () => {
-    if (!checkoutData.name || !checkoutData.phone) return alert("Preencha nome e telefone.")
+    // Validação Simplificada para Mesa
+    if (isTableSession) {
+        if (!checkoutData.name) return alert("Por favor, informe seu nome para identificarmos o pedido.")
+    } else {
+        if (!checkoutData.name || !checkoutData.phone) return alert("Preencha nome e telefone.")
+    }
     
     let fullAddress = ""
     if (checkoutData.deliveryType === 'entrega') {
@@ -318,8 +334,10 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
             }
         }
         fullAddress = `${checkoutData.street}, ${checkoutData.number} - ${checkoutData.neighborhood}, ${checkoutData.city}. CEP: ${checkoutData.cep}. ${checkoutData.complement}`
-    } else {
+    } else if (checkoutData.deliveryType === 'retirada') {
         fullAddress = "Retirada no Balcão"
+    } else {
+        fullAddress = `Mesa ${checkoutData.tableNumber}`
     }
 
     setIsSubmitting(true)
@@ -336,8 +354,9 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     const res = await createOrderAction({
         storeId: store.id,
         customerName: checkoutData.name,
-        customerPhone: cleanPhone(checkoutData.phone),
+        customerPhone: cleanPhone(checkoutData.phone || "00000000000"), // Telefone opcional na mesa
         deliveryType: checkoutData.deliveryType,
+        tableNumber: checkoutData.tableNumber, // Envia o número da mesa
         address: fullAddress,
         paymentMethod: checkoutData.paymentMethod,
         changeFor: checkoutData.changeFor,
@@ -349,7 +368,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     if (res.success) {
         setStep("success")
         setCart([])
-        localStorage.removeItem(`cart-${store.id}`) // Limpa carrinho ao finalizar
+        localStorage.removeItem(`cart-${store.id}`)
     } else {
         alert("Erro ao enviar pedido. Tente novamente.")
     }
@@ -369,11 +388,12 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   }, [store])
 
   const isCityMismatch = useMemo(() => {
+      if (isTableSession) return false // Sem validação de cidade para mesa
       if (!store.city || !checkoutData.city) return false
       return store.city.toLowerCase().trim() !== checkoutData.city.toLowerCase().trim()
-  }, [store.city, checkoutData.city])
+  }, [store.city, checkoutData.city, isTableSession])
 
-  // Se não estiver montado (SSR), renderiza um shell básico ou null para evitar mismatch
+  // Se não estiver montado (SSR), renderiza um shell básico
   if (!isMounted) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>
 
   return (
@@ -382,11 +402,22 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       
       {/* HEADER */}
       <div className="relative w-full bg-slate-900 overflow-hidden">
-        <Link href="/rastreio" className="absolute top-4 right-4 z-30">
-            <Button size="sm" className="bg-white/90 text-slate-900 hover:bg-white border-0 shadow-lg backdrop-blur-sm font-bold gap-2 transition-all hover:scale-105">
-                <Package className="w-4 h-4" /> <span className="hidden sm:inline">Acompanhar Pedido</span>
-            </Button>
-        </Link>
+        {/* Se for mesa, não mostra botão de rastreio, pois o cliente está lá */}
+        {!isTableSession && (
+            <Link href="/rastreio" className="absolute top-4 right-4 z-30">
+                <Button size="sm" className="bg-white/90 text-slate-900 hover:bg-white border-0 shadow-lg backdrop-blur-sm font-bold gap-2 transition-all hover:scale-105">
+                    <Package className="w-4 h-4" /> <span className="hidden sm:inline">Acompanhar Pedido</span>
+                </Button>
+            </Link>
+        )}
+        
+        {/* BANNER MESA (SE ESTIVER NA MESA) */}
+        {isTableSession && (
+             <div className="absolute top-4 left-4 z-30 bg-blue-600 text-white px-3 py-1.5 rounded-full font-bold text-sm shadow-lg flex items-center gap-2 animate-pulse">
+                <Utensils className="w-4 h-4" /> Mesa {tableParam}
+             </div>
+        )}
+
         <div className="relative h-[40vh] md:h-[350px] w-full">
             {banners.length > 0 ? banners.map((img: string, index: number) => (
                 <div key={index} className={cn("absolute inset-0 transition-opacity duration-1000", index === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0")}>
@@ -540,56 +571,80 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                     <SheetHeader className="p-5 border-b bg-white flex flex-row items-center gap-3 shrink-0"><Button variant="ghost" size="icon" className="h-8 w-8 -ml-2" onClick={() => setStep("cart")}><X className="h-4 w-4" /></Button><SheetTitle className="text-xl">Finalizar Pedido</SheetTitle></SheetHeader>
                     <div className="flex-1 overflow-y-auto p-5 bg-white">
                         <div className="space-y-6 pb-4">
+                            
+                            {/* AVISO DE MESA */}
+                            {isTableSession && (
+                                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center gap-4 mb-4">
+                                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600"><Utensils className="w-5 h-5" /></div>
+                                    <div>
+                                        <p className="text-sm text-blue-600 font-medium">Você está pedindo na</p>
+                                        <p className="text-xl font-bold text-blue-800">Mesa {tableParam}</p>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="space-y-3">
                                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">1</div> Seus Dados</h3>
                                 <div className="grid gap-3 pl-8">
-                                    <div><Label>Nome</Label><Input placeholder="Seu nome" value={checkoutData.name} onChange={e => setCheckoutData({...checkoutData, name: e.target.value})} /></div>
-                                    <div><Label>Celular</Label><Input placeholder="(00) 00000-0000" value={checkoutData.phone} onChange={e => setCheckoutData({...checkoutData, phone: formatPhone(e.target.value)})} maxLength={15} /></div>
+                                    <div><Label>Nome</Label><Input placeholder="Como podemos te chamar?" value={checkoutData.name} onChange={e => setCheckoutData({...checkoutData, name: e.target.value})} /></div>
+                                    {/* Celular opcional na mesa */}
+                                    {!isTableSession && <div><Label>Celular</Label><Input placeholder="(00) 00000-0000" value={checkoutData.phone} onChange={e => setCheckoutData({...checkoutData, phone: formatPhone(e.target.value)})} maxLength={15} /></div>}
                                 </div>
                             </div>
 
-                            <div className="space-y-3">
-                                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">2</div> Entrega</h3>
-                                <div className="pl-8 space-y-3">
-                                    <RadioGroup value={checkoutData.deliveryType} onValueChange={(v: any) => setCheckoutData({...checkoutData, deliveryType: v})} className="grid grid-cols-2 gap-3">
-                                        <Label className={cn("flex flex-col items-center justify-center border-2 rounded-xl p-3 cursor-pointer hover:bg-slate-50 transition-all", checkoutData.deliveryType === 'entrega' ? "border-primary bg-primary/5 text-primary" : "border-slate-200")}><RadioGroupItem value="entrega" className="sr-only" /><Bike className="mb-2 h-6 w-6" /><span className="font-bold">Entrega</span></Label>
-                                        <Label className={cn("flex flex-col items-center justify-center border-2 rounded-xl p-3 cursor-pointer hover:bg-slate-50 transition-all", checkoutData.deliveryType === 'retirada' ? "border-primary bg-primary/5 text-primary" : "border-slate-200")}><RadioGroupItem value="retirada" className="sr-only" /><Store className="mb-2 h-6 w-6" /><span className="font-bold">Retirada</span><span className="text-xs mt-1 text-green-600 font-medium">Grátis</span></Label>
-                                    </RadioGroup>
-                                    
-                                    {checkoutData.deliveryType === 'entrega' && (
-                                        <div className="animate-in slide-in-from-top-2 fade-in space-y-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                            <div className="space-y-1">
-                                                <Label>CEP</Label>
-                                                <div className="relative">
-                                                    <Input placeholder="00000-000" value={checkoutData.cep} onChange={e => { let v = e.target.value.replace(/\D/g, "").slice(0, 8); v = v.replace(/^(\d{5})(\d)/, "$1-$2"); setCheckoutData({...checkoutData, cep: v}); }} onBlur={handleCepBlur} />
-                                                    {isLoadingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
+                            {/* SÓ MOSTRA ENTREGA SE NÃO FOR MESA */}
+                            {!isTableSession && (
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">2</div> Entrega</h3>
+                                    <div className="pl-8 space-y-3">
+                                        <RadioGroup value={checkoutData.deliveryType} onValueChange={(v: any) => setCheckoutData({...checkoutData, deliveryType: v})} className="grid grid-cols-2 gap-3">
+                                            <Label className={cn("flex flex-col items-center justify-center border-2 rounded-xl p-3 cursor-pointer hover:bg-slate-50 transition-all", checkoutData.deliveryType === 'entrega' ? "border-primary bg-primary/5 text-primary" : "border-slate-200")}><RadioGroupItem value="entrega" className="sr-only" /><Bike className="mb-2 h-6 w-6" /><span className="font-bold">Entrega</span></Label>
+                                            <Label className={cn("flex flex-col items-center justify-center border-2 rounded-xl p-3 cursor-pointer hover:bg-slate-50 transition-all", checkoutData.deliveryType === 'retirada' ? "border-primary bg-primary/5 text-primary" : "border-slate-200")}><RadioGroupItem value="retirada" className="sr-only" /><Store className="mb-2 h-6 w-6" /><span className="font-bold">Retirada</span><span className="text-xs mt-1 text-green-600 font-medium">Grátis</span></Label>
+                                        </RadioGroup>
+                                        
+                                        {checkoutData.deliveryType === 'entrega' && (
+                                            <div className="animate-in slide-in-from-top-2 fade-in space-y-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                                <div className="space-y-1">
+                                                    <Label>CEP</Label>
+                                                    <div className="relative">
+                                                        <Input placeholder="00000-000" value={checkoutData.cep} onChange={e => { let v = e.target.value.replace(/\D/g, "").slice(0, 8); v = v.replace(/^(\d{5})(\d)/, "$1-$2"); setCheckoutData({...checkoutData, cep: v}); }} onBlur={handleCepBlur} />
+                                                        {isLoadingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            
-                                            {isCityMismatch && <div className="bg-red-50 border border-red-200 p-3 rounded-md flex gap-2 text-red-800 text-xs"><Ban className="w-4 h-4 shrink-0 mt-0.5" /><span><b>Entrega Indisponível:</b> A loja não entrega em {checkoutData.city}.</span></div>}
-                                            
-                                            {calcStatus && !isCityMismatch && (
-                                                <div className="bg-blue-50 border border-blue-200 p-2 rounded text-xs text-blue-800 flex items-center gap-2">
-                                                    <MapPin className="w-3 h-3 animate-pulse" />
-                                                    {calcStatus}
-                                                </div>
-                                            )}
+                                                
+                                                {isCityMismatch && <div className="bg-red-50 border border-red-200 p-3 rounded-md flex gap-2 text-red-800 text-xs"><Ban className="w-4 h-4 shrink-0 mt-0.5" /><span><b>Entrega Indisponível:</b> A loja não entrega em {checkoutData.city}.</span></div>}
+                                                
+                                                {calcStatus && !isCityMismatch && (
+                                                    <div className="bg-blue-50 border border-blue-200 p-2 rounded text-xs text-blue-800 flex items-center gap-2">
+                                                        <MapPin className="w-3 h-3 animate-pulse" />
+                                                        {calcStatus}
+                                                    </div>
+                                                )}
 
-                                            <div className="grid grid-cols-4 gap-2">
-                                                <div className="col-span-3 space-y-1"><Label>Rua</Label><Input placeholder="Rua" value={checkoutData.street} onChange={e => setCheckoutData({...checkoutData, street: e.target.value})} /></div>
-                                                <div className="col-span-1 space-y-1"><Label>Nº</Label><Input id="checkout-number" placeholder="123" value={checkoutData.number} onChange={e => setCheckoutData({...checkoutData, number: e.target.value})} /></div>
+                                                <div className="grid grid-cols-4 gap-2">
+                                                    <div className="col-span-3 space-y-1"><Label>Rua</Label><Input placeholder="Rua" value={checkoutData.street} onChange={e => setCheckoutData({...checkoutData, street: e.target.value})} /></div>
+                                                    <div className="col-span-1 space-y-1"><Label>Nº</Label><Input id="checkout-number" placeholder="123" value={checkoutData.number} onChange={e => setCheckoutData({...checkoutData, number: e.target.value})} /></div>
+                                                </div>
+                                                <div className="space-y-1"><Label>Bairro</Label><Input placeholder="Bairro" value={checkoutData.neighborhood} onChange={e => setCheckoutData({...checkoutData, neighborhood: e.target.value})} /></div>
+                                                <div className="space-y-1"><Label>Complemento</Label><Input placeholder="Apto, Bloco..." value={checkoutData.complement} onChange={e => setCheckoutData({...checkoutData, complement: e.target.value})} /></div>
                                             </div>
-                                            <div className="space-y-1"><Label>Bairro</Label><Input placeholder="Bairro" value={checkoutData.neighborhood} onChange={e => setCheckoutData({...checkoutData, neighborhood: e.target.value})} /></div>
-                                            <div className="space-y-1"><Label>Complemento</Label><Input placeholder="Apto, Bloco..." value={checkoutData.complement} onChange={e => setCheckoutData({...checkoutData, complement: e.target.value})} /></div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             <div className="space-y-3">
-                                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">3</div> Pagamento</h3>
+                                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">{isTableSession ? "2" : "3"}</div> Pagamento</h3>
                                 <div className="pl-8 space-y-3">
                                     <RadioGroup value={checkoutData.paymentMethod} onValueChange={(v: any) => setCheckoutData({...checkoutData, paymentMethod: v})} className="space-y-2">
+                                        {isTableSession && (
+                                             <div className="flex items-center space-x-2 border p-3 rounded-lg cursor-pointer hover:bg-slate-50 border-green-200 bg-green-50">
+                                                <RadioGroupItem value="caixa" id="caixa" />
+                                                <Label htmlFor="caixa" className="flex-1 cursor-pointer font-bold text-green-800 flex items-center gap-2">
+                                                    <Wallet className="w-4 h-4"/> Pagar no Caixa / Garçom
+                                                </Label>
+                                             </div>
+                                        )}
                                         <div className="flex items-center space-x-2 border p-3 rounded-lg cursor-pointer hover:bg-slate-50"><RadioGroupItem value="pix" id="pix" /><Label htmlFor="pix" className="flex-1 cursor-pointer font-medium">Pix</Label></div>
                                         <div className="flex items-center space-x-2 border p-3 rounded-lg cursor-pointer hover:bg-slate-50"><RadioGroupItem value="cartao" id="cartao" /><Label htmlFor="cartao" className="flex-1 cursor-pointer font-medium">Cartão</Label></div>
                                         <div className="flex items-center space-x-2 border p-3 rounded-lg cursor-pointer hover:bg-slate-50"><RadioGroupItem value="dinheiro" id="dinheiro" /><Label htmlFor="dinheiro" className="flex-1 cursor-pointer font-medium">Dinheiro</Label></div>
@@ -602,15 +657,18 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                     <div className="p-5 bg-white border-t space-y-4 pb-safe shrink-0 z-20">
                         <div className="space-y-1 text-sm text-slate-500 pb-2 border-b border-dashed border-slate-200">
                              <div className="flex justify-between"><span>Subtotal</span><span>{formatPrice(cartSubtotal)}</span></div>
-                             <div className="flex justify-between">
-                                <span>Entrega</span>
-                                <span className={checkoutData.deliveryType === 'entrega' ? "text-slate-900" : "text-green-600"}>
-                                    {checkoutData.deliveryType === 'entrega' ? (calculatedFee > 0 ? formatPrice(calculatedFee) : (deliveryFeeMode !== 'fixed' && distanceKm === null ? "Calculando..." : "Grátis")) : "Grátis"}
-                                </span>
-                             </div>
+                             {/* Só mostra linha de entrega se não for mesa */}
+                             {!isTableSession && (
+                                <div className="flex justify-between">
+                                    <span>Entrega</span>
+                                    <span className={checkoutData.deliveryType === 'entrega' ? "text-slate-900" : "text-green-600"}>
+                                        {checkoutData.deliveryType === 'entrega' ? (calculatedFee > 0 ? formatPrice(calculatedFee) : (deliveryFeeMode !== 'fixed' && distanceKm === null ? "Calculando..." : "Grátis")) : "Grátis"}
+                                    </span>
+                                </div>
+                             )}
                         </div>
                         <div className="flex justify-between font-bold text-xl text-slate-900"><span>Total</span><span>{formatPrice(finalTotal)}</span></div>
-                        <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 shadow-lg active:scale-[0.99] transition-all" style={{ backgroundColor: primaryColor }} onClick={handleFinishOrder} disabled={isSubmitting || (checkoutData.deliveryType === 'entrega' && isCityMismatch)}>{isSubmitting ? <Loader2 className="animate-spin" /> : "Enviar Pedido"}</Button>
+                        <Button className="w-full h-14 text-lg font-bold text-white hover:brightness-110 shadow-lg active:scale-[0.99] transition-all" style={{ backgroundColor: primaryColor }} onClick={handleFinishOrder} disabled={isSubmitting || (checkoutData.deliveryType === 'entrega' && isCityMismatch)}>{isSubmitting ? <Loader2 className="animate-spin" /> : (isTableSession ? "Pedir para Mesa" : "Enviar Pedido")}</Button>
                     </div>
                 </>
             )}
@@ -619,10 +677,14 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
             {step === "success" && (
                 <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in zoom-in-95 duration-300">
                     <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 shadow-lg shadow-green-100"><Check className="w-12 h-12" /></div>
-                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Pedido Recebido!</h2>
-                    <p className="text-slate-500 mb-8 max-w-xs">A loja já recebeu seu pedido e logo começará o preparo.</p>
-                    <Link href="/rastreio" className="w-full mt-4"><Button variant="default" className="w-full h-12 font-bold bg-blue-600 hover:bg-blue-700 shadow-blue-200 shadow-lg">Acompanhar Pedido</Button></Link>
-                    <Button variant="outline" className="w-full h-12 border-2 font-bold mt-2 hover:bg-slate-50" onClick={() => setIsCartOpen(false)}>Voltar ao Cardápio</Button>
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Pedido Enviado!</h2>
+                    <p className="text-slate-500 mb-8 max-w-xs">
+                        {isTableSession ? "A cozinha já recebeu seu pedido. Aguarde na mesa." : "A loja já recebeu seu pedido e logo começará o preparo."}
+                    </p>
+                    {!isTableSession && (
+                         <Link href="/rastreio" className="w-full mt-4"><Button variant="default" className="w-full h-12 font-bold bg-blue-600 hover:bg-blue-700 shadow-blue-200 shadow-lg">Acompanhar Pedido</Button></Link>
+                    )}
+                    <Button variant="outline" className="w-full h-12 border-2 font-bold mt-2 hover:bg-slate-50" onClick={() => { setIsCartOpen(false); setStep("cart"); }}>Fazer Outro Pedido</Button>
                 </div>
             )}
         </SheetContent>
