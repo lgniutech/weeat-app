@@ -19,7 +19,7 @@ import {
   Ticket,
   Star,
   Palette,
-  Image as ImageIcon // Ícone novo para aparência
+  Image as ImageIcon
 } from "lucide-react"
 import {
   Sidebar,
@@ -45,7 +45,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { logoutAction } from "@/app/actions/auth"
 
-// --- ATENÇÃO AQUI: IDs Atualizados ---
+// --- IDs Atualizados para incluir 'tables' ---
 const navigationItems = [
   {
     title: "Dashboard",
@@ -59,7 +59,8 @@ const navigationItems = [
     id: "operacao",
     items: [
       { title: "Gestão de Pedidos", url: "#", badge: "12", id: "orders" },
-      { title: "Mesas & Salão", url: "#", icon: QrCode },
+      // Adicionado ID 'tables' para funcionar a navegação
+      { title: "Mesas & QR Code", url: "#", icon: QrCode, id: "tables" }, 
       { title: "Tela da Cozinha", url: "#", icon: ChefHat },
     ],
   },
@@ -68,7 +69,7 @@ const navigationItems = [
     icon: UtensilsCrossed,
     id: "cardapio",
     items: [
-      { title: "Produtos & Categorias", url: "#", id: "menu-products" }, // ID NOVO
+      { title: "Produtos & Categorias", url: "#", id: "menu-products" },
       { title: "Estoque", url: "#" },
     ],
   },
@@ -99,7 +100,7 @@ const navigationItems = [
     id: "configuracoes",
     items: [
       { title: "Dados da Loja", url: "#", id: "store-settings", icon: Store }, 
-      { title: "Aparência & Marca", url: "#", id: "store-appearance", icon: ImageIcon }, // ID NOVO
+      { title: "Aparência & Marca", url: "#", id: "store-appearance", icon: ImageIcon },
       { title: "Equipe & Permissões", url: "#" },
       { title: "Tema (Claro/Escuro)", url: "#", icon: Palette, id: "tema" },
     ],
@@ -123,7 +124,7 @@ export function AppSidebar({
   userName, 
   userEmail 
 }: AppSidebarProps) {
-  const [openGroups, setOpenGroups] = React.useState<string[]>(["cardapio", "configuracoes"])
+  const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes"]) // Deixei 'operacao' aberto por padrão
   const { state, setOpen } = useSidebar()
 
   const getInitials = (name: string) => {
