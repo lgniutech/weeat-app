@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { useTheme } from "next-themes" // Importante para o fix do modo claro
+import { useTheme } from "next-themes"
 import { 
   ShoppingBag, 
   Search, 
@@ -20,7 +20,6 @@ import {
   ChevronRight, 
   Ban, 
   AlertCircle, 
-  Trash2, 
   ArrowRight, 
   Utensils, 
   Wallet 
@@ -95,8 +94,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
   // --- 1. FORÇAR MODO CLARO (LIGHT MODE) ---
   useEffect(() => {
-    // Isso garante que a tela do cliente seja sempre CLARA, 
-    // ignorando a preferência do sistema operacional dele.
     setTheme("light")
   }, [setTheme])
 
@@ -153,6 +150,9 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const fontFamily = store.font_family || "Inter"
   const primaryColor = store.primary_color || "#ea1d2c"
 
+  // CORREÇÃO: Prepara a URL da fonte fora do JSX para evitar erro de parse
+  const fontUrl = `https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@300;400;500;700&display=swap`
+
   const settings = store.settings || {}
   const deliveryFeeMode = settings.delivery_fee_mode || 'fixed'
   const fixedFee = Number(settings.delivery_fee) || 0
@@ -167,13 +167,11 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   useEffect(() => {
     setIsMounted(true)
     
-    // Recuperar Carrinho
     const savedCart = localStorage.getItem(`cart-${store.id}`)
     if (savedCart) {
       try { setCart(JSON.parse(savedCart)) } catch (e) { console.error(e) }
     }
 
-    // Recuperar Dados do Cliente
     const savedData = localStorage.getItem(`checkout-${store.id}`)
     if (savedData) {
       try {
@@ -199,14 +197,12 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     }
   }, [store.id, isTableSession, tableParam])
 
-  // Salvar Carrinho
   useEffect(() => {
     if (isMounted) {
       localStorage.setItem(`cart-${store.id}`, JSON.stringify(cart))
     }
   }, [cart, isMounted, store.id])
 
-  // Salvar Dados do Cliente (exceto pagamento sensível)
   useEffect(() => {
     if (isMounted) {
       const { paymentMethod, changeFor, ...safeData } = checkoutData
@@ -214,7 +210,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     }
   }, [checkoutData, isMounted, store.id])
 
-  // Rotação de Banners
   useEffect(() => {
     if (banners.length <= 1) return
     const interval = setInterval(() => {
@@ -223,7 +218,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     return () => clearInterval(interval)
   }, [banners.length])
 
-  // Lógica de Cálculo de Frete Dinâmico
   useEffect(() => {
     if (checkoutData.deliveryType === 'retirada' || checkoutData.deliveryType === 'mesa') {
       setCalculatedFee(0)
@@ -237,9 +231,8 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       return
     }
 
-    // Modo por KM
     if (distanceKm === null) {
-      setCalculatedFee(fixedFee) // Fallback
+      setCalculatedFee(fixedFee)
       if (checkoutData.cep.length >= 8) {
         setCalcStatus("Aguardando cálculo...")
       }
@@ -262,9 +255,8 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
   }
 
-  // Fórmula de Haversine para distância
   function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-    const R = 6371 // Raio da terra em km
+    const R = 6371
     const dLat = deg2rad(lat2 - lat1)
     const dLon = deg2rad(lon2 - lon1)
     const a =
@@ -272,7 +264,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
       Math.sin(dLon / 2) * Math.sin(dLon / 2)
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    const d = R * c // Distância em km
+    const d = R * c
     return d
   }
 
@@ -280,7 +272,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     return deg * (Math.PI / 180)
   }
 
-  // Verifica horário de funcionamento
   const activeDays = settings.business_hours?.filter((h: any) => h.active) || []
   
   const isOpenNow = useMemo(() => {
@@ -299,8 +290,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     const openTime = openHour * 60 + openMin
     const closeTime = closeHour * 60 + closeMin
     
-    // Tratamento para virada de dia (ex: fecha as 02:00) seria mais complexo, 
-    // mas para simplificar assumimos fechamento no mesmo dia ou 23:59
     return currentTime >= openTime && currentTime <= closeTime
   }, [activeDays])
 
@@ -392,14 +381,11 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
             state: data.uf
           }))
           
-          // Foca no número
           document.getElementById("checkout-number")?.focus()
 
-          // Cálculo de distância via Nominatim (OpenStreetMap)
           if (storeLat && storeLng) {
             setCalcStatus("Calculando distância...")
             
-            // Tenta busca precisa
             const queryHighPrec = `${data.logradouro}, ${data.localidade}, ${data.uf}, Brasil`
             const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryHighPrec)}&limit=1`)
             const geoData = await geoRes.json()
@@ -411,7 +397,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
               userLat = Number(geoData[0].lat)
               userLng = Number(geoData[0].lon)
             } else {
-              // Fallback para CEP
               const queryLowPrec = `${cleanCep}, Brasil`
               const cepRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryLowPrec)}&limit=1`)
               const cepData = await cepRes.json()
@@ -454,7 +439,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   const isBelowMinimum = isTableSession ? false : cartSubtotal < minimumOrder
 
   const handleFinishOrder = async () => {
-    // Validação Básica
     if (isTableSession) {
         if (!checkoutData.name) return alert("Por favor, informe seu nome para a cozinha.")
     } else {
@@ -468,7 +452,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         return alert("Por favor, preencha o endereço completo.")
       }
       
-      // Validação de cidade
       if (store.city && checkoutData.city) {
         if (store.city.toLowerCase().trim() !== checkoutData.city.toLowerCase().trim()) {
           return alert(`Desculpe, esta loja só realiza entregas em ${store.city}.`)
@@ -484,7 +467,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
 
     setIsSubmitting(true)
 
-    // Formata itens para o backend
     const formattedItems = cart.map(item => ({
       product_name: item.name,
       quantity: item.quantity,
@@ -530,7 +512,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     })).filter(cat => cat.products.length > 0)
   }, [searchTerm, categories])
 
-  // --- ENDEREÇO DA LOJA FORMATADO ---
   const storeAddress = useMemo(() => {
     if (store.street && store.number) {
         return `${store.street}, ${store.number} - ${store.neighborhood}, ${store.city}`
@@ -544,7 +525,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       return store.city.toLowerCase().trim() !== checkoutData.city.toLowerCase().trim()
   }, [store.city, checkoutData.city, isTableSession])
 
-  // Loading inicial
   if (!isMounted) {
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -554,15 +534,13 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
   }
 
   return (
-    // CLASSE 'light' FORÇADA NA RAIZ DO COMPONENTE
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-24 light" style={{ fontFamily: fontFamily }} data-theme="light">
       <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@300;400;500;700&display=swap');
+        @import url('${fontUrl}');
       `}</style>
       
-      {/* HEADER PRINCIPAL */}
+      {/* HEADER */}
       <div className="relative w-full bg-slate-900 overflow-hidden">
-        {/* Botão Rastreio (se não for mesa) */}
         {!isTableSession && (
             <Link href="/rastreio" className="absolute top-4 right-4 z-30">
                 <Button size="sm" className="bg-white/90 text-slate-900 hover:bg-white border-0 shadow-lg backdrop-blur-sm font-bold gap-2 transition-all hover:scale-105">
@@ -572,14 +550,12 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
             </Link>
         )}
 
-        {/* Badge de Mesa */}
         {isTableSession && (
              <div className="absolute top-4 left-4 z-30 bg-blue-600 text-white px-3 py-1.5 rounded-full font-bold text-sm shadow-lg flex items-center gap-2 animate-pulse">
                 <Utensils className="w-4 h-4" /> Mesa {tableParam}
              </div>
         )}
 
-        {/* Banner Rotativo */}
         <div className="relative h-[40vh] md:h-[350px] w-full">
             {banners.length > 0 ? banners.map((img: string, index: number) => (
                 <div key={index} className={cn("absolute inset-0 transition-opacity duration-1000", index === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0")}>
@@ -593,7 +569,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
             )}
         </div>
 
-        {/* Informações da Loja (Sobreposta ao Banner) */}
         <div className="absolute bottom-0 left-0 w-full z-20 p-4 md:p-8 pb-6">
             <div className="flex items-end gap-4">
                 <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden shrink-0">
@@ -617,7 +592,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         </div>
       </div>
 
-      {/* BARRA DE INFORMAÇÕES (Localização e Horário) */}
+      {/* BARRA DE INFO */}
       <div className="bg-white border-b border-slate-100 shadow-sm relative z-20">
           <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex justify-between gap-3">
               <button onClick={() => setIsInfoOpen(true)} className="flex items-center gap-2 group text-left hover:bg-slate-50 p-1.5 -ml-1.5 rounded-lg transition-colors">
@@ -642,7 +617,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
           </div>
       </div>
 
-      {/* BARRA DE BUSCA E CATEGORIAS (Sticky) */}
+      {/* BUSCA */}
       <div className="sticky top-0 z-30 bg-white border-b shadow-sm">
         <div className="px-4 md:px-8 py-3 max-w-7xl mx-auto space-y-3">
             <div className="relative">
@@ -673,7 +648,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         </div>
       </div>
 
-      {/* LISTA DE PRODUTOS */}
+      {/* PRODUTOS */}
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-12">
         {filteredCategories.length === 0 ? (
             <div className="text-center py-20 opacity-50 flex flex-col items-center">
@@ -730,7 +705,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         )}
       </div>
 
-      {/* BOTÃO FLUTUANTE DO CARRINHO */}
+      {/* BOTÃO FLUTUANTE */}
       {cartCount > 0 && (
         <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center z-40">
             <Button 
@@ -747,11 +722,10 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         </div>
       )}
 
-      {/* SHEET (MODAL LATERAL) DO CARRINHO */}
+      {/* SHEET DO CARRINHO */}
       <Sheet open={isCartOpen} onOpenChange={(open) => { setIsCartOpen(open); if(!open) setTimeout(() => setStep("cart"), 300); }}>
         <SheetContent className="w-full sm:max-w-md bg-slate-50 p-0 flex flex-col h-[100dvh] light text-slate-900" style={{ fontFamily: fontFamily }} data-theme="light">
             
-            {/* ETAPA 1: VISUALIZAR CARRINHO */}
             {step === "cart" && (
                 <>
                     <SheetHeader className="p-5 border-b bg-white shrink-0">
@@ -786,7 +760,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                                     <p className="text-green-600"><span className="font-medium">Mais:</span> {item.addons?.filter(a => item.selectedAddons.includes(a.id)).map(a => `${a.name}`).join(", ")}</p>
                                                 )}
                                                 {item.observation && (
-                                                    <p className="italic">"{item.observation}"</p>
+                                                    <p className="italic">&quot;{item.observation}&quot;</p>
                                                 )}
                                             </div>
                                         </div>
@@ -830,7 +804,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                 </>
             )}
 
-            {/* ETAPA 2: CHECKOUT (DADOS) */}
             {step === "checkout" && (
                 <>
                     <SheetHeader className="p-5 border-b bg-white flex flex-row items-center gap-3 shrink-0">
@@ -855,7 +828,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 </div>
                             )}
 
-                            {/* DADOS PESSOAIS */}
                             <div className="space-y-3">
                                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                                     <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">1</div> 
@@ -886,7 +858,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 </div>
                             </div>
 
-                            {/* ENTREGA (APENAS SE NÃO FOR MESA) */}
                             {!isTableSession && (
                                 <div className="space-y-3">
                                     <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
@@ -962,7 +933,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 </div>
                             )}
 
-                            {/* PAGAMENTO */}
                             <div className="space-y-3">
                                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                                     <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">
@@ -1045,7 +1015,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                 </>
             )}
 
-            {/* ETAPA 3: SUCESSO */}
             {step === "success" && (
                 <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in zoom-in-95 duration-300">
                     <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 shadow-lg shadow-green-100">
@@ -1079,7 +1048,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         </SheetContent>
       </Sheet>
 
-      {/* MODAL DE DETALHES DO PRODUTO (FORÇADO LIGHT) */}
+      {/* MODAL DE DETALHES DO PRODUTO */}
       <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
         <DialogContent className="max-w-md p-0 overflow-hidden gap-0 border-none sm:rounded-2xl h-[100dvh] sm:h-auto light text-slate-900 bg-white" data-theme="light">
             {selectedProduct && (
@@ -1109,7 +1078,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 <DialogDescription className="text-base text-slate-500 mt-2 leading-relaxed">{selectedProduct.description}</DialogDescription>
                             </div>
 
-                            {/* Ingredientes (Remover) */}
                             {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && (
                                 <div className="space-y-3">
                                     <h3 className="font-semibold text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -1143,7 +1111,6 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                 </div>
                             )}
 
-                            {/* Adicionais (Somar) */}
                             {selectedProduct.addons && selectedProduct.addons.length > 0 && (
                                 <div className="space-y-3">
                                     <h3 className="font-semibold text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -1203,7 +1170,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
         </DialogContent>
       </Dialog>
 
-      {/* MODAL DE INFORMAÇÕES DA LOJA (FORÇADO LIGHT) */}
+      {/* MODAL DE INFORMAÇÕES DA LOJA */}
       <Dialog open={isInfoOpen} onOpenChange={setIsInfoOpen}>
         <DialogContent className="sm:max-w-md light bg-white text-slate-900" data-theme="light">
             <DialogHeader>
