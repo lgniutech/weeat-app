@@ -10,14 +10,14 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { EmptyState } from "@/components/empty-state"
 import { StoreSetupModal } from "@/components/modals/store-setup-modal"
 import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
-import { DollarSign } from "lucide-react" // Importando ícone
+import { DollarSign } from "lucide-react"
 
-// Importação dos Módulos
+// Importação dos Módulos (ATUALIZADO)
 import { StoreAppearance } from "@/components/modules/store-appearance"
 import { MenuManager } from "@/components/modules/menu-manager"
 import { OrderManager } from "@/components/modules/order-manager"
 import { TablesManager } from "@/components/modules/tables-manager" 
-import { FinancialDashboard } from "@/components/modules/financial-dashboard"
+import { OverviewDashboard } from "@/components/modules/overview-dashboard" // <--- NOVO NOME
 import { AppearanceForm } from "@/components/settings/appearance-form"
 
 interface DashboardClientProps {
@@ -37,7 +37,6 @@ export default function DashboardClient({
   const router = useRouter()
   const pathname = usePathname()
 
-  // Se não tiver tab, assume 'dashboard'
   const activeModule = searchParams.get("tab") || "dashboard"
 
   const handleModuleChange = (moduleId: string) => {
@@ -73,8 +72,8 @@ export default function DashboardClient({
   const renderContent = () => {
     switch (activeModule) {
       case 'dashboard':
-        // A Home exibe os Gráficos/Visão Geral
-        return <FinancialDashboard store={store} />
+        // ATUALIZADO: Usando o novo componente
+        return <OverviewDashboard store={store} />
         
       case 'orders':
         return <OrderManager store={store} />
@@ -83,7 +82,6 @@ export default function DashboardClient({
         return <TablesManager store={store} />
         
       case 'financial':
-        // MUDANÇA: Exibe o placeholder personalizado conforme solicitado
         return (
             <div className="flex flex-col items-center justify-center h-[calc(100vh-150px)] space-y-6 animate-in fade-in zoom-in-95 p-4 text-center">
                 <div className="w-24 h-24 bg-slate-100 dark:bg-zinc-800 rounded-full flex items-center justify-center shadow-sm mb-2">
