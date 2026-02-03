@@ -1,129 +1,153 @@
 "use client"
 
-import { useState, useEffect, useTransition } from "react"
-import { getFinancialMetricsAction } from "@/app/actions/dashboard"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { DollarSign, ShoppingBag, TrendingUp, CreditCard, Bike, AlertCircle, Wallet } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { useSearchParams, useRouter, usePathname } from "next/navigation"
+import { useTheme } from "next-themes"
+import { useThemeColor } from "@/components/theme-provider"
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
+import { DashboardHeader } from "@/components/dashboard-header"
+import { EmptyState } from "@/components/empty-state"
+import { StoreSetupModal } from "@/components/modals/store-setup-modal"
+import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
+import { DollarSign } from "lucide-react"
 
-export function OverviewDashboard({ store }: { store: any }) {
-  const [period, setPeriod] = useState<'today' | '7days' | '30days'>('today')
-  const [data, setData] = useState<any>(null)
-  const [isPending, startTransition] = useTransition()
+// --- ATENÇÃO AQUI: Importando o NOVO arquivo ---
+import { StoreAppearance } from "@/components/modules/store-appearance"
+import { MenuManager } from "@/components/modules/menu-manager"
+import { OrderManager } from "@/components/modules/order-manager"
+import { TablesManager } from "@/components/modules/tables-manager" 
+import { OverviewDashboard } from "@/components/modules/overview-dashboard" // <--- Correção feita aqui
+import { AppearanceForm } from "@/components/settings/appearance-form"
 
-  useEffect(() => {
-    startTransition(async () => {
-      try {
-        const metrics = await getFinancialMetricsAction(store.id, period)
-        setData(metrics)
-      } catch (error) {
-        console.error("Erro ao buscar dashboard:", error)
-        setData({ error: "Falha ao carregar dados." })
-      }
-    })
-  }, [store.id, period])
+interface DashboardClientProps {
+  store: any
+  categories: any[]
+  userName: string
+  userEmail: string
+}
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
+export default function DashboardClient({ 
+  store,
+  categories,
+  userName, 
+  userEmail 
+}: DashboardClientProps) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
 
-  const isLoading = isPending || !data
+  const activeModule = searchParams.get("tab") || "dashboard"
 
-  if (!isLoading && data?.error) {
-      return (
-          <div className="flex flex-col items-center justify-center h-40 text-red-500 bg-red-50 rounded-lg border border-red-100 p-4 animate-in fade-in">
-              <AlertCircle className="w-8 h-8 mb-2" />
-              <p className="font-bold">Erro ao carregar dashboard</p>
-              <p className="text-sm opacity-80">{data.error}</p>
-              <Button variant="outline" size="sm" className="mt-4 border-red-200 hover:bg-red-100 text-red-700" onClick={() => window.location.reload()}>
-                  Tentar Novamente
-              </Button>
-          </div>
-      )
+  const handleModuleChange = (moduleId: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("tab", moduleId)
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
-  const paymentStats = data?.paymentStats || []
-  const typeStats = data?.typeStats || []
+  const [isStoreOpen, setIsStoreOpen] = useState(true)
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+
+  const { setTheme } = useTheme()
+  const { setThemeColor } = useThemeColor()
+  const isThemeInitialized = useRef(false)
+
+  useEffect(() => {
+    if (store && !isThemeInitialized.current) {
+      if (store.theme_mode) setTheme(store.theme_mode)
+      if (store.theme_color) setThemeColor(store.theme_color)
+      isThemeInitialized.current = true
+    }
+  }, [store, setTheme, setThemeColor])
+
+  useEffect(() => {
+    if (activeModule === 'store-settings') {
+      setIsSettingsModalOpen(true)
+      handleModuleChange('dashboard')
+    }
+  }, [activeModule])
+
+  const hasStore = !!store
+
+  const renderContent = () => {
+    switch (activeModule) {
+      case 'dashboard':
+        // Usa o novo componente OverviewDashboard
+        return <OverviewDashboard store={store} />
+        
+      case 'orders':
+        return <OrderManager store={store} />
+        
+      case 'tables': 
+        return <TablesManager store={store} />
+        
+      case 'financial':
+        return (
+            <div className="flex flex-col items-center justify-center h-[calc(100vh-150px)] space-y-6 animate-in fade-in zoom-in-95 p-4 text-center">
+                <div className="w-24 h-24 bg-slate-100 dark:bg-zinc-800 rounded-full flex items-center justify-center shadow-sm mb-2">
+                    <DollarSign className="w-10 h-10 text-slate-400 dark:text-slate-500" />
+                </div>
+                <div className="space-y-2 max-w-md">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Financeiro</h2>
+                    <p className="text-muted-foreground text-lg leading-relaxed">
+                        Acompanhe vendas, receitas e relatórios financeiros
+                    </p>
+                </div>
+                <div className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-5 py-2 rounded-full text-sm font-bold border border-blue-100 dark:border-blue-800/50 shadow-sm">
+                    Módulo pronto para desenvolvimento
+                </div>
+            </div>
+        )
+        
+      case 'tema':
+        return <AppearanceForm storeId={store?.id} />
+        
+      case 'store-appearance':
+        return <StoreAppearance store={store} />
+        
+      case 'menu-products':
+        return <MenuManager store={store} categories={categories} />
+        
+      default:
+        return <EmptyState moduleId={activeModule} />
+    }
+  }
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Visão Geral</h2>
-            <p className="text-muted-foreground text-sm">Resumo da performance da sua loja.</p>
-        </div>
-        <div className="flex items-center gap-2">
-            <div className="bg-white dark:bg-zinc-900 p-1 rounded-lg border dark:border-zinc-800 shadow-sm flex">
-                <Button variant={period === 'today' ? 'default' : 'ghost'} size="sm" onClick={() => setPeriod('today')} className="text-xs h-8 font-medium">Hoje</Button>
-                <Button variant={period === '7days' ? 'default' : 'ghost'} size="sm" onClick={() => setPeriod('7days')} className="text-xs h-8 font-medium">7 Dias</Button>
-                <Button variant={period === '30days' ? 'default' : 'ghost'} size="sm" onClick={() => setPeriod('30days')} className="text-xs h-8 font-medium">30 Dias</Button>
-            </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden relative group">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><DollarSign className="w-16 h-16 text-primary" /></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Faturamento</CardTitle>
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary"><DollarSign className="h-4 w-4" /></div>
-            </CardHeader>
-            <CardContent className="relative z-10">
-                {isLoading ? <div className="h-8 w-24 bg-slate-100 dark:bg-zinc-800 animate-pulse rounded"/> : (
-                    <>
-                        <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatCurrency(data?.revenue)}</div>
-                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"/>{period === 'today' ? "Vendas fechadas hoje" : "Acumulado no período"}</p>
-                    </>
-                )}
-            </CardContent>
-        </Card>
-
-        <Card className="dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden relative group">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><ShoppingBag className="w-16 h-16 text-primary" /></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Pedidos</CardTitle>
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary"><ShoppingBag className="h-4 w-4" /></div>
-            </CardHeader>
-            <CardContent className="relative z-10">
-                {isLoading ? <div className="h-8 w-24 bg-slate-100 dark:bg-zinc-800 animate-pulse rounded"/> : (
-                    <>
-                        <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{data?.ordersCount || 0}</div>
-                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block"/>Concluídos/Entregues</p>
-                    </>
-                )}
-            </CardContent>
-        </Card>
-
-        <Card className="dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden relative group">
-             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><TrendingUp className="w-16 h-16 text-primary" /></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Ticket Médio</CardTitle>
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary"><TrendingUp className="h-4 w-4" /></div>
-            </CardHeader>
-            <CardContent className="relative z-10">
-                {isLoading ? <div className="h-8 w-24 bg-slate-100 dark:bg-zinc-800 animate-pulse rounded"/> : (
-                    <>
-                        <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatCurrency(data?.averageTicket)}</div>
-                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-500 inline-block"/>Média por pedido</p>
-                    </>
-                )}
-            </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-          <Card className="dark:bg-zinc-900 dark:border-zinc-800 border-l-4 border-l-primary/50">
-              <CardHeader><CardTitle className="text-base flex items-center gap-2 dark:text-slate-100"><Wallet className="w-4 h-4 text-primary"/> Métodos de Pagamento</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                  {isLoading ? <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-8 bg-slate-100 dark:bg-zinc-800 animate-pulse rounded"/>)}</div> : paymentStats.length === 0 ? <div className="flex flex-col items-center justify-center py-6 text-center opacity-50"><CreditCard className="w-8 h-8 mb-2 text-slate-300"/><p className="text-sm text-muted-foreground italic">Sem dados no período.</p></div> : paymentStats.map((item: any) => (<div key={item.name} className="space-y-1"><div className="flex justify-between text-sm"><span className="font-medium capitalize dark:text-slate-300">{item.name}</span><span className="text-muted-foreground">{item.count} ({Math.round(item.percentage)}%)</span></div><div className="h-2 w-full bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden"><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out opacity-80 hover:opacity-100" style={{ width: `${item.percentage}%` }}/></div></div>))}
-              </CardContent>
-          </Card>
-
-          <Card className="dark:bg-zinc-900 dark:border-zinc-800 border-l-4 border-l-primary/50">
-              <CardHeader><CardTitle className="text-base flex items-center gap-2 dark:text-slate-100"><Bike className="w-4 h-4 text-primary"/> Canais de Venda</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                  {isLoading ? <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-8 bg-slate-100 dark:bg-zinc-800 animate-pulse rounded"/>)}</div> : typeStats.length === 0 ? <div className="flex flex-col items-center justify-center py-6 text-center opacity-50"><Bike className="w-8 h-8 mb-2 text-slate-300"/><p className="text-sm text-muted-foreground italic">Sem dados no período.</p></div> : typeStats.map((item: any) => (<div key={item.name} className="space-y-1"><div className="flex justify-between text-sm"><span className="font-medium capitalize dark:text-slate-300">{item.name === 'mesa' ? 'Mesa / Salão' : (item.name === 'retirada' ? 'Retirada Balcão' : 'Delivery')}</span><span className="text-muted-foreground">{item.count} ({Math.round(item.percentage)}%)</span></div><div className="h-2 w-full bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden"><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out opacity-80 hover:opacity-100" style={{ width: `${item.percentage}%` }}/></div></div>))}
-              </CardContent>
-          </Card>
-      </div>
-    </div>
+    <SidebarProvider>
+      {!hasStore && <StoreSetupModal />}
+      
+      {hasStore && (
+        <StoreSettingsModal 
+          store={store} 
+          userName={userName} 
+          isOpen={isSettingsModalOpen} 
+          onOpenChange={setIsSettingsModalOpen} 
+        />
+      )}
+      
+      <AppSidebar 
+        activeModule={activeModule} 
+        onModuleChange={handleModuleChange} 
+        storeName={store?.name}
+        storeLogo={store?.logo_url}
+        userName={userName}
+        userEmail={userEmail}
+      />
+      
+      <SidebarInset>
+        <DashboardHeader
+          activeModule={activeModule}
+          isStoreOpen={isStoreOpen}
+          onStoreStatusChange={setIsStoreOpen}
+          storeName={store?.name}
+          storeSlug={store?.slug}
+        />
+        
+        <main className="flex flex-1 flex-col bg-background p-4 overflow-y-auto overflow-x-hidden">
+          {renderContent()}
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
