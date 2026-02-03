@@ -28,6 +28,20 @@ export async function deleteCategoryAction(categoryId: string) {
   return { success: true };
 }
 
+// ADICIONADO: Função para reordenar categorias (Drag & Drop)
+export async function updateCategoryOrderAction(items: { id: string; index: number }[]) {
+  const supabase = await createClient();
+  
+  const updates = items.map((item) => 
+    supabase.from("categories").update({ index: item.index }).eq("id", item.id)
+  );
+
+  await Promise.all(updates);
+
+  revalidatePath("/");
+  return { success: true };
+}
+
 // --- INGREDIENTES ---
 
 export async function getStoreIngredientsAction(storeId: string) {
@@ -70,7 +84,7 @@ async function handleImageUpload(supabase: any, imageFile: File, prefix: string)
     return data.publicUrl;
 }
 
-// Função CENTRALIZADA para salvar relacionamentos (Onde estava o erro)
+// Função CENTRALIZADA para salvar relacionamentos
 async function saveRelations(supabase: any, productId: string, ingredientsJson: string, addonsJson: string) {
     // 1. Ingredientes (Lista de IDs simples: ["uuid1", "uuid2"])
     if (ingredientsJson) {
@@ -78,7 +92,6 @@ async function saveRelations(supabase: any, productId: string, ingredientsJson: 
             const ids = JSON.parse(ingredientsJson);
             await supabase.from("product_ingredients").delete().eq("product_id", productId);
             if (Array.isArray(ids) && ids.length > 0) {
-                // Aqui 'id' é uma string, então passamos direto
                 await supabase.from("product_ingredients").insert(ids.map((id: string) => ({ 
                     product_id: productId, 
                     ingredient_id: id 
@@ -93,12 +106,10 @@ async function saveRelations(supabase: any, productId: string, ingredientsJson: 
             const addons = JSON.parse(addonsJson); 
             await supabase.from("product_addons").delete().eq("product_id", productId);
             if (Array.isArray(addons) && addons.length > 0) {
-                // CORREÇÃO CRÍTICA AQUI:
-                // O map recebe um 'item' (objeto), e pegamos item.id e item.price
                 await supabase.from("product_addons").insert(addons.map((item: any) => ({
                     product_id: productId,
-                    addon_id: item.id,   // <--- O ID vem daqui
-                    price: item.price    // <--- O Preço vem daqui
+                    addon_id: item.id,
+                    price: item.price
                 })));
             }
         } catch (e) { console.error("Erro addons:", e); }
