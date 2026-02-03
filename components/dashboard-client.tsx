@@ -16,7 +16,6 @@ import { StoreAppearance } from "@/components/modules/store-appearance"
 import { MenuManager } from "@/components/modules/menu-manager"
 import { OrderManager } from "@/components/modules/order-manager"
 import { TablesManager } from "@/components/modules/tables-manager" 
-// IMPORT NOVO
 import { FinancialDashboard } from "@/components/modules/financial-dashboard"
 import { AppearanceForm } from "@/components/settings/appearance-form"
 
@@ -37,6 +36,7 @@ export default function DashboardClient({
   const router = useRouter()
   const pathname = usePathname()
 
+  // Se não tiver tab, assume 'dashboard'
   const activeModule = searchParams.get("tab") || "dashboard"
 
   const handleModuleChange = (moduleId: string) => {
@@ -71,20 +71,29 @@ export default function DashboardClient({
 
   const renderContent = () => {
     switch (activeModule) {
+      case 'dashboard':
+        // MUDANÇA: A Home agora exibe os Gráficos/Visão Geral
+        return <FinancialDashboard store={store} />
+        
       case 'orders':
         return <OrderManager store={store} />
+        
       case 'tables': 
         return <TablesManager store={store} />
-      case 'financial': // <--- CASE NOVO (Financeiro)
-        return <FinancialDashboard store={store} />
+        
+      case 'financial':
+        // MUDANÇA: A aba Financeiro vira "Em Breve"
+        return <EmptyState moduleId="Relatórios Financeiros Avançados" />
+        
       case 'tema':
         return <AppearanceForm storeId={store?.id} />
+        
       case 'store-appearance':
         return <StoreAppearance store={store} />
+        
       case 'menu-products':
         return <MenuManager store={store} categories={categories} />
-      case 'dashboard':
-        return <EmptyState moduleId="Dashboard (Visão Geral em Breve)" />
+        
       default:
         return <EmptyState moduleId={activeModule} />
     }

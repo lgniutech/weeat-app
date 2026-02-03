@@ -4,9 +4,7 @@ import { useState, useEffect, useTransition } from "react"
 import { getFinancialMetricsAction } from "@/app/actions/dashboard"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DollarSign, ShoppingBag, TrendingUp, Calendar, CreditCard, Bike, Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { DollarSign, ShoppingBag, TrendingUp, CreditCard, Bike } from "lucide-react"
 
 export function FinancialDashboard({ store }: { store: any }) {
   const [period, setPeriod] = useState<'today' | '7days' | '30days'>('today')
@@ -31,8 +29,9 @@ export function FinancialDashboard({ store }: { store: any }) {
       {/* HEADER & FILTRO */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Financeiro</h2>
-            <p className="text-muted-foreground text-sm">Resumo de vendas e métricas operacionais.</p>
+            {/* Título alterado para "Visão Geral" */}
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Visão Geral</h2>
+            <p className="text-muted-foreground text-sm">Resumo da performance da sua loja.</p>
         </div>
         <div className="flex items-center gap-2">
             <div className="bg-white dark:bg-zinc-900 p-1 rounded-lg border dark:border-zinc-800 shadow-sm flex">
@@ -68,7 +67,7 @@ export function FinancialDashboard({ store }: { store: any }) {
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="dark:bg-zinc-900 dark:border-zinc-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Faturamento Total</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Faturamento</CardTitle>
                 <DollarSign className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
@@ -85,7 +84,7 @@ export function FinancialDashboard({ store }: { store: any }) {
 
         <Card className="dark:bg-zinc-900 dark:border-zinc-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Pedidos Concluídos</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Pedidos</CardTitle>
                 <ShoppingBag className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
@@ -93,7 +92,7 @@ export function FinancialDashboard({ store }: { store: any }) {
                     <>
                         <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{data.ordersCount}</div>
                         <p className="text-xs text-muted-foreground mt-1">
-                             Pedidos entregues/finalizados
+                             Concluídos/Entregues
                         </p>
                     </>
                 )}
@@ -110,7 +109,7 @@ export function FinancialDashboard({ store }: { store: any }) {
                     <>
                         <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatCurrency(data.averageTicket)}</div>
                         <p className="text-xs text-muted-foreground mt-1">
-                             Valor médio por pedido
+                             Média por pedido
                         </p>
                     </>
                 )}
@@ -132,7 +131,7 @@ export function FinancialDashboard({ store }: { store: any }) {
                   {isLoading ? (
                       <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-8 bg-slate-100 dark:bg-zinc-800 animate-pulse rounded"/>)}</div>
                   ) : data.paymentStats.length === 0 ? (
-                      <p className="text-sm text-muted-foreground italic">Sem vendas registradas.</p>
+                      <p className="text-sm text-muted-foreground italic">Sem dados no período.</p>
                   ) : (
                       data.paymentStats.map((item: any) => (
                           <div key={item.name} className="space-y-1">
@@ -163,7 +162,7 @@ export function FinancialDashboard({ store }: { store: any }) {
                   {isLoading ? (
                       <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-8 bg-slate-100 dark:bg-zinc-800 animate-pulse rounded"/>)}</div>
                   ) : data.typeStats.length === 0 ? (
-                      <p className="text-sm text-muted-foreground italic">Sem vendas registradas.</p>
+                      <p className="text-sm text-muted-foreground italic">Sem dados no período.</p>
                   ) : (
                       data.typeStats.map((item: any) => (
                           <div key={item.name} className="space-y-1">
