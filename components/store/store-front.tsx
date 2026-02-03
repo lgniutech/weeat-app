@@ -122,6 +122,7 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
     neighborhood: "",
     city: "",
     complement: "",
+    // Para mesa, definimos "caixa" automaticamente
     paymentMethod: isTableSession ? "caixa" : "pix",
     changeFor: "",
     state: ""
@@ -189,11 +190,15 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
           setCheckoutData(prev => ({
             ...prev,
             ...parsed,
-            paymentMethod: "pix",
+            // Garante que se não for mesa, volta para um método padrão se estiver "caixa"
+            paymentMethod: (parsed.paymentMethod === 'caixa') ? "pix" : parsed.paymentMethod,
             changeFor: ""
           }))
         }
       } catch (e) { console.error(e) }
+    } else if (isTableSession) {
+        // Se não tem dados salvos mas é mesa, força "caixa"
+        setCheckoutData(prev => ({ ...prev, paymentMethod: "caixa" }))
     }
   }, [store.id, isTableSession, tableParam])
 
@@ -483,7 +488,8 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
       deliveryType: checkoutData.deliveryType,
       tableNumber: checkoutData.tableNumber,
       address: fullAddress,
-      paymentMethod: checkoutData.paymentMethod,
+      // Força "caixa" se for mesa, para garantir
+      paymentMethod: isTableSession ? 'caixa' : checkoutData.paymentMethod,
       changeFor: checkoutData.changeFor,
       totalPrice: finalTotal,
       items: formattedItems
@@ -941,30 +947,34 @@ export function StoreFront({ store, categories }: { store: any, categories: any[
                                     Pagamento
                                 </h3>
                                 <div className="pl-8 space-y-3">
-                                    <RadioGroup value={checkoutData.paymentMethod} onValueChange={(v: any) => setCheckoutData({...checkoutData, paymentMethod: v})} className="space-y-2">
-                                        {isTableSession && (
-                                            <div className="flex items-center space-x-2 border p-3 rounded-lg cursor-pointer hover:bg-slate-50 border-green-200 bg-green-50">
-                                                <RadioGroupItem value="caixa" id="caixa" />
-                                                <Label htmlFor="caixa" className="flex-1 cursor-pointer font-bold text-green-800 flex items-center gap-2">
-                                                    <Wallet className="w-4 h-4"/> Pagar no Caixa / Garçom
-                                                </Label>
+                                    {isTableSession ? (
+                                        <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+                                                <Wallet className="w-5 h-5" />
                                             </div>
-                                        )}
-                                        <div className="flex items-center space-x-2 border border-slate-200 p-3 rounded-lg cursor-pointer hover:bg-slate-50">
-                                            <RadioGroupItem value="pix" id="pix" />
-                                            <Label htmlFor="pix" className="flex-1 cursor-pointer font-medium text-slate-900">Pix</Label>
+                                            <div>
+                                                <p className="font-bold text-orange-800 text-sm">Pagamento no Balcão</p>
+                                                <p className="text-xs text-orange-700 mt-0.5">O pagamento será realizado ao finalizar.</p>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center space-x-2 border border-slate-200 p-3 rounded-lg cursor-pointer hover:bg-slate-50">
-                                            <RadioGroupItem value="cartao" id="cartao" />
-                                            <Label htmlFor="cartao" className="flex-1 cursor-pointer font-medium text-slate-900">Cartão</Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2 border border-slate-200 p-3 rounded-lg cursor-pointer hover:bg-slate-50">
-                                            <RadioGroupItem value="dinheiro" id="dinheiro" />
-                                            <Label htmlFor="dinheiro" className="flex-1 cursor-pointer font-medium text-slate-900">Dinheiro</Label>
-                                        </div>
-                                    </RadioGroup>
+                                    ) : (
+                                        <RadioGroup value={checkoutData.paymentMethod} onValueChange={(v: any) => setCheckoutData({...checkoutData, paymentMethod: v})} className="space-y-2">
+                                            <div className="flex items-center space-x-2 border border-slate-200 p-3 rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <RadioGroupItem value="pix" id="pix" />
+                                                <Label htmlFor="pix" className="flex-1 cursor-pointer font-medium text-slate-900">Pix</Label>
+                                            </div>
+                                            <div className="flex items-center space-x-2 border border-slate-200 p-3 rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <RadioGroupItem value="cartao" id="cartao" />
+                                                <Label htmlFor="cartao" className="flex-1 cursor-pointer font-medium text-slate-900">Cartão</Label>
+                                            </div>
+                                            <div className="flex items-center space-x-2 border border-slate-200 p-3 rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <RadioGroupItem value="dinheiro" id="dinheiro" />
+                                                <Label htmlFor="dinheiro" className="flex-1 cursor-pointer font-medium text-slate-900">Dinheiro</Label>
+                                            </div>
+                                        </RadioGroup>
+                                    )}
 
-                                    {checkoutData.paymentMethod === 'dinheiro' && (
+                                    {checkoutData.paymentMethod === 'dinheiro' && !isTableSession && (
                                         <div className="animate-in slide-in-from-top-2 fade-in">
                                             <Label className="text-slate-900">Troco para quanto?</Label>
                                             <Input 
