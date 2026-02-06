@@ -51,7 +51,6 @@ export function OverviewDashboard({ store }: { store: any }) {
   // --- 2. Busca de Clima (Prioridade: Lat/Lng Salvo > Cidade Cadastrada) ---
   useEffect(() => {
     async function fetchStoreWeather() {
-        // Se não tiver nem cidade, nem lat/lng, não faz nada
         if (!store.city && !store.settings?.location?.lat) return;
 
         try {
@@ -59,7 +58,6 @@ export function OverviewDashboard({ store }: { store: any }) {
             let longitude = store.settings?.location?.lng;
             let cityName = store.city;
 
-            // Se não tem Lat/Lng salvo, busca via Geocoding API usando a cidade
             if (!latitude || !longitude) {
                 const query = `${store.city}, ${store.state || ''}, Brazil`;
                 const geoRes = await fetch(
@@ -70,12 +68,9 @@ export function OverviewDashboard({ store }: { store: any }) {
                 if (geoData.results && geoData.results.length > 0) {
                     latitude = geoData.results[0].latitude;
                     longitude = geoData.results[0].longitude;
-                    // Atualiza o nome da cidade para o oficial encontrado (opcional)
-                    // cityName = geoData.results[0].name; 
                 }
             }
 
-            // Se conseguimos as coordenadas, buscamos o clima
             if (latitude && longitude) {
                 const weatherRes = await fetch(
                     `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
@@ -154,7 +149,8 @@ export function OverviewDashboard({ store }: { store: any }) {
             <CardTitle className="text-sm font-medium text-slate-400">Caixa Hoje</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-mono font-bold tracking-tight text-white mb-2">
+            {/* AQUI: Removido font-mono para garantir uniformidade */}
+            <div className="text-4xl font-bold tracking-tight text-white mb-2">
               {formatCurrency(metrics.revenue)}
             </div>
             <div className="flex items-center gap-4 text-sm">
