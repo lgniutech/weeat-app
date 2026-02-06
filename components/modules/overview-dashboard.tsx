@@ -21,16 +21,17 @@ import {
   Cloud,
   CloudLightning,
   Snowflake,
-  Wind
+  Wind,
+  MapPin
 } from "lucide-react"
 
 export function OverviewDashboard({ store }: { store: any }) {
   const [data, setData] = useState<DashboardData | null>(null)
-  const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null)
+  const [weather, setWeather] = useState<{ temp: number; code: number; city: string } | null>(null)
   const [isPending, startTransition] = useTransition()
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
 
-  // --- 1. Busca de Dados do Dashboard ---
+  // --- 1. Busca de Dados do Dashboard (Polling) ---
   const loadData = () => {
     startTransition(async () => {
       const result = await getDashboardOverviewAction(store.id)
@@ -43,33 +44,48 @@ export function OverviewDashboard({ store }: { store: any }) {
     })
   }
 
-  // Polling de dados a cada 30s
   useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 30000)
+    const interval = setInterval(loadData, 30000) // Atualiza a cada 30s
     return () => clearInterval(interval)
   }, [store.id])
 
-  // --- 2. Busca de Clima (Browser Geolocation + Open-Meteo) ---
+  // --- 2. Busca de Clima Baseado no Endereço da Loja ---
   useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(async (position) => {
+    async function fetchStoreWeather() {
+        if (!store.city) return;
+
         try {
-          const { latitude, longitude } = position.coords
-          const res = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
-          )
-          const wData = await res.json()
-          setWeather({
-            temp: wData.current.temperature_2m,
-            code: wData.current.weather_code
-          })
+            // Passo 1: Descobrir Lat/Long da cidade da loja
+            const cityQuery = `${store.city}, ${store.state || ''}, Brazil`;
+            const geoRes = await fetch(
+                `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(store.city)}&count=1&language=pt&format=json`
+            );
+            const geoData = await geoRes.json();
+
+            if (!geoData.results || geoData.results.length === 0) return;
+
+            const { latitude, longitude, name } = geoData.results[0];
+
+            // Passo 2: Buscar clima para essa Lat/Long
+            const weatherRes = await fetch(
+                `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
+            );
+            const weatherData = await weatherRes.json();
+
+            setWeather({
+                temp: weatherData.current.temperature_2m,
+                code: weatherData.current.weather_code,
+                city: name
+            });
+
         } catch (error) {
-          console.error("Erro ao buscar clima:", error)
+            console.error("Erro ao carregar clima:", error);
         }
-      })
     }
-  }, [])
+
+    fetchStoreWeather();
+  }, [store.city, store.state]);
 
   // Helpers de Formatação
   const formatCurrency = (val: number) => 
@@ -80,7 +96,7 @@ export function OverviewDashboard({ store }: { store: any }) {
     return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   }
 
-  // Helper de Ícone de Clima (Códigos WMO)
+  // Ícones de Clima (WMO Codes)
   const getWeatherIcon = (code: number) => {
     if (code === 0 || code === 1) return <Sun className="w-8 h-8 text-amber-500 animate-pulse-slow" />
     if (code <= 3) return <Cloud className="w-8 h-8 text-slate-400" />
@@ -100,9 +116,9 @@ export function OverviewDashboard({ store }: { store: any }) {
     return "Normal"
   }
 
-  // Skeleton
+  // Skeleton de Carregamento
   if (!data && isPending) {
-    return <div className="flex h-96 items-center justify-center text-muted-foreground animate-pulse">Ligando motores...</div>
+    return <div className="flex h-96 items-center justify-center text-muted-foreground animate-pulse">Carregando cockpit...</div>
   }
 
   const { metrics, statusCounts, salesMix, recentOrders, unavailableProducts } = data || {
@@ -116,10 +132,10 @@ export function OverviewDashboard({ store }: { store: any }) {
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* --- LINHA 1: MONITOR DE SAÚDE (Agora com 5 Colunas) --- */}
+      {/* --- LINHA 1: MONITOR VITAL (5 Colunas) --- */}
       <div className="grid gap-4 md:grid-cols-5">
         
-        {/* KPI 1: CAIXA (Ocupa 2 colunas) */}
+        {/* KPI 1: CAIXA (2 colunas) */}
         <Card className="md:col-span-2 bg-slate-900 text-slate-50 border-slate-800 dark:bg-zinc-950 dark:border-zinc-800 shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-10">
             <DollarSign className="w-32 h-32 text-emerald-500" />
@@ -157,10 +173,13 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* KPI 3: CLIMA (NOVO!) */}
+        {/* KPI 3: CLIMA LOCAL (Endereço da Loja) */}
         <Card className="dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden">
           <CardHeader className="pb-2 pt-4 px-4">
-             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clima Local</CardTitle>
+             <div className="flex justify-between items-center">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clima</CardTitle>
+                {weather?.city && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><MapPin className="w-3 h-3"/> {weather.city}</span>}
+             </div>
           </CardHeader>
           <CardContent className="flex items-center justify-between pt-0 pb-4 px-4">
              {weather ? (
@@ -174,25 +193,30 @@ export function OverviewDashboard({ store }: { store: any }) {
                  </div>
                </>
              ) : (
-               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                 <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
-                 Buscando...
+               <div className="flex flex-col justify-center h-full w-full py-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
+                    {store.city ? "Buscando..." : "Sem endereço"}
+                  </div>
+                  {!store.city && <span className="text-[10px] text-red-400">Configure o endereço</span>}
                </div>
              )}
           </CardContent>
         </Card>
 
-        {/* KPI 4: STATUS LOJA */}
+        {/* KPI 4: STATUS (Atualização) */}
         <Card className="dark:bg-zinc-900 dark:border-zinc-800 flex flex-col justify-center items-center text-center">
            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse mb-2 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
-           <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">ABERTO</span>
-           <span className="text-[10px] text-muted-foreground mt-1">Atualizado: {lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+           <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">ONLINE</span>
+           <span className="text-[10px] text-muted-foreground mt-1">
+             Atualizado: {lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+           </span>
         </Card>
       </div>
 
       {/* --- LINHA 2: GARGALOS OPERACIONAIS --- */}
       <div className="grid gap-4 md:grid-cols-3">
-        {/* Card A: FILA (Pendente) */}
+        {/* Card A: FILA */}
         <Card className={`border-l-4 ${statusCounts.pending > 0 ? 'border-l-amber-500 shadow-amber-100 dark:shadow-none' : 'border-l-slate-200'} dark:bg-zinc-900`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -206,7 +230,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* Card B: COZINHA (Preparando) */}
+        {/* Card B: COZINHA */}
         <Card className="border-l-4 border-l-blue-500 dark:bg-zinc-900">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -220,7 +244,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* Card C: EXPEDIÇÃO (Enviado) */}
+        {/* Card C: EXPEDIÇÃO */}
         <Card className="border-l-4 border-l-purple-500 dark:bg-zinc-900">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -244,7 +268,7 @@ export function OverviewDashboard({ store }: { store: any }) {
               <Activity className="w-5 h-5 text-primary" />
               Pulsar da Loja
             </CardTitle>
-            <CardDescription>Últimas atividades registradas em tempo real</CardDescription>
+            <CardDescription>Últimas atividades em tempo real</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 p-0 overflow-hidden">
              <ScrollArea className="h-[300px] px-6">
@@ -325,14 +349,6 @@ export function OverviewDashboard({ store }: { store: any }) {
                     ) : (
                         <div className="h-full flex items-center justify-center text-muted-foreground text-xs">Sem dados suficientes</div>
                     )}
-                    <div className="flex justify-center gap-3 mt-[-10px]">
-                        {salesMix.map(item => (
-                            <div key={item.name} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.fill }} />
-                                {item.name}
-                            </div>
-                        ))}
-                    </div>
                 </CardContent>
             </Card>
 
@@ -354,9 +370,6 @@ export function OverviewDashboard({ store }: { store: any }) {
                                     {prod.name}
                                 </Badge>
                             ))}
-                            {unavailableProducts.length >= 10 && (
-                                <span className="text-[10px] text-muted-foreground self-center">+ outros</span>
-                            )}
                         </div>
                     )}
                 </CardContent>
