@@ -10,14 +10,14 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { EmptyState } from "@/components/empty-state"
 import { StoreSetupModal } from "@/components/modals/store-setup-modal"
 import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
+import { DollarSign } from "lucide-react"
 
-// Importação dos Módulos
+// --- ATENÇÃO AQUI: Importando o NOVO arquivo ---
 import { StoreAppearance } from "@/components/modules/store-appearance"
 import { MenuManager } from "@/components/modules/menu-manager"
 import { OrderManager } from "@/components/modules/order-manager"
 import { TablesManager } from "@/components/modules/tables-manager" 
-// IMPORT NOVO
-import { FinancialDashboard } from "@/components/modules/financial-dashboard"
+import { OverviewDashboard } from "@/components/modules/overview-dashboard" // <--- Correção feita aqui
 import { AppearanceForm } from "@/components/settings/appearance-form"
 
 interface DashboardClientProps {
@@ -71,20 +71,43 @@ export default function DashboardClient({
 
   const renderContent = () => {
     switch (activeModule) {
+      case 'dashboard':
+        // Usa o novo componente OverviewDashboard
+        return <OverviewDashboard store={store} />
+        
       case 'orders':
         return <OrderManager store={store} />
+        
       case 'tables': 
         return <TablesManager store={store} />
-      case 'financial': // <--- CASE NOVO (Financeiro)
-        return <FinancialDashboard store={store} />
+        
+      case 'financial':
+        return (
+            <div className="flex flex-col items-center justify-center h-[calc(100vh-150px)] space-y-6 animate-in fade-in zoom-in-95 p-4 text-center">
+                <div className="w-24 h-24 bg-slate-100 dark:bg-zinc-800 rounded-full flex items-center justify-center shadow-sm mb-2">
+                    <DollarSign className="w-10 h-10 text-slate-400 dark:text-slate-500" />
+                </div>
+                <div className="space-y-2 max-w-md">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Financeiro</h2>
+                    <p className="text-muted-foreground text-lg leading-relaxed">
+                        Acompanhe vendas, receitas e relatórios financeiros
+                    </p>
+                </div>
+                <div className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-5 py-2 rounded-full text-sm font-bold border border-blue-100 dark:border-blue-800/50 shadow-sm">
+                    Módulo pronto para desenvolvimento
+                </div>
+            </div>
+        )
+        
       case 'tema':
         return <AppearanceForm storeId={store?.id} />
+        
       case 'store-appearance':
         return <StoreAppearance store={store} />
+        
       case 'menu-products':
         return <MenuManager store={store} categories={categories} />
-      case 'dashboard':
-        return <EmptyState moduleId="Dashboard (Visão Geral em Breve)" />
+        
       default:
         return <EmptyState moduleId={activeModule} />
     }

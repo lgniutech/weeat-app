@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/order"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft, MessageSquareWarning, Printer, Phone, ExternalLink, MessageCircle, DollarSign } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft, MessageSquareWarning, Printer, Phone, ExternalLink, MessageCircle, DollarSign, BellRing, Utensils } from "lucide-react"
 import { format, differenceInMinutes, isToday } from "date-fns"
 import { cn, formatPhone } from "@/lib/utils"
 import {
@@ -20,10 +20,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 
+// ATUALIZAÇÃO AQUI: Mudança visual da coluna 'enviado' para ser genérica
 const BASE_COLUMNS = [
   { id: 'pendente', label: 'Pendente', color: 'bg-yellow-500', text: 'text-yellow-700 dark:text-yellow-400', icon: AlertCircle },
   { id: 'preparando', label: 'Cozinha', color: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-400', icon: Package },
-  { id: 'enviado', label: 'Entrega', color: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-400', icon: Bike },
+  { id: 'enviado', label: 'Pronto / Expedição', color: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-400', icon: BellRing }, // Ícone e Label mudados
   { id: 'entregue', label: 'Concluído', color: 'bg-green-600', text: 'text-green-700 dark:text-green-400', icon: CheckCircle2 },
 ]
 
@@ -229,6 +230,13 @@ export function OrderManager({ store }: { store: any }) {
   }
   const getMapsLink = (address: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 
+  // HELPER PARA TEXTO DO BOTÃO NA ETAPA "PRONTO"
+  const getReadyButtonText = (type: string) => {
+      if (type === 'mesa') return "LEVAR À MESA"
+      if (type === 'retirada') return "CHAMAR CLIENTE"
+      return "SAIU P/ ENTREGA"
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-slate-50 dark:bg-zinc-950 transition-colors">
       <style jsx global>{`
@@ -398,13 +406,19 @@ export function OrderManager({ store }: { store: any }) {
                                     {col.id === 'preparando' && (
                                         <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
                                              <button onClick={() => moveOrder(order.id, 'pendente')} className="bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-[10px] border-t border-r border-slate-100 dark:border-zinc-700"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
-                                             <button onClick={() => moveOrder(order.id, 'enviado')} className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-colors uppercase">Pronto</button>
+                                             {/* ATUALIZAÇÃO AQUI: Texto muda se for Mesa ou Delivery */}
+                                             <button onClick={() => moveOrder(order.id, 'enviado')} className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-colors uppercase">
+                                                 {order.delivery_type === 'mesa' ? "SERVIR" : "PRONTO"}
+                                             </button>
                                         </div>
                                     )}
                                     {col.id === 'enviado' && (
                                         <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
                                              <button onClick={() => moveOrder(order.id, 'preparando')} className="bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-[10px] border-t border-r border-slate-100 dark:border-zinc-700"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
-                                             <button onClick={() => moveOrder(order.id, 'entregue')} className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold transition-colors uppercase">Entregue</button>
+                                             {/* ATUALIZAÇÃO AQUI: Texto do botão se adapta ao contexto */}
+                                             <button onClick={() => moveOrder(order.id, 'entregue')} className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold transition-colors uppercase">
+                                                 {getReadyButtonText(order.delivery_type)}
+                                             </button>
                                         </div>
                                     )}
                                     {col.id === 'entregue' && (
