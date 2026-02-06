@@ -19,7 +19,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter
 } from "@/components/ui/dialog";
 import {
@@ -108,7 +107,6 @@ export function CouponsManager({ store }: { store: any }) {
   };
 
   const handleToggle = async (id: string, currentStatus: boolean) => {
-    // Otimistic update
     setCoupons(prev => prev.map(c => c.id === id ? { ...c, is_active: !currentStatus } : c));
     await toggleCouponStatusAction(id, !currentStatus);
   };
@@ -163,7 +161,8 @@ export function CouponsManager({ store }: { store: any }) {
               </div>
               
               <div className="bg-slate-100 dark:bg-zinc-800 p-2 rounded border border-dashed border-slate-300 dark:border-zinc-700 mt-3 text-center">
-                <span className="font-mono font-bold text-lg tracking-widest uppercase">{coupon.code}</span>
+                {/* REMOVIDO: font-mono */}
+                <span className="font-bold text-lg tracking-widest uppercase">{coupon.code}</span>
               </div>
             </div>
 
@@ -221,12 +220,13 @@ export function CouponsManager({ store }: { store: any }) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="code">Código do Cupom</Label>
+                {/* REMOVIDO: font-mono */}
                 <Input 
                   id="code" 
                   placeholder="Ex: BEMVINDO10" 
                   value={formData.code} 
                   onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="font-mono uppercase"
+                  className="uppercase font-bold tracking-wider" 
                   required 
                 />
               </div>
