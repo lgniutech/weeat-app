@@ -44,7 +44,7 @@ interface StoreFrontProps {
   products: any[]
 }
 
-export function StoreFront({ store, categories, products }: StoreFrontProps) {
+export function StoreFront({ store, categories, products = [] }: StoreFrontProps) {
   const [cart, setCart] = useState<any[]>([])
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
@@ -66,7 +66,7 @@ export function StoreFront({ store, categories, products }: StoreFrontProps) {
   const [isOrderPlacing, setIsOrderPlacing] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState<any>(null)
 
-  // --- NOVO: ESTADOS DO CUPOM ---
+  // Estados do Cupom
   const [couponCode, setCouponCode] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null)
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
@@ -130,7 +130,8 @@ export function StoreFront({ store, categories, products }: StoreFrontProps) {
   // Total Final (Não pode ser negativo)
   const total = Math.max(0, subtotal - discountAmount + deliveryFee);
 
-  const filteredProducts = products.filter(p => {
+  // Filtragem segura (agora products vem garantido como array pelo default prop ou pelo fix da página)
+  const filteredProducts = (products || []).filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesCategory = selectedCategory === "todos" || p.category_id === selectedCategory
     return matchesSearch && matchesCategory && p.is_available
@@ -419,7 +420,6 @@ export function StoreFront({ store, categories, products }: StoreFrontProps) {
                                 </div>
                             ) : (
                                 <div className="flex gap-2">
-                                    {/* Removido font-mono para consistência visual */}
                                     <Input 
                                         placeholder="Código" 
                                         value={couponCode} 
