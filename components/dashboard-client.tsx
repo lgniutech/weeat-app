@@ -12,12 +12,13 @@ import { StoreSetupModal } from "@/components/modals/store-setup-modal"
 import { StoreSettingsModal } from "@/components/modals/store-settings-modal"
 import { DollarSign } from "lucide-react"
 
-// --- ATENÇÃO AQUI: Importando o NOVO arquivo ---
+// --- IMPORTAÇÕES ---
 import { StoreAppearance } from "@/components/modules/store-appearance"
 import { MenuManager } from "@/components/modules/menu-manager"
 import { OrderManager } from "@/components/modules/order-manager"
 import { TablesManager } from "@/components/modules/tables-manager" 
-import { OverviewDashboard } from "@/components/modules/overview-dashboard" // <--- Correção feita aqui
+import { OverviewDashboard } from "@/components/modules/overview-dashboard"
+import { CouponsManager } from "@/components/modules/coupons-manager" // <--- NOVO IMPORT
 import { AppearanceForm } from "@/components/settings/appearance-form"
 
 interface DashboardClientProps {
@@ -72,7 +73,6 @@ export default function DashboardClient({
   const renderContent = () => {
     switch (activeModule) {
       case 'dashboard':
-        // Usa o novo componente OverviewDashboard
         return <OverviewDashboard store={store} />
         
       case 'orders':
@@ -80,6 +80,9 @@ export default function DashboardClient({
         
       case 'tables': 
         return <TablesManager store={store} />
+
+      case 'coupons': // <--- NOVA ROTA DE CUPONS
+        return <CouponsManager store={store} />
         
       case 'financial':
         return (

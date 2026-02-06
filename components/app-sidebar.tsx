@@ -78,7 +78,8 @@ const navigationItems = [
     items: [
       { title: "Base de Clientes", url: "#" },
       { title: "Automação WhatsApp", url: "#", icon: MessageCircle },
-      { title: "Fidelidade & Cupons", url: "#", icon: Ticket },
+      // ADICIONADO ID: coupons
+      { title: "Fidelidade & Cupons", url: "#", icon: Ticket, id: "coupons" }, 
       { title: "Avaliações", url: "#", icon: Star },
     ],
   },
@@ -88,7 +89,6 @@ const navigationItems = [
     id: "financeiro",
     items: [
       { title: "Fluxo de Caixa", url: "#" },
-      // ADICIONADO ID: financial
       { title: "Relatórios Detalhados", url: "#", icon: BarChart3, id: "financial" }, 
       { title: "Entregadores & Fretes", url: "#" },
     ],
@@ -123,7 +123,7 @@ export function AppSidebar({
   userName, 
   userEmail 
 }: AppSidebarProps) {
-  const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes", "financeiro"]) 
+  const [openGroups, setOpenGroups] = React.useState<string[]>(["operacao", "configuracoes", "financeiro", "marketing"]) // Adicionei marketing aberto por padrão
   const { state, setOpen } = useSidebar()
 
   const getInitials = (name: string) => {
