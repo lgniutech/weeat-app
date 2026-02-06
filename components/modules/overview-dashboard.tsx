@@ -3,7 +3,6 @@
 import { useState, useEffect, useTransition } from "react"
 import { getDashboardOverviewAction, type DashboardData } from "@/app/actions/dashboard"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
@@ -11,24 +10,27 @@ import {
   DollarSign, 
   ShoppingBag, 
   Activity, 
-  Clock, 
   Bike, 
   Utensils, 
   Store, 
   AlertCircle, 
-  AlertTriangle,
-  ArrowUpRight,
-  Package,
   XCircle,
-  PauseCircle
+  PauseCircle,
+  CloudRain,
+  Sun,
+  Cloud,
+  CloudLightning,
+  Snowflake,
+  Wind
 } from "lucide-react"
 
 export function OverviewDashboard({ store }: { store: any }) {
   const [data, setData] = useState<DashboardData | null>(null)
+  const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null)
   const [isPending, startTransition] = useTransition()
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
 
-  // Função de carga de dados
+  // --- 1. Busca de Dados do Dashboard ---
   const loadData = () => {
     startTransition(async () => {
       const result = await getDashboardOverviewAction(store.id)
@@ -41,13 +43,35 @@ export function OverviewDashboard({ store }: { store: any }) {
     })
   }
 
-  // Efeito de Polling: Atualiza a cada 30 segundos
+  // Polling de dados a cada 30s
   useEffect(() => {
     loadData()
     const interval = setInterval(loadData, 30000)
     return () => clearInterval(interval)
   }, [store.id])
 
+  // --- 2. Busca de Clima (Browser Geolocation + Open-Meteo) ---
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        try {
+          const { latitude, longitude } = position.coords
+          const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
+          )
+          const wData = await res.json()
+          setWeather({
+            temp: wData.current.temperature_2m,
+            code: wData.current.weather_code
+          })
+        } catch (error) {
+          console.error("Erro ao buscar clima:", error)
+        }
+      })
+    }
+  }, [])
+
+  // Helpers de Formatação
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
 
@@ -56,9 +80,29 @@ export function OverviewDashboard({ store }: { store: any }) {
     return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   }
 
-  // Skeleton de carregamento inicial
+  // Helper de Ícone de Clima (Códigos WMO)
+  const getWeatherIcon = (code: number) => {
+    if (code === 0 || code === 1) return <Sun className="w-8 h-8 text-amber-500 animate-pulse-slow" />
+    if (code <= 3) return <Cloud className="w-8 h-8 text-slate-400" />
+    if (code <= 48) return <Wind className="w-8 h-8 text-slate-400" />
+    if (code <= 67) return <CloudRain className="w-8 h-8 text-blue-400" />
+    if (code <= 77) return <Snowflake className="w-8 h-8 text-cyan-300" />
+    if (code <= 82) return <CloudRain className="w-8 h-8 text-blue-600" />
+    if (code <= 99) return <CloudLightning className="w-8 h-8 text-purple-500 animate-pulse" />
+    return <Sun className="w-8 h-8 text-amber-500" />
+  }
+
+  const getWeatherLabel = (code: number) => {
+    if (code === 0) return "Céu Limpo"
+    if (code <= 3) return "Nublado"
+    if (code <= 67) return "Chuvoso"
+    if (code <= 99) return "Tempestade"
+    return "Normal"
+  }
+
+  // Skeleton
   if (!data && isPending) {
-    return <div className="flex h-96 items-center justify-center text-muted-foreground animate-pulse">Carregando cockpit...</div>
+    return <div className="flex h-96 items-center justify-center text-muted-foreground animate-pulse">Ligando motores...</div>
   }
 
   const { metrics, statusCounts, salesMix, recentOrders, unavailableProducts } = data || {
@@ -72,9 +116,10 @@ export function OverviewDashboard({ store }: { store: any }) {
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* --- CABEÇALHO: MONITOR DE SAÚDE --- */}
-      <div className="grid gap-4 md:grid-cols-4">
-        {/* KPI: CAIXA (Faturamento) */}
+      {/* --- LINHA 1: MONITOR DE SAÚDE (Agora com 5 Colunas) --- */}
+      <div className="grid gap-4 md:grid-cols-5">
+        
+        {/* KPI 1: CAIXA (Ocupa 2 colunas) */}
         <Card className="md:col-span-2 bg-slate-900 text-slate-50 border-slate-800 dark:bg-zinc-950 dark:border-zinc-800 shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-10">
             <DollarSign className="w-32 h-32 text-emerald-500" />
@@ -92,16 +137,16 @@ export function OverviewDashboard({ store }: { store: any }) {
               </span>
               <span className="w-px h-4 bg-slate-700"></span>
               <span className="text-slate-400">
-                Ticket Médio: <span className="text-slate-200">{formatCurrency(metrics.avgTicket)}</span>
+                Médio: <span className="text-slate-200">{formatCurrency(metrics.avgTicket)}</span>
               </span>
             </div>
           </CardContent>
         </Card>
 
-        {/* KPI: PEDIDOS CANCELADOS (Alerta) */}
+        {/* KPI 2: CANCELAMENTOS */}
         <Card className={`${metrics.cancelledCount > 0 ? 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900' : 'dark:bg-zinc-900 dark:border-zinc-800'}`}>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Cancelamentos</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados</CardTitle>
             <XCircle className={`w-4 h-4 ${metrics.cancelledCount > 0 ? 'text-red-500' : 'text-slate-300'}`} />
           </CardHeader>
           <CardContent>
@@ -112,15 +157,40 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* KPI: STATUS DA LOJA (Simulação Visual) */}
+        {/* KPI 3: CLIMA (NOVO!) */}
+        <Card className="dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden">
+          <CardHeader className="pb-2 pt-4 px-4">
+             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clima Local</CardTitle>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between pt-0 pb-4 px-4">
+             {weather ? (
+               <>
+                 <div className="flex flex-col">
+                   <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{weather.temp.toFixed(0)}°C</span>
+                   <span className="text-xs text-muted-foreground">{getWeatherLabel(weather.code)}</span>
+                 </div>
+                 <div className="scale-110 transform origin-center">
+                    {getWeatherIcon(weather.code)}
+                 </div>
+               </>
+             ) : (
+               <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                 <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
+                 Buscando...
+               </div>
+             )}
+          </CardContent>
+        </Card>
+
+        {/* KPI 4: STATUS LOJA */}
         <Card className="dark:bg-zinc-900 dark:border-zinc-800 flex flex-col justify-center items-center text-center">
            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse mb-2 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
-           <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">LOJA ABERTA</span>
-           <span className="text-xs text-muted-foreground mt-1">Atualizado: {lastUpdated.toLocaleTimeString()}</span>
+           <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">ABERTO</span>
+           <span className="text-[10px] text-muted-foreground mt-1">Atualizado: {lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         </Card>
       </div>
 
-      {/* --- CENTRO DE COMANDO: GARGALOS --- */}
+      {/* --- LINHA 2: GARGALOS OPERACIONAIS --- */}
       <div className="grid gap-4 md:grid-cols-3">
         {/* Card A: FILA (Pendente) */}
         <Card className={`border-l-4 ${statusCounts.pending > 0 ? 'border-l-amber-500 shadow-amber-100 dark:shadow-none' : 'border-l-slate-200'} dark:bg-zinc-900`}>
@@ -167,7 +237,7 @@ export function OverviewDashboard({ store }: { store: any }) {
 
       <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-7">
         
-        {/* --- FEED DE ATIVIDADE (4 colunas) --- */}
+        {/* --- LINHA 3: PULSO DA LOJA (FEED) --- */}
         <Card className="md:col-span-2 lg:col-span-4 dark:bg-zinc-900 dark:border-zinc-800 h-[400px] flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -221,7 +291,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* --- MIX DE VENDAS & ESTOQUE (3 colunas) --- */}
+        {/* --- LINHA 3: MIX DE VENDAS & ESTOQUE --- */}
         <div className="md:col-span-1 lg:col-span-3 space-y-6">
             
             {/* Gráfico Mix */}
