@@ -11,9 +11,9 @@ export type DashboardData = {
     cancelledCount: number;
   };
   statusCounts: {
-    pending: number;   // Aguardando aceite
-    preparing: number; // Na cozinha
-    expedition: number; // Saiu para entrega / Pronto
+    pending: number;   
+    preparing: number; 
+    expedition: number; 
   };
   salesMix: {
     name: string;
@@ -28,13 +28,12 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
   const supabase = await createClient();
   const now = new Date();
   
-  // Foco total no "HOJE"
+  // Define o intervalo "HOJE" (00:00 até 23:59)
   const startDate = startOfDay(now).toISOString();
   const endDate = endOfDay(now).toISOString();
 
   try {
     // 1. Busca Pedidos do Dia + Itens
-    // Trazemos tudo de uma vez para processar em memória (mais rápido que múltiplos counts)
     const { data: orders, error: ordersError } = await supabase
       .from("orders")
       .select(`
@@ -62,12 +61,13 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
       .select("id, name")
       .eq("store_id", storeId)
       .eq("is_available", false)
-      .limit(10); // Apenas os primeiros 10 para não poluir
+      .limit(10); 
 
     if (stockError) console.error("Erro ao buscar estoque:", stockError);
 
-    // --- Processamento dos Dados ---
-
+    // --- Processamento em Memória ---
+    
+    // Separa válidos de cancelados
     const validOrders = orders?.filter(o => o.status !== 'cancelado') || [];
     const cancelledOrders = orders?.filter(o => o.status === 'cancelado') || [];
 
@@ -77,7 +77,6 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
     const avgTicket = ordersCount > 0 ? revenue / ordersCount : 0;
 
     // Contagem por Status (Funil Operacional)
-    // Ajuste aqui conforme os status exatos do seu banco
     const pendingCount = validOrders.filter(o => o.status === 'pendente').length;
     
     const preparingCount = validOrders.filter(o => 
@@ -94,10 +93,10 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
     const mesaCount = validOrders.filter(o => o.delivery_type === 'mesa').length;
 
     const salesMix = [
-      { name: 'Delivery', value: deliveryCount, fill: '#3b82f6' }, // Blue-500
-      { name: 'Retirada', value: retiradaCount, fill: '#f59e0b' }, // Amber-500
-      { name: 'Mesa', value: mesaCount, fill: '#10b981' },     // Emerald-500
-    ].filter(i => i.value > 0); // Remove zerados para o gráfico não bugar
+      { name: 'Delivery', value: deliveryCount, fill: '#3b82f6' }, // blue-500
+      { name: 'Retirada', value: retiradaCount, fill: '#f59e0b' }, // amber-500
+      { name: 'Mesa', value: mesaCount, fill: '#10b981' },     // emerald-500
+    ].filter(i => i.value > 0);
 
     return {
       metrics: {
@@ -112,7 +111,7 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
         expedition: expeditionCount
       },
       salesMix,
-      recentOrders: orders?.slice(0, 7) || [], // Top 7 recentes
+      recentOrders: orders?.slice(0, 10) || [], // Top 10 recentes
       unavailableProducts: unavailable || []
     };
 
