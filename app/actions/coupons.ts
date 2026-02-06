@@ -16,6 +16,10 @@ export type Coupon = {
   is_active: boolean;
 };
 
+// ==========================================================
+// ÁREA ADMINISTRATIVA (Dono da Loja)
+// ==========================================================
+
 // --- LISTAR CUPONS ---
 export async function getCouponsAction(storeId: string) {
   const supabase = await createClient();
@@ -100,4 +104,68 @@ export async function deleteCouponAction(couponId: string) {
   const supabase = await createClient();
   await supabase.from("coupons").delete().eq("id", couponId);
   revalidatePath("/");
+}
+
+// ==========================================================
+// ÁREA DO CLIENTE (Consumidor Final)
+// ==========================================================
+
+// --- VALIDAR CUPOM NO CARRINHO ---
+export async function validateCouponAction(code: string, storeId: string, cartTotal: number) {
+  const supabase = await createClient();
+  const cleanCode = code.toUpperCase().trim().replace(/\s/g, "");
+
+  const { data: coupon, error } = await supabase
+    .from("coupons")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("code", cleanCode)
+    .single();
+
+  if (error || !coupon) {
+    return { error: "Cupom inválido ou não encontrado." };
+  }
+
+  if (!coupon.is_active) {
+    return { error: "Este cupom foi desativado." };
+  }
+
+  // Verifica validade (Data)
+  if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+    return { error: "Este cupom expirou." };
+  }
+
+  // Verifica limite de usos
+  if (coupon.max_uses && coupon.used_count >= coupon.max_uses) {
+    return { error: "Este cupom atingiu o limite de usos." };
+  }
+
+  // Verifica valor mínimo do pedido
+  if (cartTotal < coupon.min_order_value) {
+    return { error: `Pedido mínimo para este cupom: R$ ${coupon.min_order_value.toFixed(2)}` };
+  }
+
+  return { 
+    success: true, 
+    coupon: {
+      id: coupon.id,
+      code: coupon.code,
+      type: coupon.discount_type,
+      value: coupon.discount_value
+    }
+  };
+}
+
+// --- INCREMENTAR USO (CHAMADO AO FECHAR O PEDIDO) ---
+export async function incrementCouponUsageAction(couponId: string) {
+  const supabase = await createClient();
+  
+  const { data: coupon } = await supabase.from("coupons").select("used_count").eq("id", couponId).single();
+  
+  if (coupon) {
+    await supabase
+      .from("coupons")
+      .update({ used_count: (coupon.used_count || 0) + 1 })
+      .eq("id", couponId);
+  }
 }
