@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { 
-  DollarSign, 
   ShoppingBag, 
   Activity, 
   Bike, 
@@ -22,7 +21,9 @@ import {
   CloudLightning,
   Snowflake,
   Wind,
-  MapPin
+  MapPin,
+  ChefHat,
+  Timer
 } from "lucide-react"
 
 export function OverviewDashboard({ store }: { store: any }) {
@@ -134,38 +135,49 @@ export function OverviewDashboard({ store }: { store: any }) {
     unavailableProducts: []
   }
 
+  // --- CÁLCULO OPERACIONAL ---
+  // Soma total de pedidos que precisam de atenção agora
+  const totalActiveOrders = statusCounts.pending + statusCounts.preparing + statusCounts.expedition;
+
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* --- LINHA 1: MONITOR VITAL (4 Colunas) --- */}
       <div className="grid gap-4 md:grid-cols-4">
         
-        {/* KPI 1: CAIXA (2 colunas) */}
-        <Card className="md:col-span-2 bg-slate-900 text-slate-50 border-slate-800 dark:bg-zinc-950 dark:border-zinc-800 shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-8 opacity-10">
-            <DollarSign className="w-32 h-32 text-emerald-500" />
+        {/* KPI 1: MOVIMENTO ATUAL (OPERACIONAL) - COR DO TEMA */}
+        <Card className="md:col-span-2 bg-primary text-primary-foreground border-primary/20 shadow-lg relative overflow-hidden">
+          {/* Fundo Decorativo com a cor do tema */}
+          <div className="absolute top-0 right-0 p-8 opacity-20">
+            <ChefHat className="w-32 h-32 text-primary-foreground" />
           </div>
+          
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Caixa Hoje</CardTitle>
+            <CardTitle className="text-sm font-medium text-primary-foreground/80 flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Movimento Agora
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* AQUI: Removido font-mono para garantir uniformidade */}
-            <div className="text-4xl font-bold tracking-tight text-white mb-2">
-              {formatCurrency(metrics.revenue)}
+            {/* Número Gigante de Pedidos Ativos */}
+            <div className="text-5xl font-bold tracking-tight text-primary-foreground mb-2">
+              {totalActiveOrders}
             </div>
-            <div className="flex items-center gap-4 text-sm">
-              <span className="flex items-center gap-1 text-emerald-400">
-                <ShoppingBag className="w-4 h-4" /> {metrics.ordersCount} vendas
+            
+            {/* Detalhamento Rápido */}
+            <div className="flex items-center gap-4 text-sm font-medium text-primary-foreground/90">
+              <span className="flex items-center gap-1">
+                <AlertCircle className="w-4 h-4 opacity-70" /> {statusCounts.pending} Fila
               </span>
-              <span className="w-px h-4 bg-slate-700"></span>
-              <span className="text-slate-400">
-                Médio: <span className="text-slate-200">{formatCurrency(metrics.avgTicket)}</span>
+              <span className="w-px h-4 bg-primary-foreground/30"></span>
+              <span className="flex items-center gap-1">
+                <Utensils className="w-4 h-4 opacity-70" /> {statusCounts.preparing} Cozinha
               </span>
             </div>
           </CardContent>
         </Card>
 
-        {/* KPI 2: CANCELAMENTOS */}
+        {/* KPI 2: CANCELAMENTOS (ALERTA) */}
         <Card className={`${metrics.cancelledCount > 0 ? 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900' : 'dark:bg-zinc-900 dark:border-zinc-800'}`}>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados</CardTitle>
@@ -179,7 +191,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* KPI 3: CLIMA LOCAL (Endereço da Loja) */}
+        {/* KPI 3: CLIMA LOCAL */}
         <Card className="dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden">
           <CardHeader className="pb-2 pt-4 px-4">
              <div className="flex justify-between items-center">
