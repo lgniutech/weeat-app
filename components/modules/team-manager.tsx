@@ -27,13 +27,16 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Trash2, ChefHat, Bike, User, ShieldCheck } from "lucide-react";
+import { Users, Plus, Trash2, ChefHat, Bike, User, ShieldCheck, Copy, ExternalLink, Check } from "lucide-react";
+import Link from "next/link";
 
 export function TeamManager({ store }: { store: any }) {
   const [staff, setStaff] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const [origin, setOrigin] = useState("");
+  const [hasCopied, setHasCopied] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -43,11 +46,22 @@ export function TeamManager({ store }: { store: any }) {
 
   useEffect(() => {
     loadStaff();
+    // Pega a URL base do navegador (ex: localhost:3000 ou seu-app.vercel.app)
+    setOrigin(window.location.origin);
   }, [store.id]);
 
   const loadStaff = async () => {
     const data = await getStoreStaffAction(store.id);
     setStaff(data);
+  };
+
+  const staffLink = `${origin}/${store.slug}/staff`;
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(staffLink);
+    setHasCopied(true);
+    toast({ title: "Copiado!", description: "Link de acesso copiado para a área de transferência." });
+    setTimeout(() => setHasCopied(false), 2000);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -102,6 +116,35 @@ export function TeamManager({ store }: { store: any }) {
         </Button>
       </div>
 
+      {/* NOVO: CARD DE LINK DE ACESSO */}
+      <Card className="bg-slate-50 dark:bg-zinc-900 border-dashed border-primary/20">
+        <CardContent className="p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+                <div className="p-2 bg-white dark:bg-zinc-800 rounded-lg border shadow-sm">
+                    <ShieldCheck className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                    <h3 className="font-semibold text-sm">Portal da Equipe</h3>
+                    <p className="text-xs text-muted-foreground">Envie este link para seus funcionários acessarem o sistema.</p>
+                </div>
+            </div>
+            
+            <div className="flex w-full md:w-auto items-center gap-2">
+                <div className="relative w-full md:w-[300px]">
+                    <Input readOnly value={staffLink} className="pr-10 bg-white dark:bg-zinc-950 font-mono text-xs" />
+                </div>
+                <Button size="icon" variant="outline" onClick={handleCopyLink} title="Copiar Link">
+                    {hasCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                </Button>
+                <Link href={`/${store.slug}/staff`} target="_blank">
+                    <Button size="icon" variant="ghost" title="Abrir em nova aba">
+                        <ExternalLink className="w-4 h-4" />
+                    </Button>
+                </Link>
+            </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {staff.map((member) => (
           <Card key={member.id} className="relative group overflow-hidden border-l-4 border-l-primary/20 hover:border-l-primary transition-colors">
@@ -133,7 +176,7 @@ export function TeamManager({ store }: { store: any }) {
         {staff.length === 0 && (
           <div className="col-span-full py-12 text-center border-2 border-dashed rounded-lg bg-slate-50/50 dark:bg-zinc-900/20">
              <div className="w-16 h-16 bg-slate-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <ShieldCheck className="w-8 h-8 text-slate-400" />
+                <Users className="w-8 h-8 text-slate-400" />
              </div>
              <h3 className="font-semibold text-lg">Nenhum membro na equipe</h3>
              <p className="text-muted-foreground text-sm mb-4">Adicione cozinheiros, garçons ou entregadores.</p>
