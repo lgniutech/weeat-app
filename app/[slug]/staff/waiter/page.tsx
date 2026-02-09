@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ThemeProvider, useTheme } from "next-themes" // Importante
+import { ThemeProvider, useTheme } from "next-themes" 
 import { getStaffSession, logoutStaffAction } from "@/app/actions/staff"
 import { 
     getTablesStatusAction, 
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2 } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
 function WaiterContent({ params }: { params: { slug: string } }) {
@@ -37,8 +37,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
   const router = useRouter()
-  const { theme, setTheme } = useTheme() // Tema Local (Waiter)
+  const { theme, setTheme } = useTheme()
 
+  // 1. Inicialização e Autenticação
   useEffect(() => {
     async function init() {
       const session = await getStaffSession()
@@ -56,10 +57,15 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     init()
   }, [slug, router])
 
+  // 2. Busca de Mesas (Polling)
   const fetchTables = async () => {
     if (!storeId) return
-    const data = await getTablesStatusAction(storeId)
-    setTables(data)
+    try {
+        const data = await getTablesStatusAction(storeId)
+        setTables(data)
+    } catch (error) {
+        console.error("Erro ao buscar mesas:", error)
+    }
   }
 
   useEffect(() => {
@@ -80,6 +86,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     setIsManagementOpen(false) 
   }
 
+  // 3. Gestão do Carrinho
   const addToCart = (product: any) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === product.id)
@@ -93,35 +100,58 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     setCart(prev => prev.filter(i => i.id !== productId))
   }
 
+  // 4. Envio do Pedido (Corrigido para tratar erros)
   const sendOrder = () => {
     if (cart.length === 0) return
+    
     startTransition(async () => {
       let res;
-      if (selectedTable.status === 'free') {
-        res = await createTableOrderAction(storeId!, selectedTable.id, cart)
-      } else {
-        res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
-      }
+      try {
+          if (selectedTable.status === 'free') {
+            // Cria novo pedido (Abre a mesa)
+            res = await createTableOrderAction(storeId!, selectedTable.id, cart)
+          } else {
+            // Adiciona itens à mesa existente
+            res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
+          }
 
-      if (res.success) {
-        toast({ title: "Pedido Enviado!", className: "bg-green-600 text-white" })
-        setIsMenuOpen(false)
-        fetchTables()
-      } else {
-        toast({ title: "Erro", description: res.error || "Falha ao enviar", variant: "destructive" })
+          if (res?.success) {
+            toast({ title: "Pedido Enviado!", className: "bg-green-600 text-white" })
+            setIsMenuOpen(false)
+            fetchTables() // Atualiza mesas imediatamente
+          } else {
+            // Mostra o erro real vindo do Backend
+            toast({ 
+                title: "Falha ao enviar", 
+                description: res?.error || "Erro desconhecido. Tente novamente.", 
+                variant: "destructive" 
+            })
+          }
+      } catch (err) {
+          toast({ title: "Erro de Conexão", description: "Verifique sua internet.", variant: "destructive" })
       }
     })
   }
 
+  // 5. Fechamento de Mesa (Reset simples)
   const handleCloseTable = async () => {
-    if(!confirm("Recebeu o pagamento? Liberar mesa agora?")) return;
+    if(!confirm("Tem certeza? Isso vai liberar a mesa para novos clientes.")) return;
     if (!selectedTable?.orderId) return
-    await closeTableAction(selectedTable.orderId, slug)
-    setIsManagementOpen(false)
-    fetchTables()
-    toast({ title: "Mesa Liberada" })
+
+    startTransition(async () => {
+        const res = await closeTableAction(selectedTable.orderId, slug)
+        
+        if (res?.success) {
+            setIsManagementOpen(false)
+            fetchTables()
+            toast({ title: "Mesa Liberada!", className: "bg-blue-600 text-white" })
+        } else {
+            toast({ title: "Erro", description: res?.error || "Não foi possível liberar a mesa.", variant: "destructive" })
+        }
+    })
   }
 
+  // Filtros
   const filteredProducts = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchCat = activeTab === "all" || p.category_id === activeTab
@@ -130,8 +160,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const getStatusLabel = (status: string) => {
     switch(status) {
-        case 'preparando': return <Badge className="bg-blue-500">Na Cozinha</Badge>;
-        case 'pronto_cozinha': return <Badge className="bg-green-500 animate-pulse">Pronto p/ Servir</Badge>;
+        case 'preparando': return <Badge className="bg-blue-500 hover:bg-blue-600">Na Cozinha</Badge>;
+        case 'pronto_cozinha': return <Badge className="bg-green-500 animate-pulse hover:bg-green-600">Pronto p/ Servir</Badge>;
         case 'entregue': return <Badge variant="secondary">Entregue</Badge>;
         default: return <Badge variant="outline">{status}</Badge>;
     }
@@ -147,6 +177,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
           <User className="text-primary" /> Garçom
         </h1>
         <div className="flex gap-2">
+            <Button variant="ghost" size="icon" onClick={() => fetchTables()} title="Atualizar Mesas">
+                <RefreshCw className="w-4 h-4 text-slate-500" />
+            </Button>
             <Button 
                 variant="outline" 
                 size="icon" 
@@ -163,6 +196,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       </header>
 
       <main className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {tables.length === 0 && (
+            <div className="col-span-full text-center py-10 text-muted-foreground">
+                <p>Carregando mesas...</p>
+            </div>
+        )}
         {tables.map(table => (
           <div 
             key={table.id}
@@ -197,6 +235,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         ))}
       </main>
 
+      {/* Modal de Gestão da Mesa */}
       <Dialog open={isManagementOpen} onOpenChange={setIsManagementOpen}>
         <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 dark:border-slate-800">
             <DialogHeader>
@@ -230,8 +269,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                 <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                                     {selectedTable.items.map((item: any, i: number) => (
                                         <li key={i} className="flex justify-between border-b border-dashed border-slate-100 dark:border-slate-800 pb-1 last:border-0">
-                                            <span>{item.quantity}x {item.name}</span>
-                                            <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
+                                            <span>{item.quantity}x {item.name || item.product_name}</span>
+                                            <span>R$ {((item.price || item.unit_price) * item.quantity).toFixed(2)}</span>
                                         </li>
                                     ))}
                                 </ul>
@@ -247,8 +286,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                              <Button variant="outline" className="h-12 border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-900/30" onClick={openMenu}>
                                 <Plus className="mr-2 h-4 w-4"/> Adicionar Item
                              </Button>
-                             <Button variant="destructive" className="h-12" onClick={handleCloseTable}>
-                                <CheckCircle2 className="mr-2 h-4 w-4"/> Encerrar Mesa
+                             <Button 
+                                variant="destructive" 
+                                className="h-12" 
+                                onClick={handleCloseTable} 
+                                disabled={isPending}
+                             >
+                                {isPending ? <RefreshCw className="w-4 h-4 animate-spin"/> : <CheckCircle2 className="mr-2 h-4 w-4"/>}
+                                Liberar Mesa
                              </Button>
                          </div>
                     </div>
@@ -257,6 +302,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </DialogContent>
       </Dialog>
 
+      {/* Modal do Cardápio / Carrinho */}
       <Dialog open={isMenuOpen} onOpenChange={(open) => {
           if(!open) setIsManagementOpen(true)
           setIsMenuOpen(open)
