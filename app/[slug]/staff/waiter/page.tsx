@@ -3,14 +3,19 @@
 import { useState, useEffect, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { getStaffSession, logoutStaffAction } from "@/app/actions/staff"
-import { getTablesStatusAction, createTableOrderAction, addItemsToTableAction, closeTableAction } from "@/app/actions/waiter"
-import { getCategoriesAction } from "@/app/actions/menu" 
+import { 
+    getTablesStatusAction, 
+    getWaiterMenuAction, // Nova função
+    createTableOrderAction, 
+    addItemsToTableAction, 
+    closeTableAction 
+} from "@/app/actions/waiter"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, CheckCircle2, ShoppingBag, Minus, Trash2 } from "lucide-react"
+import { User, LogOut, Plus, Search, CheckCircle2, ShoppingBag, Minus, Trash2, Utensils, AlertCircle, Clock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
 export default function WaiterPage({ params }: { params: { slug: string } }) {
@@ -20,11 +25,13 @@ export default function WaiterPage({ params }: { params: { slug: string } }) {
   const [categories, setCategories] = useState<any[]>([])
   const [storeId, setStoreId] = useState<string | null>(null)
   
-  // Estado do Modal
+  // --- ESTADOS DE UI ---
+  // 1. Modal de Gestão da Mesa (Status)
   const [selectedTable, setSelectedTable] = useState<any>(null)
-  const [isOrderOpen, setIsOrderOpen] = useState(false)
-  
-  // Carrinho local (para novos itens)
+  const [isManagementOpen, setIsManagementOpen] = useState(false)
+
+  // 2. Modal de Novo Pedido (Cardápio)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [cart, setCart] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
@@ -43,16 +50,17 @@ export default function WaiterPage({ params }: { params: { slug: string } }) {
       }
       setStoreId(session.storeId)
       
-      // Carrega cardápio
-      const cats = await getCategoriesAction(session.storeId)
+      // Carrega cardápio GARANTIDO
+      const cats = await getWaiterMenuAction(session.storeId)
       setCategories(cats)
-      const allProds = cats.flatMap((c: any) => c.products || []).filter((p: any) => p.is_available)
+      // Extrai todos os produtos
+      const allProds = cats.flatMap((c: any) => c.products || [])
       setProducts(allProds)
     }
     init()
   }, [slug, router])
 
-  // 2. Polling das Mesas (Atualiza status real-time se cliente pedir pelo QR)
+  // 2. Polling das Mesas
   const fetchTables = async () => {
     if (!storeId) return
     const data = await getTablesStatusAction(storeId)
@@ -61,16 +69,26 @@ export default function WaiterPage({ params }: { params: { slug: string } }) {
 
   useEffect(() => {
     fetchTables()
-    const interval = setInterval(fetchTables, 5000) // Atualiza a cada 5s
+    const interval = setInterval(fetchTables, 5000)
     return () => clearInterval(interval)
   }, [storeId])
 
-  // --- LÓGICA DE UI ---
-  const openTable = (table: any) => {
+  // --- AÇÕES ---
+  
+  // Passo 1: Abrir Gestão da Mesa
+  const openTableManagement = (table: any) => {
     setSelectedTable(table)
-    setCart([]) // Limpa carrinho de novos itens
+    setIsManagementOpen(true)
+  }
+
+  // Passo 2: Abrir Cardápio (Novo Pedido)
+  const openMenu = () => {
+    setCart([]) 
     setSearchQuery("")
-    setIsOrderOpen(true)
+    setIsMenuOpen(true)
+    // Não fecha a gestão, pois o menu abre "por cima" ou substituindo
+    // Vamos fechar a gestão para focar no menu
+    setIsManagementOpen(false) 
   }
 
   const addToCart = (product: any) => {
@@ -90,16 +108,14 @@ export default function WaiterPage({ params }: { params: { slug: string } }) {
     startTransition(async () => {
       let res;
       if (selectedTable.status === 'free') {
-        // Abrir nova mesa
         res = await createTableOrderAction(storeId!, selectedTable.id, cart)
       } else {
-        // Adicionar à mesa existente
         res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
       }
 
       if (res.success) {
         toast({ title: "Pedido Enviado!", className: "bg-green-600 text-white" })
-        setIsOrderOpen(false)
+        setIsMenuOpen(false)
         fetchTables()
       } else {
         toast({ title: "Erro", description: res.error, variant: "destructive" })
@@ -108,10 +124,10 @@ export default function WaiterPage({ params }: { params: { slug: string } }) {
   }
 
   const handleCloseTable = async () => {
-    if(!confirm("Tem certeza que deseja fechar esta mesa?")) return;
+    if(!confirm("Recebeu o pagamento? Liberar mesa agora?")) return;
     if (!selectedTable?.orderId) return
     await closeTableAction(selectedTable.orderId, slug)
-    setIsOrderOpen(false)
+    setIsManagementOpen(false)
     fetchTables()
     toast({ title: "Mesa Liberada" })
   }
@@ -122,10 +138,18 @@ export default function WaiterPage({ params }: { params: { slug: string } }) {
     return matchSearch && matchCat
   })
 
-  // Calcula total SOMANDO o que já está na mesa + carrinho novo
+  // Helpers de Status
+  const getStatusLabel = (status: string) => {
+    switch(status) {
+        case 'preparando': return <Badge className="bg-blue-500">Na Cozinha</Badge>;
+        case 'pronto_cozinha': return <Badge className="bg-green-500 animate-pulse">Pronto p/ Servir</Badge>;
+        case 'entregue': return <Badge variant="secondary">Entregue</Badge>;
+        default: return <Badge variant="outline">{status}</Badge>;
+    }
+  }
+
   const currentTableTotal = selectedTable?.total || 0;
   const newItemsTotal = cart.reduce((a,b) => a + (b.price*b.quantity), 0);
-  const grandTotal = currentTableTotal + newItemsTotal;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20">
@@ -139,125 +163,182 @@ export default function WaiterPage({ params }: { params: { slug: string } }) {
       </header>
 
       {/* GRID DE MESAS */}
-      <main className="p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <main className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {tables.map(table => (
           <div 
             key={table.id}
-            onClick={() => openTable(table)}
+            onClick={() => openTableManagement(table)}
             className={`
               h-32 rounded-xl flex flex-col items-center justify-center cursor-pointer border-2 transition-all active:scale-95 shadow-sm relative overflow-hidden
               ${table.status === 'free' 
                 ? 'bg-white border-slate-200 hover:border-emerald-400 text-slate-400' 
-                : table.status === 'payment'
-                  ? 'bg-amber-50 border-amber-400 text-amber-700'
+                : table.orderStatus === 'pronto_cozinha' // Destaque se estiver pronto
+                  ? 'bg-green-50 border-green-500 text-green-700 shadow-green-100'
                   : 'bg-blue-50 border-blue-400 text-blue-700'
               }
             `}
           >
             <span className="text-3xl font-bold">{table.id}</span>
-            <Badge variant="secondary" className="mt-2 text-[10px] uppercase font-bold bg-white/50 backdrop-blur-sm">
-              {table.status === 'free' ? 'Livre' : `R$ ${table.total.toFixed(0)}`}
-            </Badge>
-            {table.status === 'payment' && <div className="absolute top-0 right-0 p-1 bg-amber-400 rounded-bl-lg text-[10px] font-bold text-white">CONTA</div>}
+            <div className="mt-2 flex flex-col items-center">
+                 {table.status === 'free' ? (
+                     <Badge variant="secondary" className="text-[10px]">LIVRE</Badge>
+                 ) : (
+                     <>
+                        <span className="text-xs font-bold">R$ {table.total.toFixed(0)}</span>
+                        {/* Indicador visual se tem algo pronto */}
+                        {table.orderStatus === 'pronto_cozinha' && (
+                            <span className="absolute top-2 right-2 flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                            </span>
+                        )}
+                     </>
+                 )}
+            </div>
           </div>
         ))}
       </main>
 
-      {/* MODAL DE PEDIDO / MESA */}
-      <Dialog open={isOrderOpen} onOpenChange={setIsOrderOpen}>
-        <DialogContent className="h-[90vh] sm:h-[80vh] flex flex-col p-0 gap-0 w-full max-w-lg overflow-hidden">
-          
-          {/* Header do Modal */}
-          <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
-            <div>
-              <DialogTitle className="text-lg">Mesa {selectedTable?.id}</DialogTitle>
-              <p className="text-xs text-muted-foreground">
-                {selectedTable?.status === 'free' ? "Nova Comanda" : `Ocupada • Total: R$ ${currentTableTotal.toFixed(2)}`}
-              </p>
-            </div>
-            {selectedTable?.status !== 'free' && (
-              <Button variant="destructive" size="sm" onClick={handleCloseTable} className="h-8">
-                Liberar Mesa
-              </Button>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-hidden flex flex-col">
+      {/* MODAL 1: GESTÃO DA MESA (STATUS & AÇÕES) */}
+      <Dialog open={isManagementOpen} onOpenChange={setIsManagementOpen}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle className="flex justify-between items-center">
+                    <span>Mesa {selectedTable?.id}</span>
+                    <Badge variant={selectedTable?.status === 'free' ? "outline" : "default"}>
+                        {selectedTable?.status === 'free' ? "Livre" : "Ocupada"}
+                    </Badge>
+                </DialogTitle>
+            </DialogHeader>
             
-            {/* Se Mesa Ocupada: Mostrar Resumo do que JÁ PEDIRAM */}
-            {selectedTable?.status !== 'free' && selectedTable?.items && selectedTable.items.length > 0 && (
-                <div className="bg-slate-100 dark:bg-slate-800 p-2 text-xs border-b max-h-[100px] overflow-y-auto">
-                    <p className="font-bold text-slate-500 mb-1">JÁ PEDIDO:</p>
-                    <ul className="space-y-1">
-                        {selectedTable.items.map((i: any, idx: number) => (
-                            <li key={idx} className="flex justify-between">
-                                <span>{i.quantity}x {i.name}</span>
-                                <span>R$ {(i.price * i.quantity).toFixed(2)}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
+            <div className="space-y-4 py-2">
+                {/* Se Livre */}
+                {selectedTable?.status === 'free' ? (
+                    <div className="text-center py-6 space-y-4">
+                        <Utensils className="w-12 h-12 mx-auto text-slate-300" />
+                        <p className="text-muted-foreground">Mesa disponível para novos clientes.</p>
+                        <Button className="w-full h-12 text-lg" onClick={openMenu}>
+                            <Plus className="mr-2 h-5 w-5"/> Abrir Novo Pedido
+                        </Button>
+                    </div>
+                ) : (
+                    /* Se Ocupada */
+                    <div className="space-y-4">
+                         {/* Status do Pedido Atual */}
+                         <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg flex justify-between items-center">
+                            <span className="text-sm font-medium">Status Cozinha:</span>
+                            {getStatusLabel(selectedTable?.orderStatus)}
+                         </div>
 
-            {/* Filtros e Busca */}
-            <div className="p-2 space-y-2 bg-white dark:bg-slate-900">
-                <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                        placeholder="Buscar produto..." 
-                        className="pl-8 h-9" 
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <ScrollArea className="w-full whitespace-nowrap">
-                   <div className="flex gap-2 pb-2">
-                      <Button variant={activeTab === 'all' ? "default" : "outline"} size="sm" onClick={() => setActiveTab('all')} className="rounded-full h-7 text-xs">Todos</Button>
-                      {categories.map(c => (
-                        <Button key={c.id} variant={activeTab === c.id ? "default" : "outline"} size="sm" onClick={() => setActiveTab(c.id)} className="rounded-full h-7 text-xs">{c.name}</Button>
-                      ))}
-                   </div>
-                </ScrollArea>
+                         {/* Lista de Itens Já Pedidos */}
+                         <div className="border rounded-lg p-3 max-h-[200px] overflow-y-auto">
+                            <p className="text-xs font-bold text-muted-foreground mb-2 uppercase">Consumo Atual</p>
+                            {selectedTable?.items && selectedTable.items.length > 0 ? (
+                                <ul className="space-y-2 text-sm">
+                                    {selectedTable.items.map((item: any, i: number) => (
+                                        <li key={i} className="flex justify-between">
+                                            <span>{item.quantity}x {item.name}</span>
+                                            <span className="text-muted-foreground">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : <p className="text-xs italic text-muted-foreground">Nenhum item lançado ainda.</p>}
+                         </div>
+
+                         <div className="flex justify-between items-center text-lg font-bold px-2">
+                             <span>Total Parcial:</span>
+                             <span>R$ {currentTableTotal.toFixed(2)}</span>
+                         </div>
+
+                         <div className="grid grid-cols-2 gap-3 pt-2">
+                             <Button variant="outline" className="h-12 border-blue-200 text-blue-700 hover:bg-blue-50" onClick={openMenu}>
+                                <Plus className="mr-2 h-4 w-4"/> Adicionar Item
+                             </Button>
+                             <Button variant="destructive" className="h-12" onClick={handleCloseTable}>
+                                <CheckCircle2 className="mr-2 h-4 w-4"/> Encerrar Mesa
+                             </Button>
+                         </div>
+                    </div>
+                )}
             </div>
-            
-            {/* Lista de Produtos (Cardápio) */}
-            <ScrollArea className="flex-1 bg-slate-50 dark:bg-slate-900/50 p-2">
-              <div className="grid grid-cols-1 gap-2">
-                {filteredProducts.map(p => (
-                  <div key={p.id} onClick={() => addToCart(p)} className="bg-white dark:bg-slate-800 p-3 rounded-lg border flex justify-between items-center active:bg-slate-100 cursor-pointer shadow-sm">
-                    <div>
-                      <div className="font-semibold text-sm">{p.name}</div>
-                      <div className="text-emerald-600 font-bold text-xs">R$ {p.price.toFixed(2)}</div>
-                    </div>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-700"><Plus className="w-4 h-4"/></Button>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
-            {/* Carrinho de Lançamento (Novos Itens) */}
-            {cart.length > 0 && (
-                <div className="p-3 bg-white border-t shadow-lg z-10">
-                    <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-sm">Novos Itens ({cart.length})</span>
-                        <span className="font-bold text-emerald-600">R$ {newItemsTotal.toFixed(2)}</span>
+      {/* MODAL 2: CARDÁPIO (NOVO PEDIDO) */}
+      <Dialog open={isMenuOpen} onOpenChange={(open) => {
+          if(!open) setIsManagementOpen(true) // Reabre gestão ao fechar menu sem pedir
+          setIsMenuOpen(open)
+      }}>
+        <DialogContent className="h-[90vh] sm:h-[80vh] flex flex-col p-0 gap-0 w-full max-w-lg">
+            <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
+               <DialogTitle>Adicionar à Mesa {selectedTable?.id}</DialogTitle>
+               <Button variant="ghost" size="sm" onClick={() => setIsMenuOpen(false)}>Cancelar</Button>
+            </div>
+
+            <div className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-950">
+                 {/* Filtros */}
+                 <div className="p-2 space-y-2 bg-slate-50 dark:bg-slate-900 border-b">
+                    <div className="relative">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Buscar produto..." 
+                            className="pl-8 h-9" 
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                        />
                     </div>
-                    <div className="max-h-[80px] overflow-y-auto space-y-2 mb-3">
-                        {cart.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center text-xs">
-                                <span>{item.quantity}x {item.name}</span>
-                                <Button size="icon" variant="ghost" className="h-5 w-5 text-red-400" onClick={() => removeFromCart(item.id)}>
-                                    <Minus className="w-3 h-3" />
-                                </Button>
+                    <ScrollArea className="w-full whitespace-nowrap">
+                       <div className="flex gap-2 pb-1">
+                          <Button variant={activeTab === 'all' ? "default" : "outline"} size="sm" onClick={() => setActiveTab('all')} className="rounded-full h-7 text-xs">Todos</Button>
+                          {categories.map(c => (
+                            <Button key={c.id} variant={activeTab === c.id ? "default" : "outline"} size="sm" onClick={() => setActiveTab(c.id)} className="rounded-full h-7 text-xs">{c.name}</Button>
+                          ))}
+                       </div>
+                    </ScrollArea>
+                </div>
+
+                {/* Lista de Produtos */}
+                <ScrollArea className="flex-1 p-2">
+                    <div className="grid grid-cols-1 gap-2">
+                        {filteredProducts.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-10">Nenhum produto encontrado.</p>
+                        ) : (
+                            filteredProducts.map(p => (
+                            <div key={p.id} onClick={() => addToCart(p)} className="bg-white dark:bg-slate-900 p-3 rounded-lg border flex justify-between items-center active:bg-slate-100 cursor-pointer shadow-sm">
+                                <div>
+                                <div className="font-semibold text-sm">{p.name}</div>
+                                <div className="text-emerald-600 font-bold text-xs">R$ {p.price.toFixed(2)}</div>
+                                </div>
+                                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-800"><Plus className="w-4 h-4"/></Button>
                             </div>
-                        ))}
+                            ))
+                        )}
                     </div>
-                    <Button className="w-full h-12 text-lg font-bold" onClick={sendOrder} disabled={isPending}>
-                        {isPending ? "Enviando..." : "LANÇAR PEDIDO"}
-                    </Button>
-                </div>
-            )}
-          </div>
+                </ScrollArea>
+
+                {/* Footer do Carrinho */}
+                {cart.length > 0 && (
+                    <div className="p-3 bg-white dark:bg-slate-900 border-t shadow-[0_-5px_15px_rgba(0,0,0,0.1)] z-10">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="font-bold text-sm">Novos Itens ({cart.length})</span>
+                            <span className="font-bold text-emerald-600">Total: R$ {newItemsTotal.toFixed(2)}</span>
+                        </div>
+                        <div className="max-h-[80px] overflow-y-auto space-y-2 mb-3 bg-slate-50 dark:bg-slate-800 p-2 rounded">
+                            {cart.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-xs">
+                                    <span>{item.quantity}x {item.name}</span>
+                                    <Button size="icon" variant="ghost" className="h-5 w-5 text-red-400" onClick={() => removeFromCart(item.id)}>
+                                        <Minus className="w-3 h-3" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                        <Button className="w-full h-12 text-lg font-bold" onClick={sendOrder} disabled={isPending}>
+                            {isPending ? "Enviando..." : "CONFIRMAR PEDIDO"}
+                        </Button>
+                    </div>
+                )}
+            </div>
         </DialogContent>
       </Dialog>
     </div>

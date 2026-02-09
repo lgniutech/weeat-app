@@ -6,20 +6,29 @@ import { revalidatePath } from "next/cache";
 export type TableStatus = 'free' | 'occupied' | 'payment';
 
 export type TableData = {
-  id: string; // Número da mesa (1 a 20)
+  id: string;
   status: TableStatus;
   orderId?: string;
   customerName?: string;
   total: number;
-  items?: any[]; // Itens para mostrar no resumo
+  items?: any[];
+  orderStatus?: string; // Status do pedido (preparando, pronto, etc)
 };
 
-// Busca status das mesas (1 a 20)
+// 1. BUSCAR STATUS DAS MESAS (Respeitando a quantidade real)
 export async function getTablesStatusAction(storeId: string): Promise<TableData[]> {
   const supabase = await createClient();
 
-  // Busca pedidos ABERTOS do tipo 'mesa'
-  // status != 'entregue' (entregue significa finalizado/pago/liberado)
+  // A. Descobrir quantas mesas a loja tem
+  const { data: store } = await supabase
+    .from("stores")
+    .select("tables_count")
+    .eq("id", storeId)
+    .single();
+    
+  const totalTables = store?.tables_count || 10; // Default 10 se der erro
+
+  // B. Buscar pedidos ativos
   const { data: activeOrders } = await supabase
     .from("orders")
     .select(`
@@ -35,15 +44,14 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     .neq("status", "entregue") 
     .neq("status", "cancelado");
 
-  // Gera array fixo de 20 mesas (pode ser configurável no futuro)
-  const tables = Array.from({ length: 20 }, (_, i) => {
+  // C. Gerar Array com o tamanho correto
+  const tables = Array.from({ length: totalTables }, (_, i) => {
     const tableNum = (i + 1).toString();
     
-    // Tenta achar um pedido ativo para esta mesa
-    // A string de endereço é salva como "Mesa: 10" ou "Mesa 10"
+    // Procura pedido para esta mesa
     const order = activeOrders?.find(o => 
-      o.delivery_address?.includes(`Mesa: ${tableNum}`) || 
-      o.delivery_address?.includes(`Mesa ${tableNum}`)
+      o.delivery_address === `Mesa: ${tableNum}` || 
+      o.delivery_address === `Mesa ${tableNum}`
     );
     
     let status: TableStatus = 'free';
@@ -58,20 +66,51 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
       orderId: order?.id,
       customerName: order?.customer_name,
       total: order?.total_price || 0,
-      items: order?.order_items || []
+      items: order?.order_items || [],
+      orderStatus: order?.status // Para mostrar se está pronto na cozinha
     };
   });
 
   return tables;
 }
 
-// Criar novo pedido para mesa (Abrir Mesa)
+// 2. BUSCAR CARDÁPIO (Garantido para o Garçom)
+export async function getWaiterMenuAction(storeId: string) {
+  const supabase = await createClient();
+  
+  // Busca categorias COM produtos
+  const { data: categories } = await supabase
+    .from("categories")
+    .select(`
+      id, 
+      name,
+      products (
+        id, 
+        name, 
+        price, 
+        description, 
+        is_available,
+        category_id
+      )
+    `)
+    .eq("store_id", storeId)
+    .order("index", { ascending: true });
+
+  if (!categories) return [];
+
+  return categories.map(cat => ({
+    ...cat,
+    // Garante que só vem produto disponível
+    products: cat.products?.filter((p: any) => p.is_available === true)
+  })).filter(cat => cat.products.length > 0);
+}
+
+// 3. ABRIR MESA
 export async function createTableOrderAction(storeId: string, tableNum: string, items: any[]) {
   const supabase = await createClient();
   
   const total = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-  // Formata os items para o banco
   const dbItems = items.map(i => ({
     product_id: i.id,
     name: i.name,
@@ -86,25 +125,20 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
     delivery_type: "mesa",
     delivery_address: `Mesa: ${tableNum}`,
     payment_method: "card_machine", 
-    status: "aceito", // Já entra aceito pois foi o garçom que lançou
-    items: dbItems, // JSONB legado (se usar)
+    status: "aceito", // Garçom lançou, já está aceito
+    items: dbItems, 
     total_price: total
   });
 
   if (error) return { error: "Erro ao abrir mesa." };
-
   revalidatePath("/");
   return { success: true };
 }
 
-// Adicionar itens em mesa existente
+// 4. ADICIONAR ITENS
 export async function addItemsToTableAction(orderId: string, newItems: any[], currentTotal: number) {
   const supabase = await createClient();
 
-  // Precisamos adicionar os novos itens à tabela `order_items` (se você usa tabela relacional)
-  // E atualizar o JSONB `items` no `orders`
-  
-  // 1. Busca pedido atual
   const { data: order } = await supabase.from("orders").select("items").eq("id", orderId).single();
   if (!order) return { error: "Pedido não encontrado" };
 
@@ -115,36 +149,26 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
     price: i.price
   }));
 
-  // Mescla arrays
   const updatedItems = [...(order.items || []), ...itemsToAdd];
-  
-  // Calcula novo total
   const addedTotal = newItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const newTotal = currentTotal + addedTotal;
-
-  // 2. Atualiza pedido
+  
   const { error } = await supabase
     .from("orders")
     .update({ 
       items: updatedItems,
-      total_price: newTotal,
-      status: "preparando" // Volta para cozinha fazer os novos itens
+      total_price: currentTotal + addedTotal,
+      status: "preparando" // Reativa na cozinha
     })
     .eq("id", orderId);
 
   if (error) return { error: "Erro ao atualizar pedido." };
-
-  // Se sua arquitetura usa a tabela `order_items` separada, 
-  // aqui você deveria inserir nela também. (Assumindo que o trigger do Supabase cuida ou que usamos JSONB principalmente para display rápido)
-
   revalidatePath("/");
   return { success: true };
 }
 
-// Resetar Mesa (Fechar/Liberar)
+// 5. FECHAR MESA
 export async function closeTableAction(orderId: string, storeSlug: string) {
   const supabase = await createClient();
-  // Marca como entregue (finalizado)
   await supabase.from("orders").update({ status: "entregue" }).eq("id", orderId);
   revalidatePath(`/${storeSlug}/staff/waiter`);
 }
