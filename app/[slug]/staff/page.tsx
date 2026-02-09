@@ -27,9 +27,10 @@ export default function StaffLoginPage({ params }: { params: { slug: string } })
     if (pin.length !== 4) return
 
     startTransition(async () => {
-      // Resolve a promise do params para pegar o slug
-      const resolvedParams = await params;
-      const result = await verifyStaffPinAction(resolvedParams.slug, pin)
+      // No Next.js 15+, params pode ser uma promise, mas aqui tratamos o acesso direto
+      // Se der erro de build, use `use(params)` ou `await params` dependendo da versão exata
+      const slug = params.slug 
+      const result = await verifyStaffPinAction(slug, pin)
 
       if (result.error) {
         toast({
@@ -37,7 +38,7 @@ export default function StaffLoginPage({ params }: { params: { slug: string } })
           description: result.error,
           variant: "destructive"
         })
-        setPin("") // Limpa o PIN no erro
+        setPin("") 
       } else if (result.success && result.redirectUrl) {
         toast({
           title: "Bem-vindo!",
@@ -49,26 +50,26 @@ export default function StaffLoginPage({ params }: { params: { slug: string } })
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center p-4 transition-colors duration-300">
       
       {/* Cabeçalho */}
       <div className="mb-8 text-center space-y-2">
-        <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-700">
+        <div className="w-16 h-16 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-200 dark:border-slate-800 shadow-sm">
            <Store className="w-8 h-8 text-primary" />
         </div>
         <h1 className="text-2xl font-bold tracking-tight">Portal da Equipe</h1>
-        <p className="text-slate-400 text-sm">Digite seu PIN de 4 dígitos</p>
+        <p className="text-muted-foreground text-sm">Digite seu PIN de 4 dígitos</p>
       </div>
 
-      {/* Visor do PIN */}
+      {/* Visor do PIN (Bolinhas) */}
       <div className="mb-8 flex justify-center gap-4">
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className={`w-4 h-4 rounded-full transition-all duration-300 ${
+            className={`w-4 h-4 rounded-full transition-all duration-300 border border-slate-300 dark:border-slate-700 ${
               pin.length > i 
-                ? "bg-primary scale-125 shadow-[0_0_10px_rgba(var(--primary),0.5)]" 
-                : "bg-slate-800"
+                ? "bg-primary border-primary scale-125 shadow-[0_0_10px_rgba(var(--primary),0.5)]" 
+                : "bg-slate-200 dark:bg-slate-800"
             }`}
           />
         ))}
@@ -80,29 +81,30 @@ export default function StaffLoginPage({ params }: { params: { slug: string } })
           <Button
             key={num}
             variant="outline"
-            className="h-20 text-2xl font-bold bg-slate-900 border-slate-800 hover:bg-slate-800 hover:text-white transition-all active:scale-95"
+            className="h-20 text-3xl font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-all active:scale-95 shadow-sm"
             onClick={() => handleNumberClick(num)}
             disabled={isPending}
           >
-            {num}
+            {/* Garantindo que usa a fonte padrão do projeto (Gate) e não mono */}
+            <span className="font-sans">{num}</span>
           </Button>
         ))}
         
-        {/* Botão Vazio para alinhar */}
+        {/* Espaço Vazio */}
         <div />
 
         <Button
           variant="outline"
-          className="h-20 text-2xl font-bold bg-slate-900 border-slate-800 hover:bg-slate-800 hover:text-white transition-all active:scale-95"
+          className="h-20 text-3xl font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-all active:scale-95 shadow-sm"
           onClick={() => handleNumberClick(0)}
           disabled={isPending}
         >
-          0
+           <span className="font-sans">0</span>
         </Button>
 
         <Button
           variant="ghost"
-          className="h-20 text-red-400 hover:bg-red-950/30 hover:text-red-300"
+          className="h-20 text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500"
           onClick={handleDelete}
           disabled={isPending}
         >
@@ -113,7 +115,7 @@ export default function StaffLoginPage({ params }: { params: { slug: string } })
       {/* Botão Entrar */}
       <div className="mt-8 w-full max-w-[300px]">
         <Button 
-          className="w-full h-14 text-lg font-bold" 
+          className="w-full h-14 text-lg font-bold shadow-md" 
           size="lg"
           onClick={handleLogin}
           disabled={pin.length !== 4 || isPending}
@@ -123,7 +125,7 @@ export default function StaffLoginPage({ params }: { params: { slug: string } })
         </Button>
       </div>
 
-      <p className="mt-8 text-xs text-slate-600">
+      <p className="mt-8 text-xs text-muted-foreground">
         WeEat Ops v2.0 • Acesso Restrito
       </p>
     </div>

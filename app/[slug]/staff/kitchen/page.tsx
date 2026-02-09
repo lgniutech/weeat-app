@@ -34,10 +34,10 @@ function OrderTimer({ createdAt }: { createdAt: string }) {
     return () => clearInterval(interval)
   }, [createdAt])
 
-  // Lógica de Cores do Semáforo
-  let colorClass = "text-emerald-500" // Verde (< 10 min)
-  if (elapsed >= 10) colorClass = "text-amber-500" // Amarelo (10-20 min)
-  if (elapsed >= 20) colorClass = "text-red-500 animate-pulse" // Vermelho (> 20 min)
+  // Cores do Semáforo (Funcionam bem no Claro e Escuro)
+  let colorClass = "text-emerald-600 dark:text-emerald-500" 
+  if (elapsed >= 10) colorClass = "text-amber-600 dark:text-amber-500" 
+  if (elapsed >= 20) colorClass = "text-red-600 dark:text-red-500 animate-pulse" 
 
   return (
     <div className={`flex items-center gap-1 font-mono font-bold text-xl ${colorClass}`}>
@@ -48,8 +48,6 @@ function OrderTimer({ createdAt }: { createdAt: string }) {
 }
 
 export default function KitchenPage({ params }: { params: { slug: string } }) {
-  // OBS: params é uma Promise no Next.js mais recente, mas aqui tratamos direto ou via React.use() se necessário. 
-  // Mantendo padrão simples:
   const slug = params.slug
 
   const [orders, setOrders] = useState<any[]>([])
@@ -60,15 +58,13 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
   const { theme, setTheme } = useTheme()
   const [storeId, setStoreId] = useState<string | null>(null)
 
-  // 1. Verificar Acesso e Carregar Loja
+  // 1. Verificar Acesso
   useEffect(() => {
     async function checkAccess() {
       const session = await getStaffSession()
-      
-      // Verifica se está logado, se é a loja certa e se é cozinheiro
       if (!session || session.storeSlug !== slug || session.role !== 'kitchen') {
         toast({ title: "Acesso Negado", description: "Você não tem permissão de cozinheiro.", variant: "destructive" })
-        router.push(`/${slug}/staff`) // Manda de volta pro login
+        router.push(`/${slug}/staff`)
         return
       }
       setStoreId(session.storeId)
@@ -76,7 +72,7 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
     checkAccess()
   }, [slug, router, toast])
 
-  // 2. Buscar Pedidos (Polling)
+  // 2. Buscar Pedidos
   const fetchOrders = async () => {
     if (!storeId) return
     const data = await getKitchenOrdersAction(storeId)
@@ -86,20 +82,19 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
 
   useEffect(() => {
     fetchOrders()
-    const interval = setInterval(fetchOrders, 10000) // Atualiza a cada 10s
+    const interval = setInterval(fetchOrders, 10000)
     return () => clearInterval(interval)
   }, [storeId])
 
   // 3. Ação: Marcar como Pronto
   const handleReady = (orderId: string) => {
     startTransition(async () => {
-      // Otimistic Update (Remove da tela na hora para parecer instantâneo)
       setOrders(prev => prev.filter(o => o.id !== orderId))
       
       const res = await markOrderReadyAction(orderId, slug)
       if (res.error) {
         toast({ title: "Erro", description: res.error, variant: "destructive" })
-        fetchOrders() // Reverte se der erro (busca de novo)
+        fetchOrders()
       } else {
         toast({ title: "Pedido Pronto!", description: "Notificando garçons/entregadores." })
       }
@@ -113,7 +108,7 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground"><RefreshCw className="w-8 h-8 animate-spin"/></div>
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       
       {/* HEADER KDS */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 sticky top-0 z-10 shadow-sm">
@@ -123,18 +118,17 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
               <ChefHat className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="font-bold text-xl leading-none">KDS Cozinha</h1>
+              <h1 className="font-bold text-xl leading-none text-slate-900 dark:text-slate-100">KDS Cozinha</h1>
               <p className="text-xs text-muted-foreground">{orders.length} pedidos na fila</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Botão Tema (Sol/Lua) */}
             <Button 
               variant="outline" 
               size="icon" 
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="border-slate-300 dark:border-slate-700"
+              className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300"
             >
               <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -158,20 +152,19 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {orders.map((order) => (
-              <Card key={order.id} className="flex flex-col border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow dark:bg-slate-900">
+              <Card key={order.id} className="flex flex-col border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-start">
                     <div>
-                      <CardTitle className="text-lg">#{order.id.slice(0, 4)}</CardTitle>
+                      <CardTitle className="text-lg text-slate-900 dark:text-slate-100">#{order.id.slice(0, 4)}</CardTitle>
                       <p className="text-sm font-medium text-muted-foreground truncate max-w-[150px]">
                         {order.customer_name}
                       </p>
                     </div>
-                    {/* Timer do Pedido */}
                     <OrderTimer createdAt={order.created_at} />
                   </div>
                   <div className="flex gap-2 mt-2">
-                    <Badge variant="outline" className="uppercase text-[10px]">
+                    <Badge variant="outline" className="uppercase text-[10px] bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700">
                       {order.delivery_type === 'mesa' ? 'Mesa' : order.delivery_type}
                     </Badge>
                   </div>
@@ -187,7 +180,6 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
                             <span className="font-semibold text-slate-800 dark:text-slate-100 leading-tight">
                               {item.name}
                             </span>
-                            {/* Se o banco retornar 'add_ons', mostre aqui */}
                             {item.add_ons && (
                                <span className="text-xs text-muted-foreground italic">+ {item.add_ons}</span>
                             )}
