@@ -46,7 +46,6 @@ export function TeamManager({ store }: { store: any }) {
 
   useEffect(() => {
     loadStaff();
-    // Pega a URL base do navegador (ex: localhost:3000 ou seu-app.vercel.app)
     setOrigin(window.location.origin);
   }, [store.id]);
 
@@ -60,7 +59,7 @@ export function TeamManager({ store }: { store: any }) {
   const handleCopyLink = () => {
     navigator.clipboard.writeText(staffLink);
     setHasCopied(true);
-    toast({ title: "Copiado!", description: "Link de acesso copiado para a área de transferência." });
+    toast({ title: "Copiado!", description: "Link de acesso copiado." });
     setTimeout(() => setHasCopied(false), 2000);
   };
 
@@ -80,7 +79,7 @@ export function TeamManager({ store }: { store: any }) {
   };
 
   const handleDelete = async (id: string) => {
-    if(!confirm("Remover este funcionário? Ele perderá o acesso imediatamente.")) return;
+    if(!confirm("Remover este funcionário?")) return;
     await deleteStaffAction(id);
     loadStaff();
     toast({ title: "Removido", description: "Funcionário excluído." });
@@ -116,7 +115,6 @@ export function TeamManager({ store }: { store: any }) {
         </Button>
       </div>
 
-      {/* NOVO: CARD DE LINK DE ACESSO */}
       <Card className="bg-slate-50 dark:bg-zinc-900 border-dashed border-primary/20">
         <CardContent className="p-4 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -131,7 +129,7 @@ export function TeamManager({ store }: { store: any }) {
             
             <div className="flex w-full md:w-auto items-center gap-2">
                 <div className="relative w-full md:w-[300px]">
-                    <Input readOnly value={staffLink} className="pr-10 bg-white dark:bg-zinc-950 font-mono text-xs" />
+                    <Input readOnly value={staffLink} className="pr-10 bg-white dark:bg-zinc-950 text-xs" />
                 </div>
                 <Button size="icon" variant="outline" onClick={handleCopyLink} title="Copiar Link">
                     {hasCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
@@ -167,7 +165,8 @@ export function TeamManager({ store }: { store: any }) {
             <CardContent>
               <div className="bg-slate-50 dark:bg-zinc-900/50 p-3 rounded-md flex items-center justify-between border border-dashed border-slate-200 dark:border-zinc-800">
                 <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">PIN de Acesso</span>
-                <span className="font-mono text-lg font-bold tracking-[0.2em]">{member.pin}</span>
+                {/* REMOVIDO font-mono, agora usa a fonte do sistema (Gate) */}
+                <span className="text-lg font-bold tracking-[0.2em]">{member.pin}</span>
               </div>
             </CardContent>
           </Card>
@@ -185,7 +184,6 @@ export function TeamManager({ store }: { store: any }) {
         )}
       </div>
 
-      {/* MODAL DE CADASTRO */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
@@ -222,13 +220,14 @@ export function TeamManager({ store }: { store: any }) {
 
             <div className="space-y-2">
               <Label>PIN de Acesso (4 Números)</Label>
+              {/* REMOVIDO font-mono, mantendo visual consistente */}
               <Input 
                 placeholder="Ex: 1234" 
                 maxLength={4}
-                className="font-mono tracking-widest text-center text-lg"
+                className="tracking-widest text-center text-lg font-bold"
                 value={formData.pin}
                 onChange={e => {
-                  const val = e.target.value.replace(/[^0-9]/g, ''); // Só números
+                  const val = e.target.value.replace(/[^0-9]/g, '');
                   setFormData({...formData, pin: val});
                 }}
                 required

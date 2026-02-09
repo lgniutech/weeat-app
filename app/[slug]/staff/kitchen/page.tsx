@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { ThemeProvider, useTheme } from "next-themes" // Importante: ThemeProvider
 import { getKitchenOrdersAction, markOrderReadyAction } from "@/app/actions/kitchen"
 import { getStaffSession, logoutStaffAction } from "@/app/actions/staff"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,7 +10,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
-import { useTheme } from "next-themes"
 import { 
   ChefHat, 
   Clock, 
@@ -22,19 +22,18 @@ import {
   RefreshCw
 } from "lucide-react"
 
-// Componente do Timer Individual
+// Timer (Mantido igual)
 function OrderTimer({ createdAt }: { createdAt: string }) {
   const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
     const start = new Date(createdAt).getTime()
     const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - start) / 1000 / 60)) // Minutos
+      setElapsed(Math.floor((Date.now() - start) / 1000 / 60)) 
     }, 1000)
     return () => clearInterval(interval)
   }, [createdAt])
 
-  // Cores do Semáforo (Funcionam bem no Claro e Escuro)
   let colorClass = "text-emerald-600 dark:text-emerald-500" 
   if (elapsed >= 10) colorClass = "text-amber-600 dark:text-amber-500" 
   if (elapsed >= 20) colorClass = "text-red-600 dark:text-red-500 animate-pulse" 
@@ -47,23 +46,22 @@ function OrderTimer({ createdAt }: { createdAt: string }) {
   )
 }
 
-export default function KitchenPage({ params }: { params: { slug: string } }) {
+// Conteúdo da Página (Lógica)
+function KitchenContent({ params }: { params: { slug: string } }) {
   const slug = params.slug
-
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
   const router = useRouter()
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme() // Agora usa o tema isolado
   const [storeId, setStoreId] = useState<string | null>(null)
 
-  // 1. Verificar Acesso
   useEffect(() => {
     async function checkAccess() {
       const session = await getStaffSession()
       if (!session || session.storeSlug !== slug || session.role !== 'kitchen') {
-        toast({ title: "Acesso Negado", description: "Você não tem permissão de cozinheiro.", variant: "destructive" })
+        toast({ title: "Acesso Negado", description: "Permissão exclusiva para cozinha.", variant: "destructive" })
         router.push(`/${slug}/staff`)
         return
       }
@@ -72,7 +70,6 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
     checkAccess()
   }, [slug, router, toast])
 
-  // 2. Buscar Pedidos
   const fetchOrders = async () => {
     if (!storeId) return
     const data = await getKitchenOrdersAction(storeId)
@@ -86,31 +83,23 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
     return () => clearInterval(interval)
   }, [storeId])
 
-  // 3. Ação: Marcar como Pronto
   const handleReady = (orderId: string) => {
     startTransition(async () => {
       setOrders(prev => prev.filter(o => o.id !== orderId))
-      
       const res = await markOrderReadyAction(orderId, slug)
       if (res.error) {
         toast({ title: "Erro", description: res.error, variant: "destructive" })
         fetchOrders()
       } else {
-        toast({ title: "Pedido Pronto!", description: "Notificando garçons/entregadores." })
+        toast({ title: "Pedido Pronto!", description: "Notificando salão." })
       }
     })
-  }
-
-  const handleLogout = async () => {
-    await logoutStaffAction(slug)
   }
 
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground"><RefreshCw className="w-8 h-8 animate-spin"/></div>
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-      
-      {/* HEADER KDS */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 sticky top-0 z-10 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -134,14 +123,13 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
               <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             </Button>
             
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20">
+            <Button variant="ghost" size="icon" onClick={() => logoutStaffAction(slug)} className="text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20">
               <LogOut className="w-5 h-5" />
             </Button>
           </div>
         </div>
       </header>
 
-      {/* GRID DE PEDIDOS */}
       <main className="p-4">
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[70vh] text-muted-foreground opacity-50">
@@ -215,4 +203,14 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
       </main>
     </div>
   )
+}
+
+// Wrapper para isolar o Tema
+export default function KitchenPageWrapper({ params }: { params: { slug: string } }) {
+    return (
+        // storageKey="kitchen-theme" garante que não conflite com "theme" (admin)
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="kitchen-theme">
+            <KitchenContent params={params} />
+        </ThemeProvider>
+    )
 }

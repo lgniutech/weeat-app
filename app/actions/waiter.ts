@@ -3,99 +3,181 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-// Busca o status de todas as mesas (1 a 20)
-export async function getTablesStatusAction(storeId: string) {
+export type TableStatus = 'free' | 'occupied' | 'payment';
+
+export type TableData = {
+  id: string;
+  status: TableStatus;
+  orderId?: string;
+  customerName?: string;
+  total: number;
+  items?: any[];
+  orderStatus?: string;
+};
+
+// --- 1. BUSCAR STATUS DAS MESAS ---
+export async function getTablesStatusAction(storeId: string): Promise<TableData[]> {
   const supabase = await createClient();
 
-  // Busca pedidos ABERTOS do tipo 'mesa'
+  // A. Buscar config da loja (tables_count)
+  const { data: store } = await supabase
+    .from("stores")
+    .select("tables_count")
+    .eq("id", storeId)
+    .single();
+    
+  // Se não tiver configurado, assume 10. Se configurou 5, usa 5.
+  const totalTables = store?.tables_count || 10; 
+
+  // B. Buscar pedidos ativos
   const { data: activeOrders } = await supabase
     .from("orders")
-    .select("id, status, total_price, delivery_address, customer_name")
+    .select(`
+      id, 
+      status, 
+      total_price, 
+      delivery_address, 
+      customer_name,
+      order_items ( name, quantity, price )
+    `)
     .eq("store_id", storeId)
     .eq("delivery_type", "mesa")
-    .neq("status", "entregue")  // Entregue = Mesa fechada/liberada
+    .neq("status", "entregue") 
     .neq("status", "cancelado");
 
-  // Mapeia para um formato fácil de consumir
-  // delivery_address geralmente guardamos como "Mesa: 10"
-  const tables = Array.from({ length: 20 }, (_, i) => {
+  // C. Montar array
+  const tables = Array.from({ length: totalTables }, (_, i) => {
     const tableNum = (i + 1).toString();
-    const order = activeOrders?.find(o => o.delivery_address === `Mesa: ${tableNum}`);
     
+    const order = activeOrders?.find(o => 
+      o.delivery_address === `Mesa: ${tableNum}` || 
+      o.delivery_address === `Mesa ${tableNum}`
+    );
+    
+    let status: TableStatus = 'free';
+    if (order) {
+      if (order.status === 'pagando') status = 'payment';
+      else status = 'occupied';
+    }
+
     return {
       id: tableNum,
-      status: order ? (order.status === 'pagando' ? 'payment' : 'occupied') : 'free',
+      status: status,
       orderId: order?.id,
       customerName: order?.customer_name,
-      total: order?.total_price || 0
+      total: order?.total_price || 0,
+      items: order?.order_items || [],
+      orderStatus: order?.status
     };
   });
 
   return tables;
 }
 
-// Cria um pedido para a mesa
+// --- 2. BUSCAR CARDÁPIO ---
+export async function getWaiterMenuAction(storeId: string) {
+  const supabase = await createClient();
+  
+  const { data: categories } = await supabase
+    .from("categories")
+    .select(`
+      id, name,
+      products (id, name, price, description, is_available, category_id)
+    `)
+    .eq("store_id", storeId)
+    .order("index", { ascending: true });
+
+  if (!categories) return [];
+
+  return categories.map(cat => ({
+    ...cat,
+    products: cat.products?.filter((p: any) => p.is_available === true)
+  })).filter(cat => cat.products.length > 0);
+}
+
+// --- 3. CRIAR PEDIDO (ABRIR MESA) ---
 export async function createTableOrderAction(storeId: string, tableNum: string, items: any[]) {
   const supabase = await createClient();
   
   const total = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-  const { error } = await supabase.from("orders").insert({
+  // A. Inserir Pedido Principal
+  const { data: order, error: orderError } = await supabase.from("orders").insert({
     store_id: storeId,
     customer_name: `Mesa ${tableNum}`,
-    customer_phone: "", // Não obrigatório para mesa
     delivery_type: "mesa",
     delivery_address: `Mesa: ${tableNum}`,
-    payment_method: "card_machine", // Padrão
-    status: "aceito", // Vai direto para "Aceito" (ou "preparando" se preferir)
-    items: items, // JSONB
+    payment_method: "card_machine", 
+    status: "aceito", 
+    items: items, // JSONB para backup
     total_price: total
-  });
+  }).select().single();
 
-  if (error) return { error: "Erro ao abrir mesa." };
-  
-  // Cria os itens na tabela relacional também (para estatísticas)
-  // (Simplificado aqui, idealmente usaria a mesma lógica do order.ts principal)
+  if (orderError || !order) {
+    console.error("Erro ao criar pedido:", orderError);
+    return { error: "Erro ao abrir mesa." };
+  }
+
+  // B. Inserir Itens na tabela relacional (CORREÇÃO: Isso faltava!)
+  const orderItemsData = items.map(i => ({
+    order_id: order.id,
+    product_id: i.id,
+    name: i.name,
+    quantity: i.quantity,
+    price: i.price
+  }));
+
+  const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
+
+  if (itemsError) {
+    console.error("Erro ao inserir itens:", itemsError);
+    // Não vamos abortar tudo, mas é bom logar
+  }
 
   revalidatePath("/");
   return { success: true };
 }
 
-// Adiciona itens a uma mesa JÁ ABERTA
+// --- 4. ADICIONAR ITENS À MESA ---
 export async function addItemsToTableAction(orderId: string, newItems: any[], currentTotal: number) {
   const supabase = await createClient();
 
-  // 1. Busca os itens atuais
-  const { data: order } = await supabase.from("orders").select("items").eq("id", orderId).single();
-  if (!order) return { error: "Pedido não encontrado" };
+  // A. Inserir NOVOS itens na tabela relacional
+  const orderItemsData = newItems.map(i => ({
+    order_id: orderId,
+    product_id: i.id,
+    name: i.name,
+    quantity: i.quantity,
+    price: i.price
+  }));
 
-  const updatedItems = [...(order.items || []), ...newItems];
-  const itemsTotal = newItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const newTotal = currentTotal + itemsTotal;
+  const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
+  if (itemsError) return { error: "Erro ao adicionar itens no banco." };
 
-  // 2. Atualiza o pedido
-  const { error } = await supabase
+  // B. Atualizar Pedido Principal (Total e Status)
+  const addedTotal = newItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const newTotal = currentTotal + addedTotal;
+
+  // Precisamos buscar os items antigos do JSONB para mesclar (apenas para manter o JSONB atualizado)
+  const { data: currentOrder } = await supabase.from("orders").select("items").eq("id", orderId).single();
+  const mergedItems = [...(currentOrder?.items || []), ...newItems];
+
+  const { error: updateError } = await supabase
     .from("orders")
     .update({ 
-      items: updatedItems,
+      items: mergedItems,
       total_price: newTotal,
-      status: "preparando" // Volta para cozinha se tiver item novo
+      status: "preparando" // Volta para cozinha
     })
     .eq("id", orderId);
 
-  if (error) return { error: "Erro ao adicionar itens." };
+  if (updateError) return { error: "Erro ao atualizar total." };
+
   revalidatePath("/");
   return { success: true };
 }
 
-// Solicita o fechamento da conta
-export async function requestBillAction(orderId: string, storeSlug: string) {
-  const supabase = await createClient();
-  await supabase.from("orders").update({ status: "pagando" }).eq("id", orderId);
-  revalidatePath(`/${storeSlug}/staff/waiter`);
-}
-
-// Fecha a mesa (libera) - Usado quando o cliente paga
+// --- 5. FECHAR MESA ---
 export async function closeTableAction(orderId: string, storeSlug: string) {
   const supabase = await createClient();
   await supabase.from("orders").update({ status: "entregue" }).eq("id", orderId);
