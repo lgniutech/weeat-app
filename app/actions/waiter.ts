@@ -19,17 +19,16 @@ export type TableData = {
 export async function getTablesStatusAction(storeId: string): Promise<TableData[]> {
   const supabase = await createClient();
 
-  // CORREÇÃO: Usar 'total_tables' em vez de 'tables_count'
+  // Busca a configuração correta da loja
   const { data: store } = await supabase
     .from("stores")
     .select("total_tables")
     .eq("id", storeId)
     .single();
     
-  // Se não tiver configurado, assume 10
   const totalTables = store?.total_tables || 10; 
 
-  // B. Buscar pedidos ativos (que não foram entregues/finalizados)
+  // Busca pedidos ativos
   const { data: activeOrders } = await supabase
     .from("orders")
     .select(`
@@ -38,22 +37,23 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
       total_price, 
       delivery_address, 
       customer_name,
-      order_items ( name, quantity, price )
+      table_number,
+      order_items ( product_name, quantity, unit_price )
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "mesa")
     .neq("status", "entregue") 
     .neq("status", "cancelado");
 
-  // C. Montar array de mesas
+  // Monta o mapa de mesas
   const tables = Array.from({ length: totalTables }, (_, i) => {
     const tableNum = (i + 1).toString();
     
-    // Procura se tem algum pedido ativo para esta mesa
-    // Normalizamos a string para evitar erros com "Mesa 1" vs "Mesa: 1"
+    // Tenta encontrar pedido pela coluna table_number OU pelo endereço
     const order = activeOrders?.find(o => {
+        if (o.table_number === tableNum) return true;
         if (!o.delivery_address) return false;
-        const addressNum = o.delivery_address.replace(/\D/g, ''); // Pega só os números
+        const addressNum = o.delivery_address.replace(/\D/g, ''); 
         return addressNum === tableNum;
     });
     
@@ -105,47 +105,46 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
   try {
       const total = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-      // A. Inserir Pedido Principal
+      // Inserção BLINDADA para aceitar os campos obrigatórios do banco
       const { data: order, error: orderError } = await supabase.from("orders").insert({
         store_id: storeId,
         customer_name: `Mesa ${tableNum}`,
         delivery_type: "mesa",
-        delivery_address: `Mesa ${tableNum}`, // Padronizado sem dois pontos para facilitar busca
-        payment_method: "card_machine", // Placeholder
-        status: "aceito", // Já entra como aceito pois foi o garçom que lançou
-        items: items, // JSONB para backup
+        delivery_address: `Mesa ${tableNum}`,
+        table_number: tableNum, // IMPORTANTE: Campo que faltava
+        payment_method: "card_machine", 
+        status: "aceito", 
+        items: items, // Backup JSONB
         total_price: total,
         last_status_change: new Date().toISOString()
       }).select().single();
 
       if (orderError) {
-        console.error("Erro ao criar pedido (Banco):", orderError);
-        return { error: `Erro no Banco: ${orderError.message}` };
+        console.error("Erro SQL ao criar pedido:", orderError);
+        return { error: `Erro ao abrir mesa: ${orderError.message}` };
       }
 
-      if (!order) {
-        return { error: "Erro desconhecido ao criar pedido." };
-      }
-
-      // B. Inserir Itens na tabela relacional
       if (items.length > 0) {
           const orderItemsData = items.map(i => ({
             order_id: order.id,
-            product_name: i.name, // Ajustado para bater com esquema padrão se necessário
+            product_name: i.name,
             quantity: i.quantity,
             unit_price: i.price,
-            total_price: i.price * i.quantity
+            total_price: i.price * i.quantity,
+            // Campos OBRIGATÓRIOS para o Schema do Supabase não reclamar de NULL
+            removed_ingredients: '[]', 
+            selected_addons: '[]',
+            observation: ''
           }));
 
           const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
 
           if (itemsError) {
-            console.error("Erro ao inserir itens (Banco):", itemsError);
-            // Não abortamos pois o pedido foi criado, mas avisamos no log
+            console.error("Erro SQL ao inserir itens:", itemsError);
           }
       }
       
-      // Histórico
+      // Log no histórico
       await supabase.from("order_history").insert({
           order_id: order.id,
           new_status: 'aceito',
@@ -156,7 +155,7 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
       return { success: true, orderId: order.id };
 
   } catch (err: any) {
-      console.error("Erro Crítico (Try/Catch):", err);
+      console.error("Erro Interno:", err);
       return { error: "Erro interno no servidor." };
   }
 }
@@ -166,26 +165,23 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
   const supabase = await createClient();
 
   try {
-      // A. Inserir NOVOS itens na tabela relacional
       const orderItemsData = newItems.map(i => ({
         order_id: orderId,
         product_name: i.name,
         quantity: i.quantity,
         unit_price: i.price,
-        total_price: i.price * i.quantity
+        total_price: i.price * i.quantity,
+        removed_ingredients: '[]', 
+        selected_addons: '[]',
+        observation: ''
       }));
 
       const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
-      if (itemsError) {
-          console.error(itemsError);
-          return { error: "Erro ao adicionar itens no banco." };
-      }
+      if (itemsError) return { error: "Erro ao adicionar itens: " + itemsError.message };
 
-      // B. Atualizar Pedido Principal (Total e Status)
       const addedTotal = newItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
       const newTotal = currentTotal + addedTotal;
 
-      // Buscar itens antigos para manter JSONB atualizado (opcional, mas bom para integridade)
       const { data: currentOrder } = await supabase.from("orders").select("items").eq("id", orderId).single();
       const mergedItems = [...(currentOrder?.items || []), ...newItems];
 
@@ -194,7 +190,7 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
         .update({ 
           items: mergedItems,
           total_price: newTotal,
-          status: "preparando", // Volta status para cozinha ver que tem coisa nova
+          status: "preparando", 
           last_status_change: new Date().toISOString()
         })
         .eq("id", orderId);
@@ -213,7 +209,7 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
 export async function closeTableAction(orderId: string, storeSlug: string) {
   const supabase = await createClient();
   
-  // Define como "entregue" para sair da lista de mesas ativas
+  // Apenas marca como entregue para liberar a mesa da visualização
   const { error } = await supabase
       .from("orders")
       .update({ 
