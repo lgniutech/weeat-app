@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ThemeProvider, useTheme } from "next-themes" // Importando ThemeProvider
+import { ThemeProvider, useTheme } from "next-themes" // Importante
 import { getStaffSession, logoutStaffAction } from "@/app/actions/staff"
 import { 
     getTablesStatusAction, 
@@ -16,10 +16,9 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, CheckCircle2, Minus, Utensils, Moon, Sun } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
-// Componente Interno (Conteúdo da Página)
 function WaiterContent({ params }: { params: { slug: string } }) {
   const slug = params.slug
   const [tables, setTables] = useState<any[]>([])
@@ -27,12 +26,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [categories, setCategories] = useState<any[]>([])
   const [storeId, setStoreId] = useState<string | null>(null)
   
-  // UI States
   const [selectedTable, setSelectedTable] = useState<any>(null)
   const [isManagementOpen, setIsManagementOpen] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   
-  // Cart & Search
   const [cart, setCart] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
@@ -40,9 +37,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
   const router = useRouter()
-  const { theme, setTheme } = useTheme() // Hook do tema local
+  const { theme, setTheme } = useTheme() // Tema Local (Waiter)
 
-  // Auth & Init
   useEffect(() => {
     async function init() {
       const session = await getStaffSession()
@@ -60,7 +56,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     init()
   }, [slug, router])
 
-  // Polling
   const fetchTables = async () => {
     if (!storeId) return
     const data = await getTablesStatusAction(storeId)
@@ -73,7 +68,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     return () => clearInterval(interval)
   }, [storeId])
 
-  // Ações
   const openTableManagement = (table: any) => {
     setSelectedTable(table)
     setIsManagementOpen(true)
@@ -148,13 +142,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 transition-colors duration-300">
-      {/* Header */}
       <header className="bg-white dark:bg-slate-900 p-4 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center shadow-sm">
         <h1 className="font-bold text-xl flex items-center gap-2 text-slate-900 dark:text-slate-100">
           <User className="text-primary" /> Garçom
         </h1>
         <div className="flex gap-2">
-            {/* Botão de Tema INDEPENDENTE (graças ao ThemeProvider local) */}
             <Button 
                 variant="outline" 
                 size="icon" 
@@ -170,7 +162,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </div>
       </header>
 
-      {/* Grid Mesas */}
       <main className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {tables.map(table => (
           <div 
@@ -206,7 +197,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         ))}
       </main>
 
-      {/* Modal Gestão */}
       <Dialog open={isManagementOpen} onOpenChange={setIsManagementOpen}>
         <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 dark:border-slate-800">
             <DialogHeader>
@@ -267,7 +257,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Menu */}
       <Dialog open={isMenuOpen} onOpenChange={(open) => {
           if(!open) setIsManagementOpen(true)
           setIsMenuOpen(open)
@@ -345,11 +334,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   )
 }
 
-// Wrapper Principal que isola o Tema
+// Wrapper para isolar o Tema
 export default function WaiterPageWrapper({ params }: { params: { slug: string } }) {
-    // Usamos 'staff-theme' como chave para não conflitar com 'theme' (admin)
     return (
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="staff-theme">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="waiter-theme">
             <WaiterContent params={params} />
         </ThemeProvider>
     )
