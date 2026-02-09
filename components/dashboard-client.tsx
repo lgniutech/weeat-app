@@ -18,7 +18,8 @@ import { MenuManager } from "@/components/modules/menu-manager"
 import { OrderManager } from "@/components/modules/order-manager"
 import { TablesManager } from "@/components/modules/tables-manager" 
 import { OverviewDashboard } from "@/components/modules/overview-dashboard"
-import { CouponsManager } from "@/components/modules/coupons-manager" // <--- NOVO IMPORT
+import { CouponsManager } from "@/components/modules/coupons-manager"
+import { TeamManager } from "@/components/modules/team-manager" // <--- IMPORT NOVO
 import { AppearanceForm } from "@/components/settings/appearance-form"
 
 interface DashboardClientProps {
@@ -81,8 +82,11 @@ export default function DashboardClient({
       case 'tables': 
         return <TablesManager store={store} />
 
-      case 'coupons': // <--- NOVA ROTA DE CUPONS
+      case 'coupons':
         return <CouponsManager store={store} />
+
+      case 'team': // <--- ROTA DE EQUIPE
+        return <TeamManager store={store} />
         
       case 'financial':
         return (

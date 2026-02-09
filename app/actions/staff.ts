@@ -3,25 +3,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 
 const COOKIE_NAME = "weeat_staff_session";
 
+// --- LOGIN (JÁ EXISTIA) ---
 export async function verifyStaffPinAction(slug: string, pin: string) {
   const supabase = await createClient();
   const cookieStore = await cookies();
 
-  // 1. Achar a loja pelo Slug
-  const { data: store } = await supabase
-    .from("stores")
-    .select("id, name")
-    .eq("slug", slug)
-    .single();
+  const { data: store } = await supabase.from("stores").select("id, name").eq("slug", slug).single();
+  if (!store) return { error: "Loja não encontrada." };
 
-  if (!store) {
-    return { error: "Loja não encontrada." };
-  }
-
-  // 2. Verificar se o PIN bate com algum funcionário dessa loja
   const { data: staff } = await supabase
     .from("staff_users")
     .select("id, name, role")
@@ -29,12 +22,8 @@ export async function verifyStaffPinAction(slug: string, pin: string) {
     .eq("pin", pin)
     .single();
 
-  if (!staff) {
-    return { error: "PIN incorreto." };
-  }
+  if (!staff) return { error: "PIN incorreto." };
 
-  // 3. Criar Sessão (Cookie Simples)
-  // Armazenamos o ID, Nome, Cargo e ID da Loja para validar nas próximas telas
   const sessionData = JSON.stringify({
     staffId: staff.id,
     name: staff.name,
@@ -43,7 +32,6 @@ export async function verifyStaffPinAction(slug: string, pin: string) {
     storeSlug: slug
   });
 
-  // Define o cookie para expirar em 24h
   cookieStore.set(COOKIE_NAME, sessionData, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -51,41 +39,72 @@ export async function verifyStaffPinAction(slug: string, pin: string) {
     path: "/",
   });
 
-  // 4. Determinar Redirecionamento baseado no Cargo
   let redirectUrl = `/${slug}/staff/`;
-
-  switch (staff.role) {
-    case "kitchen":
-      redirectUrl += "kitchen"; // KDS
-      break;
-    case "waiter":
-      redirectUrl += "waiter"; // Garçom
-      break;
-    case "courier":
-      redirectUrl += "courier"; // Entregador
-      break;
-    default:
-      return { error: "Cargo não reconhecido." };
-  }
+  if (staff.role === "kitchen") redirectUrl += "kitchen";
+  else if (staff.role === "waiter") redirectUrl += "waiter";
+  else if (staff.role === "courier") redirectUrl += "courier";
 
   return { success: true, redirectUrl };
 }
 
-// Função para logout do staff
 export async function logoutStaffAction(slug: string) {
   const cookieStore = await cookies();
   cookieStore.delete(COOKIE_NAME);
   redirect(`/${slug}/staff`);
 }
 
-// Função auxiliar para pegar o usuário atual (usada nas páginas protegidas)
 export async function getStaffSession() {
   const cookieStore = await cookies();
   const session = cookieStore.get(COOKIE_NAME);
   if (!session) return null;
+  try { return JSON.parse(session.value); } catch { return null; }
+}
+
+// --- NOVAS FUNÇÕES: GERENCIAMENTO (CRUD) ---
+
+export async function getStoreStaffAction(storeId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("staff_users")
+    .select("*")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false });
+
+  if (error) return [];
+  return data;
+}
+
+export async function createStaffAction(storeId: string, name: string, role: string, pin: string) {
+  const supabase = await createClient();
+
+  // Validação simples
+  if (!name || !role || !pin) return { error: "Preencha todos os campos." };
+  if (pin.length !== 4 || isNaN(Number(pin))) return { error: "O PIN deve ter 4 números." };
+
   try {
-    return JSON.parse(session.value);
-  } catch {
-    return null;
+    const { error } = await supabase.from("staff_users").insert({
+      store_id: storeId,
+      name,
+      role,
+      pin
+    });
+
+    if (error) {
+      if (error.message.includes("unique_pin_per_store")) {
+        return { error: "Este PIN já está sendo usado por outro funcionário." };
+      }
+      throw error;
+    }
+
+    revalidatePath("/"); // Atualiza a lista
+    return { success: true };
+  } catch (err) {
+    return { error: "Erro ao criar funcionário." };
   }
+}
+
+export async function deleteStaffAction(staffId: string) {
+  const supabase = await createClient();
+  await supabase.from("staff_users").delete().eq("id", staffId);
+  revalidatePath("/");
 }
