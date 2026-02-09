@@ -50,7 +50,6 @@ export default async function StorePage({ params }: Props) {
         .map((p: any) => ({
             ...p,
             ingredients: p.product_ingredients?.map((pi: any) => pi.ingredient) || [],
-            // Mapeia o addon e injeta o preço da relação (product_addons.price)
             addons: p.product_addons?.map((pa: any) => ({
                 ...pa.addon,
                 price: pa.price 
@@ -59,5 +58,8 @@ export default async function StorePage({ params }: Props) {
     })).filter(cat => cat.products.length > 0)
   }
 
-  return (<StoreFront store={store} categories={categories} />)
+  // CORREÇÃO: Achatar a lista de produtos para passar para o componente de busca
+  const allProducts = categories.reduce((acc, cat) => [...acc, ...cat.products], [])
+
+  return (<StoreFront store={store} categories={categories} products={allProducts} />)
 }
