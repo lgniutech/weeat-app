@@ -30,9 +30,14 @@ interface OrderInput {
 export async function createOrderAction(order: OrderInput) {
   const supabase = await createClient();
 
+  // LÓGICA DE STATUS INICIAL:
+  // Mesa -> 'aceito' (Vai direto pra cozinha)
+  // Entrega/Retirada -> 'pendente' (Precisa que a loja aceite no painel/gestor)
+  const initialStatus = order.deliveryType === 'mesa' ? 'aceito' : 'pendente';
+
   const orderData = {
     store_id: order.storeId,
-    status: "pendente",
+    status: initialStatus,
     customer_name: order.customerName,
     customer_phone: order.customerPhone,
     delivery_type: order.deliveryType,
@@ -64,7 +69,8 @@ export async function createOrderAction(order: OrderInput) {
     total_price: item.unit_price * item.quantity,
     observation: item.observation,
     removed_ingredients: JSON.stringify(item.removed_ingredients),
-    selected_addons: JSON.stringify(item.selected_addons)
+    selected_addons: JSON.stringify(item.selected_addons),
+    status: 'pendente' // Item nasce pendente (para ser feito)
   }));
 
   const { error: itemsError } = await supabase.from("order_items").insert(itemsToInsert);
@@ -74,11 +80,11 @@ export async function createOrderAction(order: OrderInput) {
     return { error: "Erro ao registrar itens do pedido." };
   }
 
-  // Log inicial no histórico
+  // Log no histórico com o status correto
   await supabase.from("order_history").insert({
       order_id: newOrder.id,
       previous_status: null,
-      new_status: 'pendente',
+      new_status: initialStatus,
       changed_at: new Date().toISOString()
   });
 
@@ -151,11 +157,10 @@ export async function getCustomerOrdersAction(phone: string) {
   return data || [];
 }
 
-// --- BUSCAR CONTA DA MESA ---
+// BUSCAR CONTA DA MESA
 export async function getTableOrdersAction(storeId: string, tableNumber: string) {
   const supabase = await createClient();
 
-  // Busca pedidos ativos desta mesa
   const { data: orders, error } = await supabase
     .from("orders")
     .select(`
