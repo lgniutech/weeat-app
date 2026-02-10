@@ -60,7 +60,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
   
-  // ESTADOS DO CLIENTE (NOME/TELEFONE)
+  // ESTADOS DO CLIENTE
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
 
@@ -110,7 +110,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const openTableManagement = (table: any) => {
     setSelectedTable(table)
-    // Se a mesa estiver livre, limpa os campos de cliente para o novo cadastro
     if (table.status === 'free') {
         setClientName("")
         setClientPhone("")
@@ -164,7 +163,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       let res;
       try {
           if (selectedTable.status === 'free') {
-            // AQUI: Passamos o clientName e clientPhone para o backend
             res = await createTableOrderAction(storeId!, selectedTable.id, cart, clientName, clientPhone)
           } else {
             res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
@@ -181,13 +179,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   }
 
   const handleCloseTable = async () => {
-    if(!confirm("Encerrar mesa e liberar para novos clientes?")) return;
+    if(!confirm("Tem certeza que deseja encerrar a conta?")) return;
+    
     startTransition(async () => {
         const res = await closeTableAction(selectedTable.id, storeId!)
         if (res?.success) {
             setIsManagementOpen(false)
             fetchTables()
-            toast({ title: "Mesa Liberada!", className: "bg-blue-600 text-white" })
+            toast({ title: "Conta Encerrada!", className: "bg-blue-600 text-white" })
         } else {
             toast({ title: "Erro ao fechar", description: res?.error || "Verifique o SQL do Banco.", variant: "destructive" })
         }
@@ -289,7 +288,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 <DialogTitle className="flex justify-between items-center">
                     <span className="flex items-center gap-2">
                         Mesa {selectedTable?.id}
-                        {/* Se tiver nome do cliente e a mesa estiver ocupada, mostra o nome */}
                         {selectedTable?.status !== 'free' && selectedTable?.customerName && !selectedTable.customerName.includes("Mesa") && (
                             <span className="text-sm font-normal text-muted-foreground">({selectedTable.customerName})</span>
                         )}
@@ -324,30 +322,17 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                 <Label htmlFor="client-name" className="text-xs font-semibold text-muted-foreground uppercase">Nome do Cliente (Opcional)</Label>
                                 <div className="relative">
                                     <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input 
-                                        id="client-name"
-                                        placeholder="Ex: João Silva" 
-                                        className="pl-9 bg-white dark:bg-slate-900" 
-                                        value={clientName}
-                                        onChange={(e) => setClientName(e.target.value)}
-                                    />
+                                    <Input id="client-name" placeholder="Ex: João Silva" className="pl-9 bg-white dark:bg-slate-900" value={clientName} onChange={(e) => setClientName(e.target.value)} />
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <Label htmlFor="client-phone" className="text-xs font-semibold text-muted-foreground uppercase">Telefone / WhatsApp</Label>
                                 <div className="relative">
                                     <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input 
-                                        id="client-phone"
-                                        placeholder="Ex: 11999999999" 
-                                        className="pl-9 bg-white dark:bg-slate-900" 
-                                        value={clientPhone}
-                                        onChange={(e) => setClientPhone(e.target.value)}
-                                    />
+                                    <Input id="client-phone" placeholder="Ex: 11999999999" className="pl-9 bg-white dark:bg-slate-900" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} />
                                 </div>
                             </div>
                         </div>
-
                         <Button className="w-full h-12 text-lg bg-primary hover:bg-primary/90" onClick={openMenu}>
                             <Plus className="mr-2 h-5 w-5"/> Abrir Pedido
                         </Button>
@@ -370,8 +355,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
                          <div className="grid grid-cols-2 gap-3 pt-2">
                              <Button variant="outline" className="h-12" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar</Button>
+                             {/* CORREÇÃO AQUI: Botão Destructive (Vermelho) e SEM travas lógicas além do loading */}
                              <Button 
-                                className="h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                                variant="destructive" 
+                                className="h-12 font-bold shadow-sm"
                                 onClick={handleCloseTable} 
                                 disabled={isPending} 
                              >
@@ -383,14 +370,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </div>
         </DialogContent>
       </Dialog>
-      
+      {/* O resto dos Modais (Cardápio e Customização) permanece igual */}
        <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>
         <DialogContent className="h-[95vh] w-full max-w-lg flex flex-col p-0 gap-0">
              <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
-               <DialogTitle>
-                    Cardápio (Mesa {selectedTable?.id})
-                    {clientName && <span className="block text-xs font-normal text-muted-foreground mt-1">Cliente: {clientName}</span>}
-               </DialogTitle>
+               <DialogTitle>Cardápio (Mesa {selectedTable?.id})</DialogTitle>
                <Button variant="ghost" size="sm" onClick={() => setIsMenuOpen(false)}>Voltar</Button>
             </div>
             <div className="p-2 space-y-2 border-b bg-white dark:bg-slate-950">
