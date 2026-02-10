@@ -53,7 +53,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   
   // Estados do Checkout
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'retirada' | 'mesa'>('delivery')
-  const [tableNumber, setTableNumber] = useState<string | null>(null) // Novo estado para mesa
+  const [tableNumber, setTableNumber] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState('pix')
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
@@ -82,8 +82,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
       const mesa = params.get('mesa')
       if (mesa) {
         setDeliveryMethod('mesa')
-        setTableNumber(mesa) // Salva o número da mesa
-        setPaymentMethod('card_machine') // Define um padrão interno, mas não mostra
+        setTableNumber(mesa)
+        setPaymentMethod('card_machine') // Padrão maquininha para mesa
       }
     }
     // Aplica cor do tema da loja
@@ -122,13 +122,13 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     if (appliedCoupon.type === 'percent') {
       return (subtotal * appliedCoupon.value) / 100;
     }
-    return appliedCoupon.value; // Valor fixo
+    return appliedCoupon.value;
   }, [subtotal, appliedCoupon]);
 
   // Taxa de Entrega (Mesa não tem taxa)
   const deliveryFee = deliveryMethod === 'delivery' ? 5.00 : 0 
   
-  // Total Final (Não pode ser negativo)
+  // Total Final
   const total = Math.max(0, subtotal - discountAmount + deliveryFee);
 
   const filteredProducts = (products || []).filter(p => {
@@ -142,7 +142,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     if (!couponCode) return;
     setIsValidatingCoupon(true);
     
-    // Chama a Server Action
     const result = await validateCouponAction(couponCode, store.id, subtotal);
 
     if (result.error) {
@@ -160,7 +159,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     setCouponCode("");
   }
 
-  // --- FINALIZAR PEDIDO ---
+  // --- FINALIZAR PEDIDO (CORRIGIDO) ---
   const handleCheckout = async () => {
     if (cart.length === 0) return
     
@@ -188,24 +187,27 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         ? `${customerAddress.street}, ${customerAddress.number} - ${customerAddress.neighborhood} (${customerAddress.city}) ${customerAddress.complement ? ` - Comp: ${customerAddress.complement}` : ''}`
         : deliveryMethod === 'mesa' ? `Mesa: ${tableNumber}` : 'Retirada no Balcão';
 
+    // --- CORREÇÃO AQUI: Mapeamento CamelCase para bater com app/actions/order.ts ---
     const orderData = {
-      store_id: store.id,
-      customer_name: customerName,
-      customer_phone: customerPhone || "Não informado", // Opcional na mesa
-      delivery_type: deliveryMethod,
-      delivery_address: fullAddress,
-      table_number: tableNumber, // Passa o número da mesa explicitamente
-      payment_method: paymentMethod,
+      storeId: store.id,
+      customerName: customerName,
+      customerPhone: customerPhone || "Não informado", 
+      deliveryType: deliveryMethod,
+      address: fullAddress, // Era delivery_address, agora é address
+      tableNumber: tableNumber || undefined, // undefined se não tiver
+      paymentMethod: paymentMethod,
+      totalPrice: total,
+      // Mapeamento dos itens para OrderItemInput
       items: cart.map(item => ({
-        product_id: item.id,
-        name: item.name,
+        product_name: item.name,
         quantity: item.quantity,
-        price: item.price
-      })),
-      total_price: total,
-      notes: appliedCoupon ? `Cupom aplicado: ${appliedCoupon.code}` : ''
+        unit_price: item.price,
+        removed_ingredients: [], // Placeholder
+        selected_addons: []      // Placeholder
+      }))
     }
 
+    // Chama a action
     const result = await createOrderAction(orderData)
 
     if (result.success) {
@@ -215,9 +217,9 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
       setCart([])
       setAppliedCoupon(null);
       setIsCartOpen(false)
-      setOrderSuccess(result.order)
+      setOrderSuccess({ id: result.orderId }) // Ajustado para pegar orderId retornado
     } else {
-      toast({ title: "Erro", description: "Não foi possível enviar o pedido.", variant: "destructive" })
+      toast({ title: "Erro", description: result.error || "Não foi possível enviar o pedido.", variant: "destructive" })
     }
 
     setIsOrderPlacing(false)
@@ -576,7 +578,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                     }
                 </DialogDescription>
                 <div className="bg-slate-100 p-4 rounded-lg text-sm w-full">
-                    <p className="font-bold">Pedido #{orderSuccess?.id.slice(0,4)}</p>
+                    <p className="font-bold">Pedido #{orderSuccess?.id?.slice(0,4)}</p>
                     <p className="text-muted-foreground mt-1">Total: {formatCurrency(total)}</p>
                 </div>
                 <Button className="w-full mt-2" onClick={() => setOrderSuccess(null)}>Fazer outro pedido</Button>
