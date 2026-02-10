@@ -1,53 +1,72 @@
-"use server";
+"use server"
 
-import { createClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server"
+import { revalidatePath } from "next/cache"
 
+// Busca pedidos ativos para o KDS (Kitchen Display System)
 export async function getKitchenOrdersAction(storeId: string) {
-  const supabase = await createClient();
+  const supabase = await createClient()
 
-  // Busca pedidos que estão NA COZINHA ('preparando')
-  // Ordena pelos mais antigos primeiro (FIFO - First In, First Out)
-  const { data, error } = await supabase
+  // Buscamos pedidos com status:
+  // 'aceito' -> Acabou de chegar do garçom/delivery
+  // 'preparando' -> Já está na chapa/panela
+  const { data: orders, error } = await supabase
     .from("orders")
     .select(`
       id,
-      customer_name,
       created_at,
       status,
+      table_number,
+      customer_name,
       delivery_type,
-      notes,
+      last_status_change,
       order_items (
+        id,
+        product_name,
         quantity,
-        name
-        -- Se tiver addons salvos no banco, adicione aqui: add_ons
+        observation,
+        removed_ingredients,
+        selected_addons
       )
     `)
     .eq("store_id", storeId)
-    .eq("status", "preparando") 
-    .order("created_at", { ascending: true });
+    .in("status", ["aceito", "preparando"]) 
+    .order("created_at", { ascending: true }) // FIFO: O primeiro que entra é o primeiro que sai
 
   if (error) {
-    console.error("Erro ao buscar pedidos da cozinha:", error);
-    return [];
+    console.error("Erro cozinha:", error)
+    return []
   }
 
-  return data;
+  return orders
 }
 
-export async function markOrderReadyAction(orderId: string, storeSlug: string) {
-  const supabase = await createClient();
+// Avança o status do pedido
+export async function advanceKitchenStatusAction(orderId: string, currentStatus: string) {
+  const supabase = await createClient()
+  
+  let nextStatus = ""
 
-  // Atualiza para 'pronto_cozinha' (libera para o garçom/entregador)
-  const { error } = await supabase
-    .from("orders")
-    .update({ status: "pronto_cozinha" })
-    .eq("id", orderId);
-
-  if (error) {
-    return { error: "Erro ao atualizar pedido." };
+  // Lógica de Avanço:
+  // Aceito (Novo) -> Preparando (Em Produção) -> Enviado (Pronto/Sino Toca)
+  if (currentStatus === 'aceito') {
+    nextStatus = 'preparando'
+  } else if (currentStatus === 'preparando') {
+    nextStatus = 'enviado' 
+  } else {
+    return { success: false }
   }
 
-  revalidatePath(`/${storeSlug}/staff/kitchen`);
-  return { success: true };
+  const { error } = await supabase
+    .from("orders")
+    .update({ 
+        status: nextStatus,
+        last_status_change: new Date().toISOString()
+    })
+    .eq("id", orderId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/")
+  return { success: true }
 }
