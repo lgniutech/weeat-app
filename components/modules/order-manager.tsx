@@ -5,9 +5,9 @@ import { createClient } from "@/lib/supabase/client"
 import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/order"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft, MessageSquareWarning, Printer, Phone, ExternalLink, MessageCircle, DollarSign, BellRing, Utensils } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft, MessageSquareWarning, Printer, Phone, ExternalLink, MessageCircle, DollarSign, BellRing } from "lucide-react"
 import { format, differenceInMinutes, isToday } from "date-fns"
-import { cn, formatPhone } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -17,14 +17,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 
-// ATUALIZAÇÃO AQUI: Mudança visual da coluna 'enviado' para ser genérica
+// DEFINIÇÃO DAS COLUNAS
 const BASE_COLUMNS = [
   { id: 'pendente', label: 'Pendente', color: 'bg-yellow-500', text: 'text-yellow-700 dark:text-yellow-400', icon: AlertCircle },
   { id: 'preparando', label: 'Cozinha', color: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-400', icon: Package },
-  { id: 'enviado', label: 'Pronto / Expedição', color: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-400', icon: BellRing }, // Ícone e Label mudados
+  { id: 'enviado', label: 'Pronto / Expedição', color: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-400', icon: BellRing },
   { id: 'entregue', label: 'Concluído', color: 'bg-green-600', text: 'text-green-700 dark:text-green-400', icon: CheckCircle2 },
 ]
 
@@ -56,7 +55,7 @@ export function OrderManager({ store }: { store: any }) {
   const playNotificationSound = () => {
     if (soundEnabled && audioRef.current) {
       audioRef.current.currentTime = 0
-      audioRef.current.play().catch(e => console.log("Erro ao tocar som:", e))
+      audioRef.current.play().catch(e => console.log("Erro som:", e))
     }
   }
 
@@ -92,6 +91,7 @@ export function OrderManager({ store }: { store: any }) {
         { event: 'UPDATE', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
         (payload) => {
            fetchOrders()
+           // Atualiza modal se estiver aberto
            if (viewOrder && payload.new.id === viewOrder.id) {
                setTimeout(async () => {
                    const dateStr = format(selectedDate, 'yyyy-MM-dd')
@@ -199,9 +199,17 @@ export function OrderManager({ store }: { store: any }) {
   }
   const visibleColumns = useMemo(() => { return showCanceled ? [...BASE_COLUMNS, CANCELED_COLUMN] : BASE_COLUMNS }, [showCanceled])
 
-  const getOrdersForColumn = (status: string) => {
-    const colOrders = orders.filter(o => o.status === status)
-    const isHistory = status === 'entregue' || status === 'cancelado'
+  // --- CORREÇÃO PRINCIPAL AQUI ---
+  // A coluna 'preparando' (Cozinha) agora aceita 'preparando' E 'aceito'
+  const getOrdersForColumn = (columnId: string) => {
+    const colOrders = orders.filter(o => {
+        if (columnId === 'preparando') {
+            return o.status === 'preparando' || o.status === 'aceito'; // <--- A MÁGICA
+        }
+        return o.status === columnId;
+    })
+    
+    const isHistory = columnId === 'entregue' || columnId === 'cancelado'
     return colOrders.sort((a, b) => {
         const dateA = new Date(a.created_at).getTime()
         const dateB = new Date(b.created_at).getTime()
@@ -230,7 +238,6 @@ export function OrderManager({ store }: { store: any }) {
   }
   const getMapsLink = (address: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 
-  // HELPER PARA TEXTO DO BOTÃO NA ETAPA "PRONTO"
   const getReadyButtonText = (type: string) => {
       if (type === 'mesa') return "LEVAR À MESA"
       if (type === 'retirada') return "CHAMAR CLIENTE"
@@ -337,6 +344,8 @@ export function OrderManager({ store }: { store: any }) {
                                                 </div>
                                                 <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate" title={order.customer_name}>
                                                     {order.customer_name.split(' ')[0]}
+                                                    {/* Badge visual para saber se é NOVO (Aceito) */}
+                                                    {order.status === 'aceito' && <span className="ml-2 text-[9px] bg-green-100 text-green-700 px-1 rounded border border-green-200">NOVO</span>}
                                                 </span>
                                             </div>
                                             
@@ -345,12 +354,12 @@ export function OrderManager({ store }: { store: any }) {
                                                     isLongWait ? "bg-red-50 text-red-600 border-red-100 animate-pulse dark:bg-red-900/30 dark:text-red-300 dark:border-red-900" : "bg-white text-slate-600 border-slate-100 dark:bg-zinc-700 dark:text-slate-300 dark:border-zinc-600")} 
                                                     title="Tempo nesta etapa">
                                                     
-                                                    <span className="font-normal text-slate-400 dark:text-slate-500 mr-1 hidden sm:inline">Tempo na etapa:</span>
+                                                    <span className="font-normal text-slate-400 dark:text-slate-500 mr-1 hidden sm:inline">Tempo:</span>
                                                     {order.status === 'entregue' ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
                                                     {timeInStage}
                                                 </div>
                                                 
-                                                {['pendente', 'preparando', 'enviado'].includes(order.status) && (
+                                                {['pendente', 'preparando', 'aceito', 'enviado'].includes(order.status) && (
                                                     <button 
                                                         className="text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 transition-colors p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20" 
                                                         onClick={(e) => handleCancelClick(order.id, e)}
@@ -405,8 +414,9 @@ export function OrderManager({ store }: { store: any }) {
                                     )}
                                     {col.id === 'preparando' && (
                                         <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
+                                             {/* Se for aceito, não tem como voltar pra pendente, pois pulou essa etapa. Se for preparando, pode voltar pra pendente? Melhor não complicar. */}
                                              <button onClick={() => moveOrder(order.id, 'pendente')} className="bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-[10px] border-t border-r border-slate-100 dark:border-zinc-700"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
-                                             {/* ATUALIZAÇÃO AQUI: Texto muda se for Mesa ou Delivery */}
+                                             
                                              <button onClick={() => moveOrder(order.id, 'enviado')} className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-colors uppercase">
                                                  {order.delivery_type === 'mesa' ? "SERVIR" : "PRONTO"}
                                              </button>
@@ -415,7 +425,6 @@ export function OrderManager({ store }: { store: any }) {
                                     {col.id === 'enviado' && (
                                         <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
                                              <button onClick={() => moveOrder(order.id, 'preparando')} className="bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-[10px] border-t border-r border-slate-100 dark:border-zinc-700"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
-                                             {/* ATUALIZAÇÃO AQUI: Texto do botão se adapta ao contexto */}
                                              <button onClick={() => moveOrder(order.id, 'entregue')} className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold transition-colors uppercase">
                                                  {getReadyButtonText(order.delivery_type)}
                                              </button>
@@ -474,8 +483,8 @@ export function OrderManager({ store }: { store: any }) {
                             <DialogTitle className="text-xl flex items-center gap-2">
                                 Pedido #{viewOrder.id.slice(0,4)}
                                 <Badge variant="outline" className={cn(
-                                    BASE_COLUMNS.find(c => c.id === viewOrder.status)?.text, 
-                                    BASE_COLUMNS.find(c => c.id === viewOrder.status)?.color.replace('bg-', 'bg-opacity-10 bg-')
+                                    BASE_COLUMNS.find(c => c.id === viewOrder.status)?.text || 'text-slate-500', 
+                                    BASE_COLUMNS.find(c => c.id === viewOrder.status)?.color.replace('bg-', 'bg-opacity-10 bg-') || 'bg-slate-100'
                                 )}>
                                     {viewOrder.status.toUpperCase()}
                                 </Badge>
@@ -487,6 +496,7 @@ export function OrderManager({ store }: { store: any }) {
                          </Button>
                     </DialogHeader>
 
+                    {/* CONTEÚDO DO MODAL MANTIDO IGUAL */}
                     <div className="grid md:grid-cols-2 gap-6 py-4">
                         <div className="space-y-6">
                              {/* CLIENTE */}
@@ -570,14 +580,14 @@ export function OrderManager({ store }: { store: any }) {
 
                     <DialogFooter className="flex flex-col sm:flex-row gap-2 border-t dark:border-zinc-800 pt-4">
                         {/* Botões de controle no modal iguais aos cards */}
-                        {viewOrder.status === 'pendente' && (
+                        {(viewOrder.status === 'pendente' || viewOrder.status === 'aceito') && (
                             <>
                                 <Button variant="destructive" className="flex-1" onClick={() => handleCancelClick(viewOrder.id)}>Recusar Pedido</Button>
                                 <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => moveOrder(viewOrder.id, 'preparando')}>Aceitar e Cozinhar</Button>
                             </>
                         )}
-                        {/* Outros status omitidos para brevidade, mas devem seguir lógica similar ou usar os componentes padrão que já suportam dark mode se variant="outline" etc */}
-                        {viewOrder.status !== 'pendente' && <Button className="w-full" variant="outline" onClick={() => setViewOrder(null)}>Fechar</Button>}
+                         {/* Outros status omitidos para brevidade */}
+                        {viewOrder.status !== 'pendente' && viewOrder.status !== 'aceito' && <Button className="w-full" variant="outline" onClick={() => setViewOrder(null)}>Fechar</Button>}
                     </DialogFooter>
                  </>
              )}
