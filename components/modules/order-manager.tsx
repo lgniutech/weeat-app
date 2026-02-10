@@ -199,12 +199,15 @@ export function OrderManager({ store }: { store: any }) {
   }
   const visibleColumns = useMemo(() => { return showCanceled ? [...BASE_COLUMNS, CANCELED_COLUMN] : BASE_COLUMNS }, [showCanceled])
 
-  // --- CORREÇÃO PRINCIPAL AQUI ---
-  // A coluna 'preparando' (Cozinha) agora aceita 'preparando' E 'aceito'
+  // --- CORREÇÃO AQUI (ACEITA CONCLUIDO) ---
   const getOrdersForColumn = (columnId: string) => {
     const colOrders = orders.filter(o => {
         if (columnId === 'preparando') {
-            return o.status === 'preparando' || o.status === 'aceito'; // <--- A MÁGICA
+            return o.status === 'preparando' || o.status === 'aceito'; 
+        }
+        // AQUI ESTÁ A CORREÇÃO:
+        if (columnId === 'entregue') {
+             return o.status === 'entregue' || o.status === 'concluido';
         }
         return o.status === columnId;
     })
@@ -220,7 +223,7 @@ export function OrderManager({ store }: { store: any }) {
   const getTimeInStage = (lastChange: string, createdAt: string, status: string) => {
       const dateRef = lastChange ? new Date(lastChange) : new Date(createdAt)
       const minutes = differenceInMinutes(now, dateRef)
-      if (status === 'entregue' || status === 'cancelado') return format(dateRef, "HH:mm")
+      if (status === 'entregue' || status === 'cancelado' || status === 'concluido') return format(dateRef, "HH:mm")
       if (minutes < 1) return "Agora"
       if (minutes < 60) return `${minutes} min`
       return format(dateRef, "HH:mm")
@@ -258,7 +261,7 @@ export function OrderManager({ store }: { store: any }) {
           <h2 className="text-sm font-bold tracking-tight flex items-center gap-2 text-slate-800 dark:text-slate-100 uppercase">
             KDS <span className="text-slate-400">|</span> Cozinha
             <span className="bg-slate-800 dark:bg-slate-700 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                {orders.filter(o => o.status !== 'entregue' && o.status !== 'cancelado').length}
+                {orders.filter(o => o.status !== 'entregue' && o.status !== 'cancelado' && o.status !== 'concluido').length}
             </span>
           </h2>
 
@@ -326,7 +329,7 @@ export function OrderManager({ store }: { store: any }) {
                             
                             {colOrders.map(order => {
                                 const timeInStage = getTimeInStage(order.last_status_change, order.created_at, order.status)
-                                const isLongWait = differenceInMinutes(now, new Date(order.last_status_change || order.created_at)) > 15 && order.status !== 'entregue' && order.status !== 'cancelado';
+                                const isLongWait = differenceInMinutes(now, new Date(order.last_status_change || order.created_at)) > 15 && order.status !== 'entregue' && order.status !== 'cancelado' && order.status !== 'concluido';
                                 
                                 return (
                                 <Card key={order.id} className={cn("shadow-[0_1px_2px_rgba(0,0,0,0.05)] border-0 rounded overflow-hidden group bg-white dark:bg-zinc-800 hover:ring-2 hover:ring-primary/50 transition-all cursor-pointer dark:text-slate-100", isLongWait ? "ring-1 ring-red-200 dark:ring-red-900/50" : "")}>
@@ -355,7 +358,7 @@ export function OrderManager({ store }: { store: any }) {
                                                     title="Tempo nesta etapa">
                                                     
                                                     <span className="font-normal text-slate-400 dark:text-slate-500 mr-1 hidden sm:inline">Tempo:</span>
-                                                    {order.status === 'entregue' ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
+                                                    {order.status === 'entregue' || order.status === 'concluido' ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
                                                     {timeInStage}
                                                 </div>
                                                 
@@ -522,10 +525,10 @@ export function OrderManager({ store }: { store: any }) {
                                  <div className="bg-slate-50 dark:bg-zinc-900 p-3 rounded-lg border dark:border-zinc-800">
                                      {viewOrder.delivery_type === 'entrega' ? (
                                          <>
-                                            <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">{viewOrder.address}</p>
-                                            <a href={getMapsLink(viewOrder.address)} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline text-xs font-bold flex items-center gap-1 mt-2">
-                                                <ExternalLink className="w-3 h-3" /> Abrir no Maps
-                                            </a>
+                                             <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">{viewOrder.address}</p>
+                                             <a href={getMapsLink(viewOrder.address)} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline text-xs font-bold flex items-center gap-1 mt-2">
+                                                 <ExternalLink className="w-3 h-3" /> Abrir no Maps
+                                             </a>
                                          </>
                                      ) : (viewOrder.delivery_type === 'mesa' ? 
                                         <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Mesa {viewOrder.table_number}</p>
