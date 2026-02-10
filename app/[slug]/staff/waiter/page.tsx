@@ -19,8 +19,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
 type Product = {
@@ -59,6 +60,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
   
+  // ESTADOS DO CLIENTE (NOME/TELEFONE)
+  const [clientName, setClientName] = useState("")
+  const [clientPhone, setClientPhone] = useState("")
+
   const [tempQuantity, setTempQuantity] = useState(1)
   const [tempObs, setTempObs] = useState("")
   const [tempRemovedIngredients, setTempRemovedIngredients] = useState<string[]>([])
@@ -105,6 +110,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const openTableManagement = (table: any) => {
     setSelectedTable(table)
+    // Se a mesa estiver livre, limpa os campos de cliente para o novo cadastro
+    if (table.status === 'free') {
+        setClientName("")
+        setClientPhone("")
+    }
     setIsManagementOpen(true)
   }
 
@@ -154,7 +164,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       let res;
       try {
           if (selectedTable.status === 'free') {
-            res = await createTableOrderAction(storeId!, selectedTable.id, cart)
+            // AQUI: Passamos o clientName e clientPhone para o backend
+            res = await createTableOrderAction(storeId!, selectedTable.id, cart, clientName, clientPhone)
           } else {
             res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
           }
@@ -172,7 +183,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const handleCloseTable = async () => {
     if(!confirm("Encerrar mesa e liberar para novos clientes?")) return;
     startTransition(async () => {
-        // CORREÇÃO: Passa selectedTable.id (que é o numero da mesa, ex "1")
         const res = await closeTableAction(selectedTable.id, storeId!)
         if (res?.success) {
             setIsManagementOpen(false)
@@ -277,7 +287,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900">
             <DialogHeader>
                 <DialogTitle className="flex justify-between items-center">
-                    <span>Mesa {selectedTable?.id}</span>
+                    <span className="flex items-center gap-2">
+                        Mesa {selectedTable?.id}
+                        {/* Se tiver nome do cliente e a mesa estiver ocupada, mostra o nome */}
+                        {selectedTable?.status !== 'free' && selectedTable?.customerName && !selectedTable.customerName.includes("Mesa") && (
+                            <span className="text-sm font-normal text-muted-foreground">({selectedTable.customerName})</span>
+                        )}
+                    </span>
                     <Badge variant={selectedTable?.status === 'free' ? "outline" : "default"}>
                         {selectedTable?.status === 'free' ? "Livre" : "Ocupada"}
                     </Badge>
@@ -302,9 +318,39 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 )}
 
                 {selectedTable?.status === 'free' ? (
-                    <div className="text-center py-6 space-y-4">
-                        <Utensils className="w-12 h-12 mx-auto text-muted-foreground opacity-20" />
-                        <Button className="w-full h-12 text-lg" onClick={openMenu}><Plus className="mr-2 h-5 w-5"/> Abrir Pedido</Button>
+                    <div className="py-2 space-y-4">
+                        <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-lg border border-slate-100 dark:border-slate-800 space-y-3">
+                            <div className="space-y-1">
+                                <Label htmlFor="client-name" className="text-xs font-semibold text-muted-foreground uppercase">Nome do Cliente (Opcional)</Label>
+                                <div className="relative">
+                                    <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        id="client-name"
+                                        placeholder="Ex: João Silva" 
+                                        className="pl-9 bg-white dark:bg-slate-900" 
+                                        value={clientName}
+                                        onChange={(e) => setClientName(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="client-phone" className="text-xs font-semibold text-muted-foreground uppercase">Telefone / WhatsApp</Label>
+                                <div className="relative">
+                                    <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        id="client-phone"
+                                        placeholder="Ex: 11999999999" 
+                                        className="pl-9 bg-white dark:bg-slate-900" 
+                                        value={clientPhone}
+                                        onChange={(e) => setClientPhone(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <Button className="w-full h-12 text-lg bg-primary hover:bg-primary/90" onClick={openMenu}>
+                            <Plus className="mr-2 h-5 w-5"/> Abrir Pedido
+                        </Button>
                     </div>
                 ) : (
                     <div className="space-y-4">
@@ -324,11 +370,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
                          <div className="grid grid-cols-2 gap-3 pt-2">
                              <Button variant="outline" className="h-12" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar</Button>
-                             {/* CORREÇÃO AQUI: Botão sempre AZUL e sempre HABILITADO (salvo isPending) */}
                              <Button 
                                 className="h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold"
                                 onClick={handleCloseTable} 
-                                disabled={isPending} // Removemos a trava 'hasReadyItems'
+                                disabled={isPending} 
                              >
                                 <CheckCircle2 className="mr-2 h-4 w-4"/> Encerrar Mesa
                              </Button>
@@ -338,11 +383,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </div>
         </DialogContent>
       </Dialog>
-      {/* Modais de Cardápio e Produto (MANTIDOS IGUAIS) */}
+      
        <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>
         <DialogContent className="h-[95vh] w-full max-w-lg flex flex-col p-0 gap-0">
              <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
-               <DialogTitle>Cardápio (Mesa {selectedTable?.id})</DialogTitle>
+               <DialogTitle>
+                    Cardápio (Mesa {selectedTable?.id})
+                    {clientName && <span className="block text-xs font-normal text-muted-foreground mt-1">Cliente: {clientName}</span>}
+               </DialogTitle>
                <Button variant="ghost" size="sm" onClick={() => setIsMenuOpen(false)}>Voltar</Button>
             </div>
             <div className="p-2 space-y-2 border-b bg-white dark:bg-slate-950">
