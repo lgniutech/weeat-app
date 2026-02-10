@@ -7,7 +7,7 @@ export async function getKitchenOrdersAction(storeId: string) {
   const supabase = await createClient();
 
   // Busca pedidos com status 'aceito' (Fila) e 'preparando' (Fogo)
-  // Ordenados por data de criação (FIFO - First In, First Out)
+  // Adicionado 'last_status_change' para o cálculo preciso do timer
   const { data, error } = await supabase
     .from("orders")
     .select(`
@@ -17,6 +17,7 @@ export async function getKitchenOrdersAction(storeId: string) {
       status,
       delivery_type,
       table_number,
+      last_status_change, 
       order_items (
         id,
         quantity,
@@ -43,31 +44,40 @@ export async function advanceKitchenStatusAction(orderId: string, currentStatus:
   
   let nextStatus = "";
 
-  // Lógica de Avanço Rígida:
-  // 1. Aceito -> Preparando (Cozinheiro assume o pedido)
-  // 2. Preparando -> Enviado (Cozinheiro finaliza e notifica garçom/balcão)
+  // 1. Lógica Rígida de Transição
   if (currentStatus === 'aceito') {
-    nextStatus = 'preparando';
+    nextStatus = 'preparando'; // Cozinheiro puxou o ticket
   } else if (currentStatus === 'preparando') {
-    nextStatus = 'enviado'; 
+    nextStatus = 'enviado';    // Cozinheiro finalizou (Sino toca/Garçom busca)
   } else {
-    return { success: false, message: "Status inválido para avanço." };
+    // Bloqueia qualquer outra tentativa bizarra de status
+    return { success: false, message: "Ação não permitida para o status atual." };
   }
 
+  const now = new Date().toISOString();
+
+  // 2. Atualiza Status e Reinicia o Timer (last_status_change)
   const { error } = await supabase
     .from("orders")
     .update({ 
         status: nextStatus,
-        last_status_change: new Date().toISOString()
+        last_status_change: now
     })
     .eq("id", orderId);
 
   if (error) {
-    console.error("Erro ao avançar status:", error);
     return { success: false, message: "Erro ao atualizar pedido." };
   }
 
-  // Revalida todas as rotas para garantir que o Garçom e o Painel vejam a mudança imediatamente
+  // 3. Registra no Histórico (Para métricas e auditoria futura)
+  // Isso habilita dashboards como "Tempo Médio de Preparo" na Fase 3
+  await supabase.from("order_history").insert({
+    order_id: orderId,
+    previous_status: currentStatus,
+    new_status: nextStatus,
+    changed_at: now
+  });
+
   revalidatePath("/");
   return { success: true };
 }
