@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, ArrowRight, Ticket, X } from "lucide-react"
+import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, ArrowRight, Ticket, X, Utensils } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -53,6 +53,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   
   // Estados do Checkout
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'retirada' | 'mesa'>('delivery')
+  const [tableNumber, setTableNumber] = useState<string | null>(null) // Novo estado para mesa
   const [paymentMethod, setPaymentMethod] = useState('pix')
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
@@ -81,8 +82,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
       const mesa = params.get('mesa')
       if (mesa) {
         setDeliveryMethod('mesa')
-        setCustomerAddress(prev => ({ ...prev, complement: `Mesa ${mesa}` }))
-        setPaymentMethod('card_machine') // Padrão caixa para mesa
+        setTableNumber(mesa) // Salva o número da mesa
+        setPaymentMethod('card_machine') // Padrão maquininha para mesa
       }
     }
     // Aplica cor do tema da loja
@@ -124,13 +125,12 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     return appliedCoupon.value; // Valor fixo
   }, [subtotal, appliedCoupon]);
 
-  // Taxa de Entrega
+  // Taxa de Entrega (Mesa não tem taxa)
   const deliveryFee = deliveryMethod === 'delivery' ? 5.00 : 0 
   
   // Total Final (Não pode ser negativo)
   const total = Math.max(0, subtotal - discountAmount + deliveryFee);
 
-  // Filtragem segura (agora products vem garantido como array pelo default prop ou pelo fix da página)
   const filteredProducts = (products || []).filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesCategory = selectedCategory === "todos" || p.category_id === selectedCategory
@@ -163,10 +163,19 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   // --- FINALIZAR PEDIDO ---
   const handleCheckout = async () => {
     if (cart.length === 0) return
-    if (!customerName || !customerPhone) {
-      toast({ title: "Atenção", description: "Preencha seus dados de contato.", variant: "destructive" })
+    
+    // Validação Simplificada para Mesa
+    if (!customerName) {
+      toast({ title: "Atenção", description: "Informe seu nome.", variant: "destructive" })
       return
     }
+    
+    // Telefone só é obrigatório para Delivery/Retirada
+    if (deliveryMethod !== 'mesa' && !customerPhone) {
+      toast({ title: "Atenção", description: "Informe seu telefone.", variant: "destructive" })
+      return
+    }
+
     if (deliveryMethod === 'delivery' && !customerAddress.street) {
         toast({ title: "Atenção", description: "Preencha o endereço de entrega.", variant: "destructive" })
         return
@@ -177,14 +186,15 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     // Formata endereço
     const fullAddress = deliveryMethod === 'delivery' 
         ? `${customerAddress.street}, ${customerAddress.number} - ${customerAddress.neighborhood} (${customerAddress.city}) ${customerAddress.complement ? ` - Comp: ${customerAddress.complement}` : ''}`
-        : deliveryMethod === 'mesa' ? `Mesa: ${customerAddress.complement}` : 'Retirada no Balcão';
+        : deliveryMethod === 'mesa' ? `Mesa: ${tableNumber}` : 'Retirada no Balcão';
 
     const orderData = {
       store_id: store.id,
       customer_name: customerName,
-      customer_phone: customerPhone,
+      customer_phone: customerPhone || "Não informado", // Opcional na mesa
       delivery_type: deliveryMethod,
       delivery_address: fullAddress,
+      table_number: tableNumber, // Passa o número da mesa explicitamente
       payment_method: paymentMethod,
       items: cart.map(item => ({
         product_id: item.id,
@@ -193,23 +203,19 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         price: item.price
       })),
       total_price: total,
-      // Salva info do cupom nas notas para aparecer no painel
-      notes: appliedCoupon ? `Cupom aplicado: ${appliedCoupon.code} (-${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(discountAmount)})` : ''
+      notes: appliedCoupon ? `Cupom aplicado: ${appliedCoupon.code}` : ''
     }
 
     const result = await createOrderAction(orderData)
 
     if (result.success) {
-      // Se usou cupom, incrementa o uso
       if (appliedCoupon) {
         await incrementCouponUsageAction(appliedCoupon.id);
       }
-
       setCart([])
       setAppliedCoupon(null);
       setIsCartOpen(false)
       setOrderSuccess(result.order)
-      
     } else {
       toast({ title: "Erro", description: "Não foi possível enviar o pedido.", variant: "destructive" })
     }
@@ -376,6 +382,20 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                     </div>
                 ) : (
                     <div className="space-y-6">
+                        
+                        {/* BANNER DE MESA */}
+                        {tableNumber && (
+                             <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                                <div className="bg-emerald-100 dark:bg-emerald-800 p-2 rounded-full">
+                                    <Utensils className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-emerald-800 dark:text-emerald-200">Você está na Mesa {tableNumber}</p>
+                                    <p className="text-xs text-emerald-600 dark:text-emerald-400">Seu pedido será levado até você.</p>
+                                </div>
+                             </div>
+                        )}
+
                         {/* ITENS */}
                         <div className="space-y-4">
                             {cart.map((item) => (
@@ -402,68 +422,79 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
                         <Separator />
                         
-                        {/* CUPOM DE DESCONTO */}
-                        <div className="bg-white dark:bg-zinc-900 p-4 rounded-lg border border-slate-100 dark:border-zinc-800 space-y-3">
-                            <Label className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground font-bold">
-                                <Ticket className="w-4 h-4" /> Cupom de Desconto
-                            </Label>
-                            
-                            {appliedCoupon ? (
-                                <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 p-3 rounded border border-emerald-100 dark:border-emerald-800">
-                                    <div className="flex flex-col">
-                                        <span className="font-bold text-sm">{appliedCoupon.code}</span>
-                                        <span className="text-xs">Desconto aplicado</span>
+                        {/* CUPOM DE DESCONTO (Escondido se for mesa) */}
+                        {!tableNumber && (
+                            <div className="bg-white dark:bg-zinc-900 p-4 rounded-lg border border-slate-100 dark:border-zinc-800 space-y-3">
+                                <Label className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground font-bold">
+                                    <Ticket className="w-4 h-4" /> Cupom de Desconto
+                                </Label>
+                                
+                                {appliedCoupon ? (
+                                    <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 p-3 rounded border border-emerald-100 dark:border-emerald-800">
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-sm">{appliedCoupon.code}</span>
+                                            <span className="text-xs">Desconto aplicado</span>
+                                        </div>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-700 hover:bg-emerald-100" onClick={removeCoupon}>
+                                            <X className="w-4 h-4" />
+                                        </Button>
                                     </div>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-700 hover:bg-emerald-100" onClick={removeCoupon}>
-                                        <X className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="flex gap-2">
-                                    <Input 
-                                        placeholder="Código" 
-                                        value={couponCode} 
-                                        onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                                        className="uppercase placeholder:normal-case font-bold"
-                                    />
-                                    <Button variant="secondary" onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponCode}>
-                                        {isValidatingCoupon ? "..." : "Aplicar"}
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <Input 
+                                            placeholder="Código" 
+                                            value={couponCode} 
+                                            onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                                            className="uppercase placeholder:normal-case font-bold"
+                                        />
+                                        <Button variant="secondary" onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponCode}>
+                                            {isValidatingCoupon ? "..." : "Aplicar"}
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <Separator />
 
-                        {/* FORMULÁRIO DE ENTREGA */}
+                        {/* FORMULÁRIO DE DADOS */}
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-sm">Dados de Entrega</h3>
+                            <h3 className="font-semibold text-sm">Seus Dados</h3>
                             
                             <Input placeholder="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-                            <Input placeholder="WhatsApp (Ex: 11999999999)" type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+                            
+                            {/* Telefone opcional na mesa */}
+                            {!tableNumber && (
+                                <Input placeholder="WhatsApp (Ex: 11999999999)" type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+                            )}
 
-                            <RadioGroup value={deliveryMethod} onValueChange={(v: any) => setDeliveryMethod(v)} className="grid grid-cols-2 gap-4">
-                                <div className={`flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-slate-50 cursor-pointer ${deliveryMethod === 'delivery' ? 'border-primary bg-primary/5' : 'border-muted bg-transparent'}`} onClick={() => setDeliveryMethod('delivery')}>
-                                    <RadioGroupItem value="delivery" id="delivery" className="sr-only" />
-                                    <MapPin className="mb-2 h-6 w-6" />
-                                    <span className="text-xs font-medium">Entrega</span>
-                                </div>
-                                <div className={`flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-slate-50 cursor-pointer ${deliveryMethod === 'retirada' ? 'border-primary bg-primary/5' : 'border-muted bg-transparent'}`} onClick={() => setDeliveryMethod('retirada')}>
-                                    <RadioGroupItem value="retirada" id="retirada" className="sr-only" />
-                                    <ShoppingBag className="mb-2 h-6 w-6" />
-                                    <span className="text-xs font-medium">Retirar</span>
-                                </div>
-                            </RadioGroup>
+                            {/* SELEÇÃO DE ENTREGA (SÓ APARECE SE NÃO FOR MESA) */}
+                            {!tableNumber && (
+                                <>
+                                    <RadioGroup value={deliveryMethod} onValueChange={(v: any) => setDeliveryMethod(v)} className="grid grid-cols-2 gap-4">
+                                        <div className={`flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-slate-50 cursor-pointer ${deliveryMethod === 'delivery' ? 'border-primary bg-primary/5' : 'border-muted bg-transparent'}`} onClick={() => setDeliveryMethod('delivery')}>
+                                            <RadioGroupItem value="delivery" id="delivery" className="sr-only" />
+                                            <MapPin className="mb-2 h-6 w-6" />
+                                            <span className="text-xs font-medium">Entrega</span>
+                                        </div>
+                                        <div className={`flex flex-col items-center justify-between rounded-md border-2 p-4 hover:bg-slate-50 cursor-pointer ${deliveryMethod === 'retirada' ? 'border-primary bg-primary/5' : 'border-muted bg-transparent'}`} onClick={() => setDeliveryMethod('retirada')}>
+                                            <RadioGroupItem value="retirada" id="retirada" className="sr-only" />
+                                            <ShoppingBag className="mb-2 h-6 w-6" />
+                                            <span className="text-xs font-medium">Retirar</span>
+                                        </div>
+                                    </RadioGroup>
 
-                            {deliveryMethod === 'delivery' && (
-                                <div className="space-y-2 animate-in slide-in-from-top-2">
-                                    <div className="grid grid-cols-4 gap-2">
-                                        <Input className="col-span-3" placeholder="Rua" value={customerAddress.street} onChange={e => setCustomerAddress({...customerAddress, street: e.target.value})} />
-                                        <Input className="col-span-1" placeholder="Nº" value={customerAddress.number} onChange={e => setCustomerAddress({...customerAddress, number: e.target.value})} />
-                                    </div>
-                                    <Input placeholder="Bairro" value={customerAddress.neighborhood} onChange={e => setCustomerAddress({...customerAddress, neighborhood: e.target.value})} />
-                                    <Input placeholder="Complemento (Casa, Apt...)" value={customerAddress.complement} onChange={e => setCustomerAddress({...customerAddress, complement: e.target.value})} />
-                                </div>
+                                    {deliveryMethod === 'delivery' && (
+                                        <div className="space-y-2 animate-in slide-in-from-top-2">
+                                            <div className="grid grid-cols-4 gap-2">
+                                                <Input className="col-span-3" placeholder="Rua" value={customerAddress.street} onChange={e => setCustomerAddress({...customerAddress, street: e.target.value})} />
+                                                <Input className="col-span-1" placeholder="Nº" value={customerAddress.number} onChange={e => setCustomerAddress({...customerAddress, number: e.target.value})} />
+                                            </div>
+                                            <Input placeholder="Bairro" value={customerAddress.neighborhood} onChange={e => setCustomerAddress({...customerAddress, neighborhood: e.target.value})} />
+                                            <Input placeholder="Complemento (Casa, Apt...)" value={customerAddress.complement} onChange={e => setCustomerAddress({...customerAddress, complement: e.target.value})} />
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
 
@@ -475,10 +506,11 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="pix">PIX (Chave na Entrega/Msg)</SelectItem>
+                                    <SelectItem value="pix">PIX</SelectItem>
                                     <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
                                     <SelectItem value="debit_card">Cartão de Débito</SelectItem>
                                     <SelectItem value="money">Dinheiro</SelectItem>
+                                    {tableNumber && <SelectItem value="card_machine">Maquininha (Garçom leva)</SelectItem>}
                                 </SelectContent>
                              </Select>
                         </div>
@@ -494,7 +526,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                             <span>{formatCurrency(subtotal)}</span>
                         </div>
                         
-                        {/* Exibe o desconto se houver */}
                         {discountAmount > 0 && (
                              <div className="flex justify-between text-emerald-600 font-medium">
                                 <span>Desconto ({appliedCoupon?.code})</span>
@@ -503,8 +534,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         )}
 
                         <div className="flex justify-between text-muted-foreground">
-                            <span>Entrega</span>
-                            <span>{deliveryFee === 0 ? 'Grátis' : formatCurrency(deliveryFee)}</span>
+                            <span>{tableNumber ? 'Serviço (Opcional)' : 'Entrega'}</span>
+                            <span>{tableNumber ? 'A combinar' : (deliveryFee === 0 ? 'Grátis' : formatCurrency(deliveryFee))}</span>
                         </div>
                         <Separator className="my-2" />
                         <div className="flex justify-between font-bold text-lg">
@@ -512,54 +543,42 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                             <span>{formatCurrency(total)}</span>
                         </div>
                     </div>
-                    
                     <Button 
                         size="lg" 
-                        className="w-full font-bold text-md" 
-                        onClick={handleCheckout}
+                        className="w-full font-bold text-base" 
+                        onClick={handleCheckout} 
                         disabled={isOrderPlacing}
                     >
-                        {isOrderPlacing ? "Enviando..." : (deliveryMethod === 'delivery' ? 'Fazer Pedido no WhatsApp' : 'Finalizar Pedido')}
-                        {!isOrderPlacing && <ArrowRight className="ml-2 w-4 h-4" />}
+                        {isOrderPlacing ? "Enviando..." : "ENVIAR PEDIDO"}
                     </Button>
                 </SheetFooter>
             )}
         </SheetContent>
       </Sheet>
 
-      {/* MODAL DE SUCESSO (PÓS-COMPRA) */}
-      <Dialog open={!!orderSuccess} onOpenChange={(o) => { if(!o) window.location.reload() }}>
-         <DialogContent className="sm:max-w-md text-center">
-             <div className="mx-auto w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
-                 <ShoppingBag className="w-8 h-8 text-emerald-600" />
-             </div>
-             <DialogHeader>
-                 <DialogTitle className="text-center text-2xl">Pedido Recebido!</DialogTitle>
-                 <DialogDescription className="text-center">
-                     A loja já recebeu seu pedido. Acompanhe o status.
-                 </DialogDescription>
-             </DialogHeader>
-             
-             <div className="bg-slate-50 p-4 rounded-lg my-4 text-left space-y-2 text-sm">
-                 <p><strong>Pedido:</strong> #{orderSuccess?.id?.slice(0,6)}</p>
-                 <p><strong>Total:</strong> {formatCurrency(orderSuccess?.total_price || 0)}</p>
-                 <p><strong>Tempo estimado:</strong> 40-50 min</p>
-             </div>
-
-             <DialogFooter className="flex-col gap-2 sm:flex-col">
-                 <Button className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white" onClick={() => {
-                     // Link do WhatsApp
-                     const msg = `Olá! Fiz o pedido #${orderSuccess?.id?.slice(0,6)} no app. Poderia confirmar?`
-                     window.open(`https://wa.me/55${store.phone || ''}?text=${encodeURIComponent(msg)}`, '_blank')
-                 }}>
-                     Acompanhar no WhatsApp
-                 </Button>
-                 <Button variant="ghost" onClick={() => window.location.reload()}>
-                     Fazer novo pedido
-                 </Button>
-             </DialogFooter>
-         </DialogContent>
+      {/* MODAL DE SUCESSO */}
+      <Dialog open={!!orderSuccess} onOpenChange={() => setOrderSuccess(null)}>
+        <DialogContent className="sm:max-w-md text-center">
+            <div className="flex flex-col items-center gap-4 py-6">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-2 animate-in zoom-in">
+                    <Clock className="w-8 h-8" />
+                </div>
+                <DialogTitle className="text-2xl text-green-700">Pedido Recebido!</DialogTitle>
+                <DialogDescription className="text-base">
+                    {tableNumber 
+                        ? `O garçom já viu seu pedido da Mesa ${tableNumber}. Logo estará aí!`
+                        : "Seu pedido foi enviado para a loja. Acompanhe pelo WhatsApp."
+                    }
+                </DialogDescription>
+                <div className="bg-slate-100 p-4 rounded-lg text-sm w-full">
+                    <p className="font-bold">Pedido #{orderSuccess?.id.slice(0,4)}</p>
+                    <p className="text-muted-foreground mt-1">Total: {formatCurrency(total)}</p>
+                </div>
+                <Button className="w-full mt-2" onClick={() => setOrderSuccess(null)}>Fazer outro pedido</Button>
+            </div>
+        </DialogContent>
       </Dialog>
+
     </div>
   )
 }
