@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react"
 import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge" 
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -49,7 +50,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("todos")
   
-  // Estados do Checkout
+  // Checkout
   const [deliveryMethod, setDeliveryMethod] = useState<'entrega' | 'retirada' | 'mesa'>('entrega')
   const [tableNumber, setTableNumber] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState('pix')
@@ -59,12 +60,12 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [isOrderPlacing, setIsOrderPlacing] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState<{id: string, total: number} | null>(null)
 
-  // Estados da Conta da Mesa
+  // Conta da Mesa
   const [isBillOpen, setIsBillOpen] = useState(false)
   const [tableBill, setTableBill] = useState<any[]>([])
   const [isLoadingBill, setIsLoadingBill] = useState(false)
 
-  // Estados do Cupom
+  // Cupom
   const [couponCode, setCouponCode] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null)
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
@@ -116,14 +117,20 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     return matchesSearch && matchesCategory && p.is_available
   })
 
-  // --- AÇÕES MESA ---
+  // --- AÇÕES MESA (CORRIGIDO) ---
   const handleOpenBill = async () => {
       if (!tableNumber) return;
       setIsLoadingBill(true);
       setIsBillOpen(true);
-      const orders = await getTableOrdersAction(store.id, tableNumber);
-      setTableBill(orders);
-      setIsLoadingBill(false);
+      try {
+          const orders = await getTableOrdersAction(store.id, tableNumber);
+          setTableBill(orders || []);
+      } catch (e) {
+          console.error(e)
+          toast({ title: "Erro", description: "Não foi possível carregar a conta." })
+      } finally {
+          setIsLoadingBill(false);
+      }
   }
 
   const handleCheckout = async () => {
@@ -162,11 +169,11 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         const result = await createOrderAction(orderData)
         if (result.success) {
           if (appliedCoupon) await incrementCouponUsageAction(appliedCoupon.id);
-          const savedTotal = total; // <--- CORREÇÃO: Salva o total antes de zerar
+          const savedTotal = total; 
           setCart([])
           setAppliedCoupon(null)
           setIsCartOpen(false)
-          setOrderSuccess({ id: result.orderId, total: savedTotal }) // Passa o total salvo
+          setOrderSuccess({ id: result.orderId, total: savedTotal }) 
         } else {
           toast({ title: "Erro", description: result.error, variant: "destructive" })
         }
@@ -191,7 +198,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     setIsValidatingCoupon(false);
   }
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
+  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20 font-sans">
@@ -219,7 +226,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
              </div>
 
              <div className="flex items-center gap-2">
-                 {/* BOTÃO DA CONTA (SÓ SE FOR MESA) */}
+                 {/* BOTÃO DA CONTA */}
                  {tableNumber && (
                      <Button variant="ghost" size="icon" onClick={handleOpenBill} title="Minha Conta">
                          <Receipt className="w-5 h-5 text-slate-600 dark:text-slate-300" />
@@ -298,7 +305,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         </DialogContent>
       </Dialog>
 
-      {/* CHECKOUT (SHEET) */}
+      {/* CHECKOUT */}
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
         <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950">
             <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm">
@@ -416,13 +423,15 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         <Separator className="my-2" />
                         <div className="flex justify-between font-bold text-lg"><span>Total</span><span>{formatCurrency(total)}</span></div>
                     </div>
-                    <Button size="lg" className="w-full font-bold text-base" onClick={handleCheckout} disabled={isOrderPlacing}>{isOrderPlacing ? "Enviando..." : "ENVIAR PEDIDO"}</Button>
+                    <Button size="lg" className="w-full font-bold text-base" onClick={handleCheckout} disabled={isOrderPlacing}>
+                        {isOrderPlacing ? "Enviando..." : "ENVIAR PEDIDO"}
+                    </Button>
                 </SheetFooter>
             )}
         </SheetContent>
       </Sheet>
 
-      {/* SUCESSO (CORRIGIDO) */}
+      {/* SUCESSO */}
       <Dialog open={!!orderSuccess} onOpenChange={() => setOrderSuccess(null)}>
         <DialogContent className="sm:max-w-md text-center">
             <div className="flex flex-col items-center gap-4 py-6">
@@ -433,7 +442,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 </DialogDescription>
                 <div className="bg-slate-100 p-4 rounded-lg text-sm w-full">
                     <p className="font-bold">Pedido #{orderSuccess?.id?.slice(0,4)}</p>
-                    {/* Exibe o total salvo */}
                     <p className="text-muted-foreground mt-1">Total: {formatCurrency(orderSuccess?.total || 0)}</p>
                 </div>
                 <Button className="w-full mt-2" onClick={() => setOrderSuccess(null)}>Fazer outro pedido</Button>
@@ -480,7 +488,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
             <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800">
                 <div className="flex justify-between w-full font-bold text-lg">
                     <span>Total da Mesa</span>
-                    <span>{formatCurrency(tableBill.reduce((acc, o) => acc + o.total_price, 0))}</span>
+                    <span>{formatCurrency(tableBill.reduce((acc, o) => acc + (o.total_price || 0), 0))}</span>
                 </div>
             </SheetFooter>
         </SheetContent>
