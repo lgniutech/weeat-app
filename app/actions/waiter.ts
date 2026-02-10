@@ -18,7 +18,7 @@ export type TableData = {
   isPreparing: boolean;
 };
 
-// --- 1. BUSCAR STATUS DAS MESAS (MANTIDO) ---
+// --- 1. BUSCAR STATUS DAS MESAS ---
 export async function getTablesStatusAction(storeId: string): Promise<TableData[]> {
   const supabase = await createClient();
 
@@ -54,8 +54,11 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
        (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
+    // Verifica se tem itens prontos (Enviado pela cozinha)
     const readyOrders = tableOrders.filter(o => o.status === 'enviado');
     const hasReadyItems = readyOrders.length > 0;
+    
+    // Verifica se tem itens sendo feitos (Aceito ou Preparando)
     const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
     
     let status: TableStatus = 'free';
@@ -65,12 +68,12 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     }
 
     const total = tableOrders.reduce((acc, o) => acc + (o.total_price || 0), 0);
-    const allItems = tableOrders.flatMap(o => o.order_items || []);
+    const allItems = activeOrders?.filter(o => o.table_number === tableNum).flatMap(o => o.order_items || []) || [];
 
     return {
       id: tableNum,
       status: status,
-      orderId: tableOrders[0]?.id,
+      orderId: tableOrders[0]?.id, // Pega o ID do primeiro pedido ativo
       customerName: tableOrders[0]?.customer_name,
       total: total,
       items: allItems,
@@ -84,7 +87,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   return tables;
 }
 
-// --- 2. BUSCAR CARDÁPIO (MANTIDO) ---
+// --- 2. BUSCAR CARDÁPIO ---
 export async function getWaiterMenuAction(storeId: string) {
   const supabase = await createClient();
   const { data: categories } = await supabase
@@ -111,32 +114,31 @@ export async function getWaiterMenuAction(storeId: string) {
   })).filter(cat => cat.products.length > 0);
 }
 
-// --- 3. CRIAR PEDIDO (ATUALIZADO COM NOME E TELEFONE) ---
+// --- 3. CRIAR PEDIDO (NOVA MESA) ---
 export async function createTableOrderAction(
     storeId: string, 
     tableNum: string, 
     items: any[], 
-    clientName?: string, // Opcional
-    clientPhone?: string // Opcional
+    clientName?: string, 
+    clientPhone?: string 
 ) {
   const supabase = await createClient();
   
   try {
       const total = items.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
-
-      // Define os valores finais (usa o input ou o padrão "Mesa X")
       const finalName = clientName && clientName.trim() !== "" ? clientName : `Mesa ${tableNum}`;
       const finalPhone = clientPhone && clientPhone.trim() !== "" ? clientPhone : "00000000000";
 
+      // CRIA COM STATUS 'aceito' PARA A COZINHA VER
       const { data: order, error: orderError } = await supabase.from("orders").insert({
         store_id: storeId,
-        customer_name: finalName,      // Salva o nome
-        customer_phone: finalPhone,    // Salva o telefone
+        customer_name: finalName,
+        customer_phone: finalPhone, 
         delivery_type: "mesa",
         address: `Mesa ${tableNum}`,
         table_number: tableNum,
         payment_method: "card_machine",
-        status: "aceito",
+        status: "aceito", 
         total_price: total,
         last_status_change: new Date().toISOString()
       }).select().single();
@@ -152,7 +154,8 @@ export async function createTableOrderAction(
             total_price: (i.totalPrice || i.price * i.quantity),
             observation: i.observation || "",
             removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
-            selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null
+            selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
+            status: 'pendente'
           }));
           await supabase.from("order_items").insert(orderItemsData);
       }
@@ -164,11 +167,12 @@ export async function createTableOrderAction(
   } catch (err: any) { return { error: "Erro interno no servidor." }; }
 }
 
-// --- 4. ADICIONAR ITENS (MANTIDO) ---
+// --- 4. ADICIONAR ITENS (CORRIGIDO PARA BUG 1) ---
 export async function addItemsToTableAction(orderId: string, newItems: any[], currentTableTotal: number) {
   const supabase = await createClient();
   try {
       const addedTotal = newItems.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
+      
       const orderItemsData = newItems.map(i => ({
         order_id: orderId,
         product_name: i.name,
@@ -177,15 +181,22 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
         total_price: (i.totalPrice || i.price * i.quantity),
         observation: i.observation || "",
         removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
-        selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null
+        selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
+        status: 'pendente'
       }));
 
       const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
       if (itemsError) return { error: "Erro ao adicionar itens." };
 
       const newTotal = currentTableTotal + addedTotal;
+      
+      // MUDANÇA AQUI: Status volta para 'aceito' para alertar a cozinha
       const { error: updateError } = await supabase.from("orders")
-        .update({ total_price: newTotal, status: "preparando", last_status_change: new Date().toISOString() })
+        .update({ 
+            total_price: newTotal, 
+            status: "aceito", // <--- FORÇA 'aceito' (antes era 'preparando')
+            last_status_change: new Date().toISOString() 
+        })
         .eq("id", orderId);
 
       if (updateError) return { error: "Erro ao atualizar total." };
@@ -194,7 +205,7 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
   } catch (err) { return { error: "Erro ao processar." }; }
 }
 
-// --- 5. FECHAR MESA (MANTIDO) ---
+// --- 5. FECHAR MESA ---
 export async function closeTableAction(tableNum: string, storeId: string) {
   const supabase = await createClient();
   const { data: orders } = await supabase.from("orders")
@@ -216,12 +227,15 @@ export async function closeTableAction(tableNum: string, storeId: string) {
       .update({ status: "concluido", last_status_change: new Date().toISOString() })
       .in("id", ids);
 
+  // Também conclui todos os itens para limpar KDS se houver algo solto
+  await supabase.from("order_items").update({ status: 'concluido' }).in("order_id", ids);
+
   if (error) return { error: `Erro no Banco: ${error.message}` };
   revalidatePath("/");
   return { success: true };
 }
 
-// --- 6. SERVIR ITENS (MANTIDO) ---
+// --- 6. SERVIR ITENS ---
 export async function serveReadyOrdersAction(orderIds: string[]) {
     const supabase = await createClient();
     const { error } = await supabase
