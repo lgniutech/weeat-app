@@ -8,14 +8,13 @@ export type TableStatus = 'free' | 'occupied' | 'payment';
 export type TableData = {
   id: string;
   status: TableStatus;
-  orderId?: string; // ID do pedido principal (ou o mais recente)
+  orderId?: string;
   customerName?: string;
   total: number;
   items?: any[];
   orderStatus?: string;
-  // NOVOS CAMPOS PARA O SINO
   hasReadyItems: boolean;
-  readyOrderIds: string[]; // Lista de IDs que estão prontos para servir
+  readyOrderIds: string[];
 };
 
 // --- 1. BUSCAR STATUS DAS MESAS ---
@@ -30,8 +29,9 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     
   const totalTables = store?.total_tables || 10; 
 
-  // Busca TODOS os pedidos ativos (não entregues/cancelados)
-  // Inclui 'enviado' que é o status "Pronto na Cozinha"
+  // MUDANÇA CRUCIAL AQUI:
+  // Antes: .neq("status", "entregue") -> Isso escondia os pedidos entregues
+  // Agora: .neq("status", "concluido") -> Mostra tudo, exceto o que já foi embora
   const { data: activeOrders } = await supabase
     .from("orders")
     .select(`
@@ -45,45 +45,41 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "mesa")
-    .neq("status", "entregue") 
+    .neq("status", "concluido") // Status novo para mesa fechada
     .neq("status", "cancelado");
 
   const tables = Array.from({ length: totalTables }, (_, i) => {
     const tableNum = (i + 1).toString();
     
-    // Filtra todos os pedidos desta mesa
+    // Filtra pedidos desta mesa
     const tableOrders = activeOrders?.filter(o => 
        o.table_number === tableNum || 
        (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
-    // Verifica se tem algum pedido "Pronto" (enviado)
+    // Verifica se tem itens PRONTOS NA COZINHA (enviado)
     const readyOrders = tableOrders.filter(o => o.status === 'enviado');
     const hasReadyItems = readyOrders.length > 0;
     
-    // Define status geral da mesa
+    // Lógica de Status da Mesa
     let status: TableStatus = 'free';
     if (tableOrders.length > 0) {
-      // Se tem algum pedido pagando, a mesa tá em pagamento
       if (tableOrders.some(o => o.status === 'pagando')) status = 'payment';
       else status = 'occupied';
     }
 
-    // Calcula total acumulado da mesa (soma de todos os pedidos não pagos)
+    // Soma total (incluindo o que já foi entregue, pois o cliente ainda vai pagar)
     const total = tableOrders.reduce((acc, o) => acc + (o.total_price || 0), 0);
-    
-    // Junta todos os itens para exibição geral
     const allItems = tableOrders.flatMap(o => o.order_items || []);
 
     return {
       id: tableNum,
       status: status,
-      orderId: tableOrders[0]?.id, // Pega um ID qualquer para referência se precisar
+      orderId: tableOrders[0]?.id,
       customerName: tableOrders[0]?.customer_name,
       total: total,
       items: allItems,
       orderStatus: tableOrders[0]?.status,
-      // NOVAS PROPRIEDADES
       hasReadyItems: hasReadyItems,
       readyOrderIds: readyOrders.map(o => o.id)
     };
@@ -92,7 +88,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   return tables;
 }
 
-// --- 2. BUSCAR CARDÁPIO (MANTIDO IGUAL) ---
+// --- 2. BUSCAR CARDÁPIO (Igual) ---
 export async function getWaiterMenuAction(storeId: string) {
   const supabase = await createClient();
   const { data: categories } = await supabase
@@ -119,7 +115,7 @@ export async function getWaiterMenuAction(storeId: string) {
   })).filter(cat => cat.products.length > 0);
 }
 
-// --- 3. CRIAR PEDIDO (MANTIDO IGUAL) ---
+// --- 3. CRIAR PEDIDO (Igual) ---
 export async function createTableOrderAction(storeId: string, tableNum: string, items: any[]) {
   const supabase = await createClient();
   try {
@@ -132,7 +128,7 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
         address: `Mesa ${tableNum}`,
         table_number: tableNum,
         payment_method: "card_machine",
-        status: "aceito", // Vai direto pra cozinha (não é pendente)
+        status: "aceito",
         total_price: total,
         last_status_change: new Date().toISOString()
       }).select().single();
@@ -152,25 +148,17 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
           }));
           await supabase.from("order_items").insert(orderItemsData);
       }
-      
-      await supabase.from("order_history").insert({
-          order_id: order.id,
-          new_status: 'aceito',
-          changed_at: new Date().toISOString()
-      });
-
+      await supabase.from("order_history").insert({ order_id: order.id, new_status: 'aceito', changed_at: new Date().toISOString() });
       revalidatePath("/");
       return { success: true, orderId: order.id };
   } catch (err: any) { return { error: "Erro interno no servidor." }; }
 }
 
-// --- 4. ADICIONAR ITENS (MANTIDO IGUAL) ---
+// --- 4. ADICIONAR ITENS (Igual) ---
 export async function addItemsToTableAction(orderId: string, newItems: any[], currentTableTotal: number) {
-  // Nota: Isso adiciona itens a um pedido existente. 
-  // Se o pedido anterior já foi entregue, o ideal seria criar um novo pedido, 
-  // mas para simplificar mantemos a lógica de adicionar ao último ativo.
   const supabase = await createClient();
   try {
+      // Verifica se o pedido atual já foi entregue. Se sim, reabre para "preparando".
       const addedTotal = newItems.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
       const orderItemsData = newItems.map(i => ({
         order_id: orderId,
@@ -197,26 +185,25 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
   } catch (err) { return { error: "Erro ao processar." }; }
 }
 
-// --- 5. FECHAR MESA (LIBERAR TUDO) ---
+// --- 5. FECHAR MESA (AÇÃO FINAL) ---
 export async function closeTableAction(tableNum: string, storeId: string) {
-  // Marca TODOS os pedidos desta mesa como entregues (para limpar a mesa)
   const supabase = await createClient();
   
-  // Primeiro busca os IDs
+  // Busca pedidos ativos (incluindo entregues e pagando)
   const { data: orders } = await supabase.from("orders")
       .select("id")
       .eq("store_id", storeId)
       .eq("table_number", tableNum)
-      .neq("status", "entregue")
+      .neq("status", "concluido") 
       .neq("status", "cancelado");
       
   if (!orders || orders.length === 0) return { success: true };
-
   const ids = orders.map(o => o.id);
 
+  // Define como CONCLUIDO (Isso remove a mesa da tela do garçom)
   const { error } = await supabase
       .from("orders")
-      .update({ status: "entregue", last_status_change: new Date().toISOString() })
+      .update({ status: "concluido", last_status_change: new Date().toISOString() })
       .in("id", ids);
 
   if (error) return { error: error.message };
@@ -224,14 +211,15 @@ export async function closeTableAction(tableNum: string, storeId: string) {
   return { success: true };
 }
 
-// --- 6. NOVO: SERVIR ITENS PRONTOS ---
+// --- 6. SERVIR ITENS (AÇÃO INTERMEDIÁRIA) ---
 export async function serveReadyOrdersAction(orderIds: string[]) {
     const supabase = await createClient();
     
+    // Define como ENTREGUE (O garçom vê como servido, mas a mesa continua aberta)
     const { error } = await supabase
         .from("orders")
         .update({ 
-            status: "entregue", // Isso move para "Concluído" no Kanban
+            status: "entregue", 
             last_status_change: new Date().toISOString()
         })
         .in("id", orderIds);
