@@ -10,7 +10,7 @@ import {
     createTableOrderAction, 
     addItemsToTableAction, 
     closeTableAction,
-    serveReadyOrdersAction // Nova Action
+    serveReadyOrdersAction 
 } from "@/app/actions/waiter"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,11 +19,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, ChefHat } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
-// Tipagens (mantidas)
 type Product = {
     id: string;
     name: string;
@@ -70,7 +69,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
 
-  // 1. Init
   useEffect(() => {
     async function init() {
       const session = await getStaffSession()
@@ -87,14 +85,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     init()
   }, [slug, router])
 
-  // 2. Polling Mesas
   const fetchTables = async () => {
     if (!storeId) return
     try {
         const data = await getTablesStatusAction(storeId)
         setTables(data)
-        
-        // Atualiza modal aberto em tempo real se a mesa mudar status
         if (selectedTable && isManagementOpen) {
             const updated = data.find(t => t.id === selectedTable.id)
             if (updated) setSelectedTable(updated)
@@ -104,11 +99,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   useEffect(() => {
     fetchTables()
-    const interval = setInterval(fetchTables, 3000) // 3s para ficar mais rápido a resposta do sino
+    const interval = setInterval(fetchTables, 3000) 
     return () => clearInterval(interval)
   }, [storeId, selectedTable, isManagementOpen])
 
-  // Ações
   const openTableManagement = (table: any) => {
     setSelectedTable(table)
     setIsManagementOpen(true)
@@ -138,7 +132,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     const finalUnitPrice = Number(productToCustomize.price) + addonsTotal
     const removedObjects = productToCustomize.ingredients?.filter(i => tempRemovedIngredients.includes(i.id)) || []
     const addonObjects = productToCustomize.addons?.filter(a => tempSelectedAddons.includes(a.id)) || []
-
     const newItem: CartItem = {
         ...productToCustomize,
         cartId: Math.random().toString(36).substr(2, 9),
@@ -163,10 +156,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
           if (selectedTable.status === 'free') {
             res = await createTableOrderAction(storeId!, selectedTable.id, cart)
           } else {
-            // Se já tem mesa aberta, adiciona no último pedido ativo (ou cria lógica pra novo pedido, aqui simplificado)
             res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
           }
-
           if (res?.success) {
             toast({ title: "Pedido Enviado!", className: "bg-green-600 text-white" })
             setIsMenuOpen(false)
@@ -187,27 +178,25 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             fetchTables()
             toast({ title: "Mesa Liberada!", className: "bg-blue-600 text-white" })
         } else {
-            toast({ title: "Erro", description: res?.error, variant: "destructive" })
+            // MOSTRA O ERRO REAL PARA VOCÊ VER
+            toast({ title: "Erro ao fechar", description: res?.error || "Verifique se rodou o comando SQL.", variant: "destructive" })
         }
     })
   }
 
-  // --- NOVA FUNÇÃO: SERVIR PEDIDO ---
   const handleServeOrders = async () => {
       if (!selectedTable?.readyOrderIds || selectedTable.readyOrderIds.length === 0) return;
-      
       startTransition(async () => {
           const res = await serveReadyOrdersAction(selectedTable.readyOrderIds);
           if (res?.success) {
               toast({ title: "Pedido Entregue!", className: "bg-green-600 text-white" });
-              fetchTables(); // Isso vai fazer o sino sumir pois o status mudou para 'entregue'
+              fetchTables(); 
           } else {
               toast({ title: "Erro", description: res?.error, variant: "destructive" });
           }
       });
   }
 
-  // Helpers Visuais
   const filteredProducts = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchCat = activeTab === "all" || p.category_id === activeTab
@@ -228,30 +217,25 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 transition-colors duration-300">
       
-      {/* HEADER */}
       <header className="bg-white dark:bg-slate-900 p-4 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center shadow-sm">
         <h1 className="font-bold text-xl flex items-center gap-2 text-slate-900 dark:text-slate-100">
           <User className="text-primary" /> Garçom
         </h1>
         <div className="flex gap-2">
-            <Button variant="ghost" size="icon" onClick={() => fetchTables()}>
-                <RefreshCw className="w-4 h-4 text-slate-500" />
-            </Button>
+            <Button variant="ghost" size="icon" onClick={() => fetchTables()}><RefreshCw className="w-4 h-4 text-slate-500" /></Button>
             <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                 {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => logoutStaffAction(slug)}>
-                <LogOut className="w-5 h-5 text-red-400" />
-            </Button>
+            <Button variant="ghost" size="icon" onClick={() => logoutStaffAction(slug)}><LogOut className="w-5 h-5 text-red-400" /></Button>
         </div>
       </header>
 
-      {/* GRID DE MESAS */}
       <main className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {tables.length === 0 && <p className="col-span-full text-center text-muted-foreground">Carregando mesas...</p>}
         {tables.map(table => {
-            // Estilos condicionais
             const isReady = table.hasReadyItems;
+            // Verifica se está tudo entregue ou se ainda tem coisa fazendo
+            const statusLabel = table.isPreparing ? "Preparando..." : "Servido";
             
             return (
               <div 
@@ -259,20 +243,12 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 onClick={() => openTableManagement(table)}
                 className={cn(
                   "h-32 rounded-xl flex flex-col items-center justify-center cursor-pointer border-2 shadow-sm relative overflow-hidden transition-all active:scale-95",
-                  // MESA LIVRE
                   table.status === 'free' && "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400",
-                  // MESA OCUPADA (NORMAL)
                   table.status === 'occupied' && !isReady && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
-                  // MESA PRONTA (SINO + PULSE) - Estética 1
                   isReady && "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse"
                 )}
               >
-                {/* Ícone do Sino Flutuando */}
-                {isReady && (
-                    <div className="absolute top-2 right-2 animate-bounce">
-                        <BellRing className="w-6 h-6 text-green-600 fill-green-200" />
-                    </div>
-                )}
+                {isReady && (<div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>)}
 
                 <span className="text-3xl font-bold">{table.id}</span>
                 <div className="mt-2 text-center">
@@ -281,13 +257,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     ) : (
                         <div className="flex flex-col items-center">
                             {isReady ? (
-                                <span className="text-xs font-black bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-0.5 rounded-full uppercase">
-                                    PEDIDO PRONTO!
-                                </span>
+                                <span className="text-xs font-black bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-0.5 rounded-full uppercase">PRONTO!</span>
                             ) : (
                                 <>
                                     <span className="text-xs font-bold">R$ {table.total.toFixed(0)}</span>
-                                    <span className="text-[10px] opacity-70">Aguardando...</span>
+                                    {/* MUDANÇA AQUI: Mostra status real */}
+                                    <span className={cn("text-[10px] font-medium uppercase", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
+                                        {statusLabel}
+                                    </span>
                                 </>
                             )}
                         </div>
@@ -298,7 +275,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         })}
       </main>
 
-      {/* 1. MODAL DETALHES DA MESA */}
       <Dialog open={isManagementOpen} onOpenChange={setIsManagementOpen}>
         <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900">
             <DialogHeader>
@@ -311,43 +287,31 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </DialogHeader>
             
             <div className="py-2 space-y-4">
-                {/* SEÇÃO DE ALERTA - PEDIDO PRONTO */}
                 {selectedTable?.hasReadyItems && (
                     <div className="bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500 p-4 rounded-r shadow-sm animate-in fade-in slide-in-from-top-2">
                         <div className="flex items-center gap-3 mb-3">
                             <BellRing className="w-6 h-6 text-green-700 dark:text-green-400 animate-bounce" />
                             <div>
-                                <h3 className="font-bold text-green-800 dark:text-green-300">Pedido Pronto na Cozinha!</h3>
-                                <p className="text-xs text-green-700 dark:text-green-400">Busque os itens e confirme abaixo.</p>
+                                <h3 className="font-bold text-green-800 dark:text-green-300">Pedido Pronto!</h3>
+                                <p className="text-xs text-green-700 dark:text-green-400">Leve à mesa e confirme.</p>
                             </div>
                         </div>
-                        <Button 
-                            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12 text-lg shadow-md transition-all active:scale-95"
-                            onClick={handleServeOrders}
-                            disabled={isPending}
-                        >
+                        <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12 text-lg shadow-md transition-all active:scale-95" onClick={handleServeOrders} disabled={isPending}>
                             {isPending ? <RefreshCw className="animate-spin mr-2"/> : <CheckCircle2 className="mr-2 h-5 w-5"/>}
-                            CONFIRMAR ENTREGA (SERVIR)
+                            SERVIR PEDIDO
                         </Button>
                     </div>
                 )}
 
-                {/* Conteúdo Normal da Mesa */}
                 {selectedTable?.status === 'free' ? (
                     <div className="text-center py-6 space-y-4">
                         <Utensils className="w-12 h-12 mx-auto text-muted-foreground opacity-20" />
-                        <Button className="w-full h-12 text-lg" onClick={openMenu}>
-                            <Plus className="mr-2 h-5 w-5"/> Abrir Pedido
-                        </Button>
+                        <Button className="w-full h-12 text-lg" onClick={openMenu}><Plus className="mr-2 h-5 w-5"/> Abrir Pedido</Button>
                     </div>
                 ) : (
                     <div className="space-y-4">
-                         {/* Lista de Consumo */}
                          <div className="border rounded-lg p-3 max-h-[200px] overflow-y-auto bg-slate-50 dark:bg-slate-950">
-                            <p className="text-xs font-bold text-muted-foreground mb-2 uppercase flex items-center justify-between">
-                                <span>Consumo Total</span>
-                                <span className="text-emerald-600 dark:text-emerald-400">R$ {selectedTable?.total?.toFixed(2)}</span>
-                            </p>
+                            <p className="text-xs font-bold text-muted-foreground mb-2 uppercase flex items-center justify-between"><span>Consumo Total</span><span className="text-emerald-600 dark:text-emerald-400">R$ {selectedTable?.total?.toFixed(2)}</span></p>
                             {selectedTable?.items?.length > 0 ? (
                                 <ul className="space-y-2">
                                     {selectedTable.items.map((item: any, i: number) => (
@@ -361,15 +325,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                          </div>
 
                          <div className="grid grid-cols-2 gap-3 pt-2">
-                             <Button variant="outline" className="h-12" onClick={openMenu}>
-                                <Plus className="mr-2 h-4 w-4"/> Adicionar
-                             </Button>
+                             <Button variant="outline" className="h-12" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar</Button>
+                             {/* Botão de Encerrar fica VERMELHO PADRÃO se estiver preparando, e AZUL se estiver tudo servido */}
                              <Button 
-                                variant="destructive" 
-                                className="h-12" 
+                                variant={selectedTable?.isPreparing ? "secondary" : "destructive"} 
+                                className={cn("h-12", !selectedTable?.isPreparing && "bg-blue-600 hover:bg-blue-700 text-white")}
                                 onClick={handleCloseTable} 
-                                disabled={isPending || selectedTable?.hasReadyItems} // Bloqueia fechar se tiver coisa pra servir
-                                title={selectedTable?.hasReadyItems ? "Entregue o pedido antes de fechar a mesa" : "Liberar mesa"}
+                                disabled={isPending || selectedTable?.hasReadyItems} 
                              >
                                 <CheckCircle2 className="mr-2 h-4 w-4"/> Encerrar Mesa
                              </Button>
@@ -379,17 +341,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </div>
         </DialogContent>
       </Dialog>
-
-      {/* 2. MODAL CARDÁPIO E 3. CUSTOMIZAÇÃO (MANTIDOS IGUAIS AO ANTERIOR) */}
-      {/* ... [O código do Cardápio e Modal de Produto segue idêntico ao anterior para economizar espaço, pois não mudou] ... */}
-      <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>
+      {/* Resto dos Modais (Cardápio e Produto) permanecem iguais e estão abaixo no arquivo se copiar tudo */}
+       <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>
         <DialogContent className="h-[95vh] w-full max-w-lg flex flex-col p-0 gap-0">
-             {/* Header do Cardápio */}
              <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
                <DialogTitle>Cardápio (Mesa {selectedTable?.id})</DialogTitle>
                <Button variant="ghost" size="sm" onClick={() => setIsMenuOpen(false)}>Voltar</Button>
             </div>
-            {/* ... Restante do código do cardápio igual ... */}
             <div className="p-2 space-y-2 border-b bg-white dark:bg-slate-950">
                 <div className="relative">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -425,7 +383,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             )}
         </DialogContent>
       </Dialog>
-
       <Dialog open={!!productToCustomize} onOpenChange={(o) => !o && setProductToCustomize(null)}>
         <DialogContent className="h-[90vh] sm:h-auto sm:max-w-lg flex flex-col p-0 gap-0 overflow-hidden">
              {productToCustomize && (
@@ -439,7 +396,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     </div>
                     <ScrollArea className="flex-1 p-4">
                         <div className="space-y-6 pb-10">
-                            {/* Ingredientes e Adicionais (Código identico ao anterior) */}
                             {productToCustomize.ingredients && productToCustomize.ingredients.length > 0 && (
                                 <div className="space-y-3">
                                     <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Ingredientes</h4>
@@ -486,7 +442,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
              )}
         </DialogContent>
       </Dialog>
-
     </div>
   )
 }
