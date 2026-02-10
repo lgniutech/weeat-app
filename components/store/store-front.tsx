@@ -83,7 +83,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
       if (mesa) {
         setDeliveryMethod('mesa')
         setTableNumber(mesa) // Salva o número da mesa
-        setPaymentMethod('card_machine') // Padrão maquininha para mesa
+        setPaymentMethod('card_machine') // Define um padrão interno, mas não mostra
       }
     }
     // Aplica cor do tema da loja
@@ -498,22 +498,23 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                             )}
                         </div>
 
-                        {/* PAGAMENTO */}
-                        <div className="space-y-3">
-                             <h3 className="font-semibold text-sm">Pagamento</h3>
-                             <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="pix">PIX</SelectItem>
-                                    <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
-                                    <SelectItem value="debit_card">Cartão de Débito</SelectItem>
-                                    <SelectItem value="money">Dinheiro</SelectItem>
-                                    {tableNumber && <SelectItem value="card_machine">Maquininha (Garçom leva)</SelectItem>}
-                                </SelectContent>
-                             </Select>
-                        </div>
+                        {/* PAGAMENTO (SÓ APARECE SE NÃO FOR MESA) */}
+                        {!tableNumber && (
+                            <div className="space-y-3">
+                                 <h3 className="font-semibold text-sm">Pagamento</h3>
+                                 <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="pix">PIX</SelectItem>
+                                        <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
+                                        <SelectItem value="debit_card">Cartão de Débito</SelectItem>
+                                        <SelectItem value="money">Dinheiro</SelectItem>
+                                    </SelectContent>
+                                 </Select>
+                            </div>
+                        )}
                     </div>
                 )}
             </ScrollArea>
@@ -533,10 +534,14 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                             </div>
                         )}
 
-                        <div className="flex justify-between text-muted-foreground">
-                            <span>{tableNumber ? 'Serviço (Opcional)' : 'Entrega'}</span>
-                            <span>{tableNumber ? 'A combinar' : (deliveryFee === 0 ? 'Grátis' : formatCurrency(deliveryFee))}</span>
-                        </div>
+                        {/* REMOVIDO PARA MESAS */}
+                        {!tableNumber && (
+                            <div className="flex justify-between text-muted-foreground">
+                                <span>Entrega</span>
+                                <span>{deliveryFee === 0 ? 'Grátis' : formatCurrency(deliveryFee)}</span>
+                            </div>
+                        )}
+                        
                         <Separator className="my-2" />
                         <div className="flex justify-between font-bold text-lg">
                             <span>Total</span>
