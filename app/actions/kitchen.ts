@@ -6,8 +6,8 @@ import { revalidatePath } from "next/cache";
 export async function getKitchenOrdersAction(storeId: string) {
   const supabase = await createClient();
 
-  // Busca pedidos com status 'aceito' (Fila) e 'preparando' (Fogo)
-  // Adicionado 'last_status_change' para o cálculo preciso do timer
+  // Busca pedidos da cozinha (Aceitos ou Preparando)
+  // Agora trazendo também o 'status' de cada item individualmente
   const { data, error } = await supabase
     .from("orders")
     .select(`
@@ -24,7 +24,8 @@ export async function getKitchenOrdersAction(storeId: string) {
         name: product_name, 
         observation,
         removed_ingredients,
-        selected_addons
+        selected_addons,
+        status 
       )
     `)
     .eq("store_id", storeId)
@@ -39,45 +40,78 @@ export async function getKitchenOrdersAction(storeId: string) {
   return data || [];
 }
 
+// --- NOVO: AÇÃO PARA AVANÇAR PEDIDO COMPLETO (MANTIDA) ---
 export async function advanceKitchenStatusAction(orderId: string, currentStatus: string) {
   const supabase = await createClient();
-  
   let nextStatus = "";
 
-  // 1. Lógica Rígida de Transição
-  if (currentStatus === 'aceito') {
-    nextStatus = 'preparando'; // Cozinheiro puxou o ticket
-  } else if (currentStatus === 'preparando') {
-    nextStatus = 'enviado';    // Cozinheiro finalizou (Sino toca/Garçom busca)
-  } else {
-    // Bloqueia qualquer outra tentativa bizarra de status
-    return { success: false, message: "Ação não permitida para o status atual." };
-  }
+  if (currentStatus === 'aceito') nextStatus = 'preparando';
+  else if (currentStatus === 'preparando') nextStatus = 'enviado';
+  else return { success: false, message: "Status inválido." };
 
   const now = new Date().toISOString();
 
-  // 2. Atualiza Status e Reinicia o Timer (last_status_change)
+  // Atualiza o pedido e TODOS os itens dentro dele para o mesmo status
+  // Isso garante sincronia se o cozinheiro usar o modo "Pedido Completo"
+  const itemStatus = nextStatus === 'enviado' ? 'concluido' : 'preparando';
+
   const { error } = await supabase
     .from("orders")
-    .update({ 
-        status: nextStatus,
-        last_status_change: now
-    })
+    .update({ status: nextStatus, last_status_change: now })
     .eq("id", orderId);
 
-  if (error) {
-    return { success: false, message: "Erro ao atualizar pedido." };
-  }
+  if (error) return { success: false, message: "Erro ao atualizar pedido." };
 
-  // 3. Registra no Histórico (Para métricas e auditoria futura)
-  // Isso habilita dashboards como "Tempo Médio de Preparo" na Fase 3
-  await supabase.from("order_history").insert({
-    order_id: orderId,
-    previous_status: currentStatus,
-    new_status: nextStatus,
-    changed_at: now
-  });
+  // Atualiza todos os itens também
+  await supabase
+    .from("order_items")
+    .update({ status: itemStatus })
+    .eq("order_id", orderId);
 
   revalidatePath("/");
   return { success: true };
+}
+
+// --- NOVO: AÇÃO PARA AVANÇAR ITEM INDIVIDUAL ---
+export async function advanceItemStatusAction(itemId: string, orderId: string) {
+    const supabase = await createClient();
+
+    // 1. Marca o item como 'concluido'
+    const { error } = await supabase
+        .from("order_items")
+        .update({ status: 'concluido' })
+        .eq("id", itemId);
+
+    if (error) return { success: false, message: "Erro ao atualizar item." };
+
+    // 2. Verifica se TODOS os itens desse pedido já estão concluídos
+    const { data: items } = await supabase
+        .from("order_items")
+        .select("status")
+        .eq("order_id", orderId);
+
+    const allDone = items?.every(i => i.status === 'concluido');
+
+    // 3. Se tudo estiver pronto, finaliza o pedido inteiro automaticamente!
+    if (allDone) {
+        await supabase
+            .from("orders")
+            .update({ 
+                status: 'enviado', // Manda para o garçom
+                last_status_change: new Date().toISOString()
+            })
+            .eq("id", orderId);
+        
+        return { success: true, orderFinished: true };
+    }
+
+    // Se não terminou tudo, garante que o pedido esteja pelo menos "preparando"
+    await supabase
+        .from("orders")
+        .update({ status: 'preparando' })
+        .eq("id", orderId)
+        .eq("status", "aceito"); // Só muda se ainda estava como 'novo'
+
+    revalidatePath("/");
+    return { success: true, orderFinished: false };
 }
