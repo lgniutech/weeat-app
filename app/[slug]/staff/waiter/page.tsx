@@ -172,14 +172,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const handleCloseTable = async () => {
     if(!confirm("Encerrar mesa e liberar para novos clientes?")) return;
     startTransition(async () => {
+        // CORREÇÃO: Passa selectedTable.id (que é o numero da mesa, ex "1")
         const res = await closeTableAction(selectedTable.id, storeId!)
         if (res?.success) {
             setIsManagementOpen(false)
             fetchTables()
             toast({ title: "Mesa Liberada!", className: "bg-blue-600 text-white" })
         } else {
-            // MOSTRA O ERRO REAL PARA VOCÊ VER
-            toast({ title: "Erro ao fechar", description: res?.error || "Verifique se rodou o comando SQL.", variant: "destructive" })
+            toast({ title: "Erro ao fechar", description: res?.error || "Verifique o SQL do Banco.", variant: "destructive" })
         }
     })
   }
@@ -234,7 +234,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         {tables.length === 0 && <p className="col-span-full text-center text-muted-foreground">Carregando mesas...</p>}
         {tables.map(table => {
             const isReady = table.hasReadyItems;
-            // Verifica se está tudo entregue ou se ainda tem coisa fazendo
             const statusLabel = table.isPreparing ? "Preparando..." : "Servido";
             
             return (
@@ -261,7 +260,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                             ) : (
                                 <>
                                     <span className="text-xs font-bold">R$ {table.total.toFixed(0)}</span>
-                                    {/* MUDANÇA AQUI: Mostra status real */}
                                     <span className={cn("text-[10px] font-medium uppercase", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
                                         {statusLabel}
                                     </span>
@@ -326,12 +324,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
                          <div className="grid grid-cols-2 gap-3 pt-2">
                              <Button variant="outline" className="h-12" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar</Button>
-                             {/* Botão de Encerrar fica VERMELHO PADRÃO se estiver preparando, e AZUL se estiver tudo servido */}
+                             {/* CORREÇÃO AQUI: Botão sempre AZUL e sempre HABILITADO (salvo isPending) */}
                              <Button 
-                                variant={selectedTable?.isPreparing ? "secondary" : "destructive"} 
-                                className={cn("h-12", !selectedTable?.isPreparing && "bg-blue-600 hover:bg-blue-700 text-white")}
+                                className="h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold"
                                 onClick={handleCloseTable} 
-                                disabled={isPending || selectedTable?.hasReadyItems} 
+                                disabled={isPending} // Removemos a trava 'hasReadyItems'
                              >
                                 <CheckCircle2 className="mr-2 h-4 w-4"/> Encerrar Mesa
                              </Button>
@@ -341,7 +338,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </div>
         </DialogContent>
       </Dialog>
-      {/* Resto dos Modais (Cardápio e Produto) permanecem iguais e estão abaixo no arquivo se copiar tudo */}
+      {/* Modais de Cardápio e Produto (MANTIDOS IGUAIS) */}
        <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>
         <DialogContent className="h-[95vh] w-full max-w-lg flex flex-col p-0 gap-0">
              <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
