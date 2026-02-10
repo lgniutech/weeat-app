@@ -6,8 +6,8 @@ import { revalidatePath } from "next/cache";
 export async function getKitchenOrdersAction(storeId: string) {
   const supabase = await createClient();
 
-  // CORREÇÃO 1: Busca 'aceito' (novos) E 'preparando' (em andamento)
-  // CORREÇÃO 2: Busca 'product_name' e 'observation' corretos
+  // Busca pedidos com status 'aceito' (Fila) e 'preparando' (Fogo)
+  // Ordenados por data de criação (FIFO - First In, First Out)
   const { data, error } = await supabase
     .from("orders")
     .select(`
@@ -27,7 +27,7 @@ export async function getKitchenOrdersAction(storeId: string) {
       )
     `)
     .eq("store_id", storeId)
-    .in("status", ["aceito", "preparando"]) // <--- AQUI ESTAVA O ERRO (Faltava o 'aceito')
+    .in("status", ["aceito", "preparando"]) 
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -43,14 +43,15 @@ export async function advanceKitchenStatusAction(orderId: string, currentStatus:
   
   let nextStatus = "";
 
-  // Lógica de Avanço:
-  // Aceito (Novo) -> Preparando (Fogo) -> Enviado (Pronto/Sino Toca)
+  // Lógica de Avanço Rígida:
+  // 1. Aceito -> Preparando (Cozinheiro assume o pedido)
+  // 2. Preparando -> Enviado (Cozinheiro finaliza e notifica garçom/balcão)
   if (currentStatus === 'aceito') {
     nextStatus = 'preparando';
   } else if (currentStatus === 'preparando') {
-    nextStatus = 'enviado'; // 'enviado' é o status que faz o sino tocar no garçom
+    nextStatus = 'enviado'; 
   } else {
-    return { success: false };
+    return { success: false, message: "Status inválido para avanço." };
   }
 
   const { error } = await supabase
@@ -62,9 +63,11 @@ export async function advanceKitchenStatusAction(orderId: string, currentStatus:
     .eq("id", orderId);
 
   if (error) {
-    return { error: "Erro ao atualizar pedido." };
+    console.error("Erro ao avançar status:", error);
+    return { success: false, message: "Erro ao atualizar pedido." };
   }
 
+  // Revalida todas as rotas para garantir que o Garçom e o Painel vejam a mudança imediatamente
   revalidatePath("/");
   return { success: true };
 }
