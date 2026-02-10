@@ -27,13 +27,14 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     
   const totalTables = store?.total_tables || 10; 
 
+  // CORREÇÃO: 'address' em vez de 'delivery_address'
   const { data: activeOrders } = await supabase
     .from("orders")
     .select(`
       id, 
       status, 
       total_price, 
-      delivery_address, 
+      address, 
       customer_name,
       table_number,
       order_items ( name:product_name, quantity, price:unit_price )
@@ -46,10 +47,10 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   const tables = Array.from({ length: totalTables }, (_, i) => {
     const tableNum = (i + 1).toString();
     
-    // Tenta encontrar pelo campo table_number (ideal) ou fallback no delivery_address
+    // Busca pelo número da mesa salvo ou pelo endereço
     const order = activeOrders?.find(o => 
        o.table_number === tableNum || 
-       o.delivery_address?.replace(/\D/g, '') === tableNum
+       (o.address && o.address.replace(/\D/g, '') === tableNum)
     );
     
     let status: TableStatus = 'free';
@@ -72,11 +73,10 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   return tables;
 }
 
-// --- 2. BUSCAR CARDÁPIO COMPLETO (COM ADICIONAIS) ---
+// --- 2. BUSCAR CARDÁPIO COMPLETO ---
 export async function getWaiterMenuAction(storeId: string) {
   const supabase = await createClient();
   
-  // Busca Categorias -> Produtos -> (Ingredientes + Adicionais)
   const { data: categories } = await supabase
     .from("categories")
     .select(`
@@ -97,7 +97,6 @@ export async function getWaiterMenuAction(storeId: string) {
 
   if (!categories) return [];
 
-  // Formata a resposta para facilitar o uso no front
   return categories.map(cat => ({
     ...cat,
     products: cat.products?.filter((p: any) => p.is_available).map((p: any) => ({
@@ -118,14 +117,14 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
   try {
       const total = items.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
 
-      // A. Inserir Pedido Principal
+      // CORREÇÃO: Usando 'address' corretamente
       const { data: order, error: orderError } = await supabase.from("orders").insert({
         store_id: storeId,
         customer_name: `Mesa ${tableNum}`,
-        customer_phone: "00000000000", // FIX: Campo obrigatório no banco
+        customer_phone: "00000000000",
         delivery_type: "mesa",
-        delivery_address: `Mesa ${tableNum}`,
-        table_number: tableNum, // Preenche o campo dedicado
+        address: `Mesa ${tableNum}`, // CORRIGIDO AQUI
+        table_number: tableNum,
         payment_method: "card_machine",
         status: "aceito",
         total_price: total,
@@ -133,31 +132,27 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
       }).select().single();
 
       if (orderError) {
-        console.error("Erro SQL Order:", orderError);
-        return { error: `Erro no Banco: ${orderError.message}` };
+        console.error("Erro ao criar pedido:", orderError);
+        return { error: `Erro SQL: ${orderError.message}` };
       }
 
-      // B. Inserir Itens na tabela relacional com JSONB
+      // Inserir Itens
       if (items.length > 0) {
           const orderItemsData = items.map(i => ({
             order_id: order.id,
             product_name: i.name,
             quantity: i.quantity,
-            unit_price: i.price, // Preço base unitário
-            total_price: (i.totalPrice || i.price * i.quantity), // Preço total do item com adicionais
+            unit_price: i.price,
+            total_price: (i.totalPrice || i.price * i.quantity),
             observation: i.observation || "",
             removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
             selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null
           }));
 
           const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
-
-          if (itemsError) {
-            console.error("Erro SQL Itens:", itemsError);
-          }
+          if (itemsError) console.error("Erro itens:", itemsError);
       }
       
-      // Histórico
       await supabase.from("order_history").insert({
           order_id: order.id,
           new_status: 'aceito',
@@ -168,17 +163,16 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
       return { success: true, orderId: order.id };
 
   } catch (err: any) {
-      console.error("Erro Crítico:", err);
+      console.error("Erro TryCatch:", err);
       return { error: "Erro interno no servidor." };
   }
 }
 
-// --- 4. ADICIONAR ITENS À MESA ---
+// --- 4. ADICIONAR ITENS ---
 export async function addItemsToTableAction(orderId: string, newItems: any[], currentTableTotal: number) {
   const supabase = await createClient();
 
   try {
-      // Calcular total dos novos itens (considerando adicionais)
       const addedTotal = newItems.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
       
       const orderItemsData = newItems.map(i => ({
