@@ -44,6 +44,7 @@ type CartItem = Product & {
     totalPrice: number;
 }
 
+// --- CONTEÚDO DO GARÇOM ---
 function WaiterContent({ params }: { params: { slug: string } }) {
   const slug = params.slug
   const [tables, setTables] = useState<any[]>([])
@@ -60,7 +61,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
   
-  // ESTADOS DO CLIENTE
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
 
@@ -72,6 +72,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
   const router = useRouter()
+  // Hook do tema isolado
   const { theme, setTheme } = useTheme()
 
   useEffect(() => {
@@ -180,7 +181,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const handleCloseTable = async () => {
     if(!confirm("Tem certeza que deseja encerrar a conta?")) return;
-    
     startTransition(async () => {
         const res = await closeTableAction(selectedTable.id, storeId!)
         if (res?.success) {
@@ -232,6 +232,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </h1>
         <div className="flex gap-2">
             <Button variant="ghost" size="icon" onClick={() => fetchTables()}><RefreshCw className="w-4 h-4 text-slate-500" /></Button>
+            {/* BOTÃO DE TEMA */}
             <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                 {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </Button>
@@ -244,7 +245,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         {tables.map(table => {
             const isReady = table.hasReadyItems;
             const statusLabel = table.isPreparing ? "Preparando..." : "Servido";
-            
             return (
               <div 
                 key={table.id}
@@ -355,7 +355,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
                          <div className="grid grid-cols-2 gap-3 pt-2">
                              <Button variant="outline" className="h-12" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar</Button>
-                             {/* CORREÇÃO AQUI: Botão Destructive (Vermelho) e SEM travas lógicas além do loading */}
                              <Button 
                                 variant="destructive" 
                                 className="h-12 font-bold shadow-sm"
@@ -370,7 +369,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </div>
         </DialogContent>
       </Dialog>
-      {/* O resto dos Modais (Cardápio e Customização) permanece igual */}
+      
        <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>
         <DialogContent className="h-[95vh] w-full max-w-lg flex flex-col p-0 gap-0">
              <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
@@ -449,23 +448,35 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                             const isSelected = tempSelectedAddons.includes(addon.id)
                                             return (
                                                 <div key={addon.id} className={`flex items-center justify-between border rounded p-3 cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5' : ''}`} onClick={() => { if (isSelected) setTempSelectedAddons(prev => prev.filter(id => id !== addon.id)); else setTempSelectedAddons(prev => [...prev, addon.id]) }}>
-                                                    <div className="flex items-center gap-2"><Checkbox checked={isSelected} id={`add-${addon.id}`} /><span className="text-sm font-medium">{addon.name}</span></div>
-                                                    <span className="text-sm text-emerald-600 font-bold">+ R$ {Number(addon.price).toFixed(2)}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-medium">{addon.name}</span>
+                                                        <span className="text-xs text-emerald-600 font-bold">+ R$ {addon.price.toFixed(2)}</span>
+                                                    </div>
+                                                    {isSelected ? <CheckCircle2 className="w-5 h-5 text-primary" /> : <div className="w-5 h-5 border-2 rounded-full border-slate-300" />}
                                                 </div>
                                             )
                                         })}
                                     </div>
                                 </div>
                             )}
-                            <div className="space-y-3"><h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Observações</h4><Textarea placeholder="Ex: Bem passado..." value={tempObs} onChange={e => setTempObs(e.target.value)} className="resize-none"/></div>
+                             <div className="space-y-3">
+                                <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Observação</h4>
+                                <Textarea placeholder="Ex: Ponto da carne, sem sal..." value={tempObs} onChange={e => setTempObs(e.target.value)} />
+                             </div>
+                             <div className="space-y-3">
+                                <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Quantidade</h4>
+                                <div className="flex items-center gap-4">
+                                    <Button variant="outline" size="icon" onClick={() => setTempQuantity(q => Math.max(1, q - 1))}><Minus className="w-4 h-4"/></Button>
+                                    <span className="text-xl font-bold w-8 text-center">{tempQuantity}</span>
+                                    <Button variant="outline" size="icon" onClick={() => setTempQuantity(q => q + 1)}><Plus className="w-4 h-4"/></Button>
+                                </div>
+                             </div>
                         </div>
                     </ScrollArea>
-                    <div className="p-4 bg-white dark:bg-slate-900 border-t shadow-lg z-10">
-                         <div className="flex items-center justify-between mb-4">
-                             <div className="flex items-center border rounded-md"><Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setTempQuantity(q => Math.max(1, q - 1))}><Minus className="w-4 h-4"/></Button><span className="w-8 text-center font-bold">{tempQuantity}</span><Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setTempQuantity(q => q + 1)}><Plus className="w-4 h-4"/></Button></div>
-                             <div className="text-right"><p className="text-xs text-muted-foreground">Total do Item</p><p className="text-xl font-bold text-emerald-600">R$ {currentItemTotal.toFixed(2)}</p></div>
-                         </div>
-                         <Button className="w-full h-12 text-lg font-bold" onClick={confirmAddItem}>Adicionar ao Pedido</Button>
+                    <div className="p-4 border-t bg-slate-50 dark:bg-slate-900">
+                        <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white" onClick={confirmAddItem}>
+                            <CheckCircle2 className="mr-2 h-5 w-5"/> <span>Confirmar R$ {currentItemTotal.toFixed(2)}</span>
+                        </Button>
                     </div>
                  </>
              )}
@@ -475,9 +486,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   )
 }
 
-export default function WaiterPageWrapper({ params }: { params: { slug: string } }) {
+// --- WRAPPER FINAL COM TEMA ISOLADO ---
+export default function WaiterPage({ params }: { params: { slug: string } }) {
     return (
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="waiter-theme">
+        // storageKey="waiter-theme" isola o tema do garçom
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="waiter-theme" disableTransitionOnChange>
             <WaiterContent params={params} />
         </ThemeProvider>
     )

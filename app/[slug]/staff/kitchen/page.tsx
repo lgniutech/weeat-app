@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { ThemeProvider, useTheme } from "next-themes" 
 import { getKitchenOrdersAction, advanceKitchenStatusAction } from "@/app/actions/kitchen"
 import { logoutStaffAction } from "@/app/actions/staff"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
@@ -18,7 +18,9 @@ import {
   Utensils, 
   AlertTriangle,
   Play,
-  ArrowRight
+  ArrowRight,
+  Sun,
+  Moon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -52,24 +54,27 @@ function OrderTimer({ createdAt }: { createdAt: string }) {
   )
 }
 
-// --- PÁGINA DA COZINHA (KDS) ---
-export default function KitchenPage({ params }: { params: { slug: string } }) {
+// --- CONTEÚDO DA PÁGINA ---
+function KitchenContent({ params }: { params: { slug: string } }) {
   const [orders, setOrders] = useState<any[]>([])
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
+  // Hook do tema (agora isolado pelo Provider no final do arquivo)
+  const { theme, setTheme } = useTheme()
 
-  // Buscar pedidos
+  // Buscar pedidos (Lógica Otimizada)
+  // Nota: Em produção, idealmente passamos o storeId via props ou contexto para evitar fetch extra
   const fetchOrders = async () => {
+    // ... Lógica mantida (simplificada para focar no tema) ...
+    // Para funcionar "copiar e colar", vamos usar a lógica direta de fetch que já criamos
+    const supabase = require("@/lib/supabase/client").createClient()
     try {
       const { data: store } = await supabase.from('stores').select('id').eq('slug', params.slug).single()
       if (store) {
-        // A action já traz ordenado por antiguidade (created_at ascending)
         const data = await getKitchenOrdersAction(store.id)
         setOrders(data)
         
-        // Atualização em Tempo Real (Supabase Realtime)
         const channel = supabase
           .channel('kitchen_orders')
           .on(
@@ -81,36 +86,27 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
 
         return () => supabase.removeChannel(channel)
       }
-    } catch (error) {
-      console.error("Erro ao carregar pedidos:", error)
-    }
+    } catch (error) { console.error(error) }
   }
 
   useEffect(() => {
     fetchOrders()
   }, [params.slug])
 
-  // Função para mover o card
   const handleAdvance = (orderId: string, currentStatus: string) => {
-    // Feedback visual imediato (Otimista)
     const originalOrders = [...orders];
-    
-    // Se estiver finalizando ('preparando' -> 'enviado'), remove da tela imediatamente
     if (currentStatus === 'preparando') {
         setOrders(prev => prev.filter(o => o.id !== orderId));
     } else {
-        // Se estiver movendo de coluna ('aceito' -> 'preparando'), atualiza status local
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'preparando' } : o));
     }
 
     startTransition(async () => {
       const result = await advanceKitchenStatusAction(orderId, currentStatus)
       if (!result.success) {
-        // Reverte em caso de erro
         setOrders(originalOrders);
         toast({ title: "Erro", description: result.message, variant: "destructive" })
       } else {
-        // Se deu certo e era finalizar, avisa que foi para o garçom
         if (currentStatus === 'preparando') {
             toast({ title: "Prato Finalizado!", description: "Avisando garçom...", className: "bg-green-600 text-white" })
         }
@@ -123,13 +119,12 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
     router.push(`/${params.slug}/login`)
   }
 
-  // Filtragem das Colunas
   const pendingOrders = orders.filter(o => o.status === 'aceito')
   const prepOrders = orders.filter(o => o.status === 'preparando')
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
-      {/* CABEÇALHO SIMPLES */}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans transition-colors duration-300">
+      {/* CABEÇALHO */}
       <header className="bg-white dark:bg-slate-900 border-b px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="bg-slate-900 text-white p-2 rounded-md">
@@ -137,15 +132,23 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
           </div>
           <h1 className="font-bold text-xl text-slate-800 dark:text-slate-100">Cozinha</h1>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground hover:text-red-600">
-           <LogOut className="w-4 h-4 mr-2" /> Sair
-        </Button>
+        
+        <div className="flex items-center gap-2">
+            {/* BOTÃO DE TEMA */}
+            <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+                {theme === 'dark' ? <Sun className="w-5 h-5"/> : <Moon className="w-5 h-5"/>}
+            </Button>
+            
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground hover:text-red-600">
+            <LogOut className="w-4 h-4 mr-2" /> Sair
+            </Button>
+        </div>
       </header>
 
       {/* ÁREA DE PEDIDOS (KANBAN) */}
       <main className="flex-1 p-6 overflow-hidden flex flex-col md:flex-row gap-6">
         
-        {/* COLUNA 1: CHEGOU (A FAZER) */}
+        {/* COLUNA 1: A FAZER */}
         <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 rounded-t-xl">
             <h2 className="font-bold text-lg text-slate-700 dark:text-slate-200 flex items-center gap-2">
@@ -177,7 +180,7 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
           </ScrollArea>
         </div>
 
-        {/* SETA DE FLUXO (VISUAL APENAS EM DESKTOP) */}
+        {/* SETA */}
         <div className="hidden md:flex items-center justify-center text-slate-300">
             <ArrowRight className="w-8 h-8 opacity-20" />
         </div>
@@ -219,7 +222,6 @@ export default function KitchenPage({ params }: { params: { slug: string } }) {
   )
 }
 
-// --- CARD DE PEDIDO LIMPO ---
 function KitchenCard({ order, onAction, btnText, btnColor, btnIcon, isCooking }: any) {
   return (
     <Card className={cn(
@@ -227,7 +229,6 @@ function KitchenCard({ order, onAction, btnText, btnColor, btnIcon, isCooking }:
         isCooking ? "border-orange-200 dark:border-orange-900 ring-1 ring-orange-100 dark:ring-orange-900" : "border-slate-200"
     )}>
       <div className="p-4">
-        {/* TOPO: MESA E TIMER */}
         <div className="flex justify-between items-start mb-3">
           <div>
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
@@ -242,7 +243,6 @@ function KitchenCard({ order, onAction, btnText, btnColor, btnIcon, isCooking }:
 
         <div className="h-px bg-slate-100 dark:bg-slate-800 my-3" />
 
-        {/* LISTA DE ITENS */}
         <div className="space-y-3">
           {order.order_items.map((item: any) => (
             <div key={item.id} className="text-sm">
@@ -254,8 +254,6 @@ function KitchenCard({ order, onAction, btnText, btnColor, btnIcon, isCooking }:
                     <p className="font-semibold text-slate-700 dark:text-slate-200 text-base leading-tight">
                         {item.name}
                     </p>
-                    
-                    {/* INGREDIENTES REMOVIDOS (VERMELHO) */}
                     {item.removed_ingredients && JSON.parse(item.removed_ingredients).length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                             {JSON.parse(item.removed_ingredients).map((ing: string, i: number) => (
@@ -265,15 +263,12 @@ function KitchenCard({ order, onAction, btnText, btnColor, btnIcon, isCooking }:
                             ))}
                         </div>
                     )}
-
-                    {/* OBSERVAÇÕES GERAIS (AMARELO) */}
                     {item.observation && (
                         <div className="mt-1 flex items-start gap-1 text-yellow-700 bg-yellow-50 border border-yellow-100 px-1.5 py-0.5 rounded text-xs font-medium">
                             <AlertTriangle className="w-3 h-3 mt-0.5" />
                             <span className="uppercase">{item.observation}</span>
                         </div>
                     )}
-                     {/* ADICIONAIS (VERDE) */}
                      {item.selected_addons && JSON.parse(item.selected_addons).length > 0 && (
                         <div className="mt-1 text-xs text-green-700 font-medium">
                             + {JSON.parse(item.selected_addons).map((a: any) => a.name).join(", ")}
@@ -286,7 +281,6 @@ function KitchenCard({ order, onAction, btnText, btnColor, btnIcon, isCooking }:
         </div>
       </div>
 
-      {/* BOTÃO DE AÇÃO */}
       <div 
         className={cn(
             "p-3 border-t cursor-pointer flex items-center justify-center font-bold text-white transition-colors select-none active:scale-[0.98]",
@@ -299,4 +293,14 @@ function KitchenCard({ order, onAction, btnText, btnColor, btnIcon, isCooking }:
       </div>
     </Card>
   )
+}
+
+// --- WRAPPER FINAL COM TEMA ISOLADO ---
+export default function KitchenPage({ params }: { params: { slug: string } }) {
+    return (
+        // storageKey="kitchen-theme" garante que o tema da cozinha não afete o admin ("theme")
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="kitchen-theme" disableTransitionOnChange>
+            <KitchenContent params={params} />
+        </ThemeProvider>
+    )
 }
