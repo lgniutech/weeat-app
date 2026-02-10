@@ -16,25 +16,23 @@ interface OrderInput {
   storeId: string;
   customerName: string;
   customerPhone: string;
-  // Adicionado 'mesa' como opção
   deliveryType: "entrega" | "retirada" | "mesa"; 
-  // Novo campo para o número da mesa
   tableNumber?: string; 
   address?: string;
   paymentMethod: string;
   changeFor?: string;
   totalPrice: number;
   items: OrderItemInput[];
+  notes?: string;
 }
 
 // CRIAR PEDIDO
 export async function createOrderAction(order: OrderInput) {
   const supabase = await createClient();
 
-  // Preparar objeto para inserção
   const orderData = {
     store_id: order.storeId,
-    status: "pendente",
+    status: order.deliveryType === 'mesa' ? "pendente" : "pendente", // Mesa também começa como pendente para aprovação do garçom
     customer_name: order.customerName,
     customer_phone: order.customerPhone,
     delivery_type: order.deliveryType,
@@ -43,8 +41,8 @@ export async function createOrderAction(order: OrderInput) {
     change_for: order.changeFor,
     total_price: order.totalPrice,
     last_status_change: new Date().toISOString(),
-    // Salva o número da mesa se existir
-    table_number: order.tableNumber || null 
+    table_number: order.tableNumber || null,
+    cancellation_reason: order.notes // Usando campo livre ou criar coluna notes no futuro
   };
 
   const { data: newOrder, error: orderError } = await supabase
@@ -83,6 +81,7 @@ export async function createOrderAction(order: OrderInput) {
       changed_at: new Date().toISOString()
   });
 
+  revalidatePath("/");
   return { success: true, orderId: newOrder.id };
 }
 
@@ -92,10 +91,7 @@ export async function getStoreOrdersAction(storeId: string, dateFilter?: string)
     
     let query = supabase
         .from("orders")
-        .select(`
-            *,
-            items:order_items(*)
-        `)
+        .select(`*, items:order_items(*)`)
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
 
@@ -106,45 +102,29 @@ export async function getStoreOrdersAction(storeId: string, dateFilter?: string)
     }
 
     const { data, error } = await query;
-
     if (error) console.error(error);
     return data || [];
 }
 
-// ATUALIZAR STATUS (COM MOTIVO OPCIONAL)
+// ATUALIZAR STATUS
 export async function updateOrderStatusAction(orderId: string, newStatus: string, reason?: string) {
     const supabase = await createClient();
 
-    const { data: currentOrder } = await supabase
-        .from("orders")
-        .select("status")
-        .eq("id", orderId)
-        .single();
-
+    const { data: currentOrder } = await supabase.from("orders").select("status").eq("id", orderId).single();
     if (!currentOrder) return { error: "Pedido não encontrado" };
-    const previousStatus = currentOrder.status;
-
-    // Objeto de atualização dinâmica
+    
     const updateData: any = { 
         status: newStatus,
         last_status_change: new Date().toISOString() 
     };
+    if (reason) updateData.cancellation_reason = reason;
 
-    // Se tiver motivo (cancelamento), salva
-    if (reason) {
-        updateData.cancellation_reason = reason;
-    }
-
-    const { error: updateError } = await supabase
-        .from("orders")
-        .update(updateData)
-        .eq("id", orderId);
-    
+    const { error: updateError } = await supabase.from("orders").update(updateData).eq("id", orderId);
     if (updateError) return { error: "Erro ao atualizar status" };
 
     await supabase.from("order_history").insert({
         order_id: orderId,
-        previous_status: previousStatus,
+        previous_status: currentOrder.status,
         new_status: newStatus,
         changed_at: new Date().toISOString()
     });
@@ -157,24 +137,50 @@ export async function updateOrderStatusAction(orderId: string, newStatus: string
 export async function getCustomerOrdersAction(phone: string) {
   const supabase = await createClient();
   const clean = phone.replace(/\D/g, "")
-
   if (!clean) return []
 
   const { data, error } = await supabase
       .from("orders")
-      .select(`
-          *,
-          store:stores(name, slug),
-          items:order_items(*)
-      `)
+      .select(`*, store:stores(name, slug), items:order_items(*)`)
       .eq("customer_phone", clean)
       .order("created_at", { ascending: false })
       .limit(5)
 
-  if (error) {
-      console.error("Erro ao buscar pedidos:", error);
-      return [];
-  }
-  
+  if (error) return [];
   return data || [];
+}
+
+// --- NOVO: BUSCAR CONTA DA MESA (CLIENTE NA MESA) ---
+export async function getTableOrdersAction(storeId: string, tableNumber: string) {
+  const supabase = await createClient();
+
+  const { data: orders, error } = await supabase
+    .from("orders")
+    .select(`
+      id,
+      total_price,
+      status,
+      created_at,
+      order_items (
+        product_name,
+        quantity,
+        unit_price,
+        total_price,
+        observation,
+        removed_ingredients,
+        selected_addons
+      )
+    `)
+    .eq("store_id", storeId)
+    .eq("table_number", tableNumber)
+    .neq("status", "concluido") // Não mostra pedidos de clientes anteriores (mesa fechada)
+    .neq("status", "cancelado")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao buscar conta da mesa:", error);
+    return [];
+  }
+
+  return orders || [];
 }
