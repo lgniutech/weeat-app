@@ -11,7 +11,7 @@ import {
     addItemsToTableAction, 
     closeTableAction,
     serveReadyOrdersAction,
-    applyCouponAction // <--- Import Novo
+    validateCouponUiAction 
 } from "@/app/actions/waiter"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -61,16 +61,19 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
   
+  // Cliente Info
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
 
+  // Item Temp
   const [tempQuantity, setTempQuantity] = useState(1)
   const [tempObs, setTempObs] = useState("")
   const [tempRemovedIngredients, setTempRemovedIngredients] = useState<string[]>([])
   const [tempSelectedAddons, setTempSelectedAddons] = useState<string[]>([])
 
-  // Estado novo para Cupom
-  const [couponCode, setCouponCode] = useState("")
+  // Cupom no Carrinho
+  const [cartCoupon, setCartCoupon] = useState("")
+  const [validatedCouponData, setValidatedCouponData] = useState<{valid: boolean, discount: number, message?: string} | null>(null)
 
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
@@ -114,7 +117,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const openTableManagement = (table: any) => {
     setSelectedTable(table)
-    setCouponCode("") // Limpa campo de cupom ao abrir
     if (table.status === 'free') {
         setClientName("")
         setClientPhone("")
@@ -125,6 +127,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const openMenu = () => {
     setCart([]) 
     setSearchQuery("")
+    setCartCoupon("") // Reset cupom ao abrir
+    setValidatedCouponData(null)
     setIsMenuOpen(true)
     setIsManagementOpen(false) 
   }
@@ -157,20 +161,43 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     }
     setCart(prev => [...prev, newItem])
     setProductToCustomize(null)
+    // Se adicionar item, o cupom validado anteriormente pode mudar (ex: % sobre total maior), invalida visual
+    if (validatedCouponData) setValidatedCouponData(null) 
     toast({ title: "Adicionado ao carrinho" })
   }
 
-  const removeFromCart = (cartId: string) => setCart(prev => prev.filter(i => i.cartId !== cartId))
+  const removeFromCart = (cartId: string) => {
+      setCart(prev => prev.filter(i => i.cartId !== cartId))
+      setValidatedCouponData(null)
+  }
+
+  // Valida cupom visualmente antes de enviar
+  const handleValidateCartCoupon = async () => {
+      if(!cartCoupon.trim()) return;
+      const total = cart.reduce((acc, item) => acc + item.totalPrice, 0);
+      
+      const res = await validateCouponUiAction(storeId!, cartCoupon, total);
+      if(res.valid) {
+          setValidatedCouponData({ valid: true, discount: res.discount })
+          toast({ title: "Cupom Válido!", description: `- R$ ${res.discount?.toFixed(2)}`, className: "bg-green-600 text-white" })
+      } else {
+          setValidatedCouponData({ valid: false, discount: 0, message: res.message })
+          toast({ title: "Inválido", description: res.message, variant: "destructive" })
+      }
+  }
 
   const sendOrder = () => {
     if (cart.length === 0) return
     startTransition(async () => {
       try {
           let res;
+          // Envia o cupom junto (se validado ou apenas digitado, a action revalida de qualquer forma por segurança)
+          const codeToSend = cartCoupon.trim().toUpperCase();
+
           if (selectedTable.status === 'free') {
-            res = await createTableOrderAction(storeId!, selectedTable.id, cart, clientName, clientPhone)
+            res = await createTableOrderAction(storeId!, selectedTable.id, cart, clientName, clientPhone, codeToSend)
           } else {
-            res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
+            res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total, codeToSend)
           }
           if (res?.success) {
             toast({ title: "Pedido Enviado!", className: "bg-green-600 text-white" })
@@ -195,21 +222,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             toast({ title: "Erro", description: res?.error, variant: "destructive" })
         }
     })
-  }
-
-  // --- NOVA FUNÇÃO DE CUPOM ---
-  const handleApplyCoupon = () => {
-      if(!couponCode.trim()) return;
-      startTransition(async () => {
-          const res = await applyCouponAction(storeId!, selectedTable.id, couponCode.toUpperCase());
-          if (res.success) {
-              toast({ title: "Cupom Aplicado!", description: `Desconto de R$ ${res.discount?.toFixed(2)}`, className: "bg-green-600 text-white" });
-              setCouponCode(""); // Limpa input
-              fetchTables(); // Atualiza valores
-          } else {
-              toast({ title: "Erro no Cupom", description: res.error, variant: "destructive" });
-          }
-      })
   }
 
   const handleServeOrders = async () => {
@@ -241,6 +253,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   }, [productToCustomize, tempSelectedAddons, tempQuantity]);
 
   const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
+  const finalCartTotal = validatedCouponData?.valid ? cartTotal - validatedCouponData.discount : cartTotal;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 transition-colors duration-300">
@@ -289,7 +302,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                 <span className="text-xs font-black bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-0.5 rounded-full uppercase">PRONTO!</span>
                             ) : (
                                 <>
-                                    {/* Se tiver desconto, mostra preço antigo riscado */}
                                     {table.discount > 0 && (
                                         <span className="text-[10px] line-through text-muted-foreground">R$ {table.subtotal?.toFixed(0)}</span>
                                     )}
@@ -343,7 +355,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 {selectedTable?.status === 'free' ? (
                     <div className="py-2 space-y-4">
                         <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-lg border border-slate-100 dark:border-slate-800 space-y-3">
-                            {/* Inputs de Cliente Mantidos */}
                             <div className="space-y-1">
                                 <Label htmlFor="client-name" className="text-xs font-semibold text-muted-foreground uppercase">Nome do Cliente (Opcional)</Label>
                                 <div className="relative">
@@ -369,7 +380,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                             <div className="flex justify-between items-center mb-2 pb-2 border-b border-dashed">
                                  <span className="text-xs font-bold text-muted-foreground uppercase">Conta Final</span>
                                  <div className="text-right">
-                                    {/* Mostra valores antes e depois do desconto */}
                                     {selectedTable?.discount > 0 && (
                                         <div className="text-[10px] text-muted-foreground line-through">Sub: R$ {selectedTable.subtotal?.toFixed(2)}</div>
                                     )}
@@ -389,19 +399,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                             ) : <p className="text-xs italic text-muted-foreground">Vazio.</p>}
                          </div>
 
-                         {/* ÁREA DE CUPOM */}
-                         <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg flex gap-2 items-center border border-slate-100 dark:border-slate-800">
-                             <TicketPercent className="w-5 h-5 text-muted-foreground" />
-                             <Input 
-                                placeholder="CUPOM" 
-                                className="h-9 uppercase font-bold text-sm" 
-                                value={couponCode}
-                                onChange={e => setCouponCode(e.target.value)}
-                             />
-                             <Button size="sm" variant="secondary" onClick={handleApplyCoupon} disabled={isPending || !couponCode}>
-                                 Aplicar
-                             </Button>
-                         </div>
                          {selectedTable?.couponCode && (
                              <div className="text-center text-xs font-bold text-green-600 bg-green-50 dark:bg-green-900/20 py-1 rounded">
                                  CUPOM ATIVO: {selectedTable.couponCode}
@@ -425,7 +422,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </DialogContent>
       </Dialog>
       
-      {/* ... MODAIS MENU E PRODUTO (Mantidos iguais para economizar espaço) ... */}
        <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>
         <DialogContent className="h-[95vh] w-full max-w-lg flex flex-col p-0 gap-0">
              <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
@@ -459,10 +455,36 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     ))}
                 </div>
             </ScrollArea>
+            
             {cart.length > 0 && (
-                <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t p-3 shadow-lg z-20">
-                    <div className="flex justify-between items-center mb-2"><span className="font-bold text-sm">{cart.length} itens</span><span className="font-bold text-emerald-600">Total: R$ {cartTotal.toFixed(2)}</span></div>
-                    <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white" onClick={sendOrder} disabled={isPending}>{isPending ? "Enviando..." : "CONFIRMAR PEDIDO"}</Button>
+                <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t p-3 shadow-lg z-20 space-y-3">
+                    
+                    <div className="flex gap-2">
+                         <div className="relative flex-1">
+                             <Tag className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                             <Input 
+                                placeholder="Cupom de desconto" 
+                                className="pl-9 uppercase" 
+                                value={cartCoupon}
+                                onChange={(e) => { setCartCoupon(e.target.value); setValidatedCouponData(null); }}
+                             />
+                         </div>
+                         <Button variant="secondary" onClick={handleValidateCartCoupon}>Aplicar</Button>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                        <span className="font-bold text-sm text-slate-500">{cart.length} itens</span>
+                        <div className="text-right">
+                             {validatedCouponData?.valid && (
+                                 <span className="text-xs text-green-600 block">Desconto: -R$ {validatedCouponData.discount.toFixed(2)}</span>
+                             )}
+                             <span className="font-bold text-emerald-600 text-lg">Total: R$ {finalCartTotal.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    
+                    <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white" onClick={sendOrder} disabled={isPending}>
+                        {isPending ? "Enviando..." : "CONFIRMAR PEDIDO"}
+                    </Button>
                 </div>
             )}
         </DialogContent>
@@ -481,9 +503,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     </div>
                     <ScrollArea className="flex-1 p-4">
                         <div className="space-y-6 pb-10">
-                            {productToCustomize.ingredients && productToCustomize.ingredients.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Ingredientes</h4>
+                             <div className="space-y-3">
+                                <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Ingredientes</h4>
+                                {productToCustomize.ingredients && productToCustomize.ingredients.length > 0 ? (
                                     <div className="grid grid-cols-2 gap-2">
                                         {productToCustomize.ingredients.map(ing => {
                                             const isRemoved = tempRemovedIngredients.includes(ing.id)
@@ -495,11 +517,12 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                             )
                                         })}
                                     </div>
-                                </div>
-                            )}
-                            {productToCustomize.addons && productToCustomize.addons.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Adicionais</h4>
+                                ) : <p className="text-sm text-muted-foreground italic">Nenhum ingrediente removível.</p>}
+                             </div>
+
+                             <div className="space-y-3">
+                                 <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Adicionais</h4>
+                                 {productToCustomize.addons && productToCustomize.addons.length > 0 ? (
                                     <div className="space-y-2">
                                         {productToCustomize.addons.map(addon => {
                                             const isSelected = tempSelectedAddons.includes(addon.id)
@@ -514,8 +537,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                             )
                                         })}
                                     </div>
-                                </div>
-                            )}
+                                 ) : <p className="text-sm text-muted-foreground italic">Nenhum adicional disponível.</p>}
+                             </div>
+
                              <div className="space-y-3">
                                 <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Observação</h4>
                                 <Textarea placeholder="Ex: Ponto da carne, sem sal..." value={tempObs} onChange={e => setTempObs(e.target.value)} />

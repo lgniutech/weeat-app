@@ -11,9 +11,9 @@ export type TableData = {
   orderId?: string;
   customerName?: string;
   total: number;
-  subtotal: number; // Novo: Total sem desconto
-  discount: number; // Novo: Valor do desconto
-  couponCode?: string; // Novo: Código do cupom
+  subtotal: number;
+  discount: number;
+  couponCode?: string;
   items?: any[];
   orderStatus?: string;
   hasReadyItems: boolean;
@@ -21,19 +21,43 @@ export type TableData = {
   isPreparing: boolean;
 };
 
-// --- 1. BUSCAR STATUS (GARÇOM) ---
+// --- HELPER: CALCULAR DESCONTO (Privado) ---
+async function calculateDiscount(supabase: any, storeId: string, grossTotal: number, code: string) {
+    if (!code) return { discount: 0, code: null, error: null };
+
+    const { data: coupon } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("store_id", storeId)
+        .eq("code", code)
+        .eq("is_active", true)
+        .single();
+
+    if (!coupon) return { discount: 0, code: null, error: "Cupom inválido" };
+    if (coupon.starts_at && new Date(coupon.starts_at) > new Date()) return { discount: 0, code: null, error: "Cupom não vigente" };
+    if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) return { discount: 0, code: null, error: "Cupom expirado" };
+    if (coupon.max_uses && coupon.used_count >= coupon.max_uses) return { discount: 0, code: null, error: "Esgotado" };
+    if (grossTotal < coupon.min_order_value) return { discount: 0, code: null, error: `Mínimo: R$ ${coupon.min_order_value}` };
+
+    let discountAmount = 0;
+    if (coupon.discount_type === 'percent') {
+        discountAmount = (grossTotal * coupon.discount_value) / 100;
+    } else {
+        discountAmount = coupon.discount_value;
+    }
+
+    if (discountAmount > grossTotal) discountAmount = grossTotal;
+
+    return { discount: discountAmount, code: code, error: null, couponId: coupon.id };
+}
+
+// --- 1. BUSCAR STATUS ---
 export async function getTablesStatusAction(storeId: string): Promise<TableData[]> {
   const supabase = await createClient();
 
-  const { data: store } = await supabase
-    .from("stores")
-    .select("total_tables")
-    .eq("id", storeId)
-    .single();
-    
+  const { data: store } = await supabase.from("stores").select("total_tables").eq("id", storeId).single();
   const totalTables = store?.total_tables || 10; 
 
-  // Agora buscamos também discount e coupon_code
   const { data: activeOrders } = await supabase
     .from("orders")
     .select(`
@@ -47,7 +71,6 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
 
   const tables = Array.from({ length: totalTables }, (_, i) => {
     const tableNum = (i + 1).toString();
-    
     const tableOrders = activeOrders?.filter(o => 
        o.table_number === tableNum || (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
@@ -56,22 +79,12 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
     
     let status: TableStatus = 'free';
-    if (tableOrders.length > 0) {
-      status = 'occupied';
-    }
+    if (tableOrders.length > 0) status = 'occupied';
 
-    // Soma o total final (que já deve ter o desconto aplicado no banco)
     const total = tableOrders.reduce((acc, o) => acc + (o.total_price || 0), 0);
-    
-    // Soma os descontos para mostrar na tela
     const totalDiscount = tableOrders.reduce((acc, o) => acc + (o.discount || 0), 0);
-    
-    // Encontra se tem algum cupom aplicado (pega o do primeiro pedido que tiver)
     const activeCoupon = tableOrders.find(o => o.coupon_code)?.coupon_code;
-
-    // Subtotal é o valor real dos itens (Total pago + Descontos dados)
     const subtotal = total + totalDiscount;
-
     const allItems = activeOrders?.filter(o => o.table_number === tableNum).flatMap(o => o.order_items || []) || [];
 
     return {
@@ -100,8 +113,7 @@ export async function getWaiterMenuAction(storeId: string) {
   const { data: categories } = await supabase
     .from("categories")
     .select(`
-      id, name,
-      products (
+      id, name, products (
         id, name, price, description, is_available, category_id, image_url,
         product_ingredients (ingredient:ingredients (id, name)),
         product_addons (price, addon:addons (id, name))
@@ -121,20 +133,38 @@ export async function getWaiterMenuAction(storeId: string) {
   })).filter(cat => cat.products.length > 0);
 }
 
-// --- 3. CRIAR PEDIDO ---
+// --- 3. CRIAR PEDIDO (COM CUPOM) ---
 export async function createTableOrderAction(
     storeId: string, 
     tableNum: string, 
     items: any[], 
     clientName?: string, 
-    clientPhone?: string 
+    clientPhone?: string,
+    couponCode?: string
 ) {
   const supabase = await createClient();
   try {
-      const total = items.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
+      // 1. Calcula totais brutos
+      const itemsTotal = items.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
+      
+      // 2. Calcula Cupom se existir
+      let discount = 0;
+      let finalCouponCode = null;
+      
+      if (couponCode && couponCode.trim() !== "") {
+          const res = await calculateDiscount(supabase, storeId, itemsTotal, couponCode.toUpperCase());
+          if (res.error) return { error: res.error };
+          discount = res.discount;
+          finalCouponCode = res.code;
+          
+          if(res.couponId) await supabase.rpc('increment_coupon_usage', { coupon_id: res.couponId });
+      }
+
+      const finalTotal = itemsTotal - discount;
       const finalName = clientName && clientName.trim() !== "" ? clientName : `Mesa ${tableNum}`;
       const finalPhone = clientPhone && clientPhone.trim() !== "" ? clientPhone : "00000000000";
 
+      // 3. Insere Pedido
       const { data: order, error } = await supabase.from("orders").insert({
         store_id: storeId,
         customer_name: finalName,
@@ -144,12 +174,15 @@ export async function createTableOrderAction(
         table_number: tableNum,
         payment_method: "card_machine",
         status: "aceito", 
-        total_price: total,
+        total_price: finalTotal,
+        discount: discount,         
+        coupon_code: finalCouponCode,
         last_status_change: new Date().toISOString()
       }).select().single();
 
       if (error) return { error: error.message };
 
+      // 4. Insere Itens
       if (items.length > 0) {
           const orderItems = items.map(i => ({
             order_id: order.id,
@@ -172,12 +205,18 @@ export async function createTableOrderAction(
   } catch (err: any) { return { error: "Erro interno." }; }
 }
 
-// --- 4. ADICIONAR ITENS ---
-export async function addItemsToTableAction(orderId: string, newItems: any[], currentTableTotal: number) {
+// --- 4. ADICIONAR ITENS (COM CUPOM) ---
+export async function addItemsToTableAction(
+    orderId: string, 
+    newItems: any[], 
+    currentTableTotal: number, 
+    couponCode?: string
+) {
   const supabase = await createClient();
   try {
-      const addedTotal = newItems.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
+      const addedItemsTotal = newItems.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
       
+      // Insere novos itens
       const orderItems = newItems.map(i => ({
         order_id: orderId,
         product_name: i.name,
@@ -189,16 +228,36 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
         selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
         status: 'pendente'
       }));
-
       await supabase.from("order_items").insert(orderItems);
       
-      // Ao adicionar itens, apenas somamos ao total. 
-      // Se houver cupom, o ideal seria revalidar, mas para simplificar mantemos o desconto fixo anterior se houver,
-      // ou o usuário deve reaplicar o cupom se for porcentagem dinâmica.
-      // Por segurança, vamos apenas somar o novo valor.
+      // Recalcula totais
+      const { data: currentOrder } = await supabase.from("orders").select("total_price, discount").eq("id", orderId).single();
+      
+      if (!currentOrder) return { error: "Pedido não encontrado" };
+
+      const previousGross = currentOrder.total_price + (currentOrder.discount || 0);
+      const newGrossTotal = previousGross + addedItemsTotal;
+
+      let discount = currentOrder.discount || 0;
+      let finalCouponCode = null; 
+
+      // Se enviou um código novo (ou re-enviou o mesmo para aplicar sobre o novo total)
+      if (couponCode && couponCode.trim() !== "") {
+          const { data: store } = await supabase.from("orders").select("store_id").eq("id", orderId).single();
+          const res = await calculateDiscount(supabase, store.store_id, newGrossTotal, couponCode.toUpperCase());
+          if (res.error) return { error: res.error };
+          
+          discount = res.discount;
+          finalCouponCode = res.code;
+          if(res.couponId) await supabase.rpc('increment_coupon_usage', { coupon_id: res.couponId });
+      }
+
+      // Atualiza pedido
       await supabase.from("orders")
         .update({ 
-            total_price: currentTableTotal + addedTotal, 
+            total_price: newGrossTotal - discount,
+            discount: discount,
+            ...(finalCouponCode ? { coupon_code: finalCouponCode } : {}),
             status: "aceito", 
             last_status_change: new Date().toISOString() 
         })
@@ -209,100 +268,12 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
   } catch (err) { return { error: "Erro ao processar." }; }
 }
 
-// --- 5. APLICAR CUPOM (NOVO) ---
-export async function applyCouponAction(storeId: string, tableNum: string, code: string) {
+// --- 5. VALIDAR CUPOM (RÁPIDO - PARA UI) ---
+export async function validateCouponUiAction(storeId: string, code: string, currentAmount: number) {
     const supabase = await createClient();
-    const now = new Date().toISOString();
-
-    // 1. Validar Cupom
-    const { data: coupon } = await supabase
-        .from("coupons")
-        .select("*")
-        .eq("store_id", storeId)
-        .eq("code", code)
-        .eq("is_active", true)
-        .single();
-
-    if (!coupon) return { success: false, error: "Cupom inválido ou não encontrado." };
-    if (coupon.starts_at && new Date(coupon.starts_at) > new Date()) return { success: false, error: "Cupom ainda não vigente." };
-    if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) return { success: false, error: "Cupom expirado." };
-    if (coupon.max_uses && coupon.used_count >= coupon.max_uses) return { success: false, error: "Limite de uso atingido." };
-
-    // 2. Buscar Pedidos da Mesa para calcular totais
-    const { data: orders } = await supabase
-        .from("orders")
-        .select("id, total_price, discount")
-        .eq("store_id", storeId)
-        .eq("table_number", tableNum)
-        .neq("status", "concluido") 
-        .neq("status", "cancelado");
-
-    if (!orders || orders.length === 0) return { success: false, error: "Mesa sem pedidos ativos." };
-
-    // Calcula o subtotal real (soma dos totais atuais + descontos já aplicados anteriormente, para saber o valor bruto)
-    const currentTotal = orders.reduce((acc, o) => acc + o.total_price, 0);
-    const currentDiscount = orders.reduce((acc, o) => acc + (o.discount || 0), 0);
-    const grossTotal = currentTotal + currentDiscount;
-
-    if (grossTotal < coupon.min_order_value) {
-        return { success: false, error: `Valor mínimo para este cupom: R$ ${coupon.min_order_value.toFixed(2)}` };
-    }
-
-    // 3. Calcular Desconto
-    let discountAmount = 0;
-    if (coupon.discount_type === 'percent') {
-        discountAmount = (grossTotal * coupon.discount_value) / 100;
-    } else {
-        discountAmount = coupon.discount_value;
-    }
-
-    // Trava para não descontar mais que o total
-    if (discountAmount > grossTotal) discountAmount = grossTotal;
-
-    // 4. Aplicar Desconto no Pedido Principal (O último/mais recente)
-    // Precisamos "limpar" descontos anteriores de outros pedidos da mesa para não duplicar, 
-    // ou concentrar o desconto em um único pedido. Vamos concentrar no último.
-    
-    const mainOrder = orders[orders.length - 1]; // Pega o último pedido
-    const otherOrders = orders.slice(0, -1);
-
-    // Zera descontos dos outros pedidos (para evitar acúmulo de cupons diferentes bugando a conta)
-    if (otherOrders.length > 0) {
-        await supabase.from("orders")
-            .update({ discount: 0, coupon_code: null }) // Remove cupom antigo
-            .in("id", otherOrders.map(o => o.id));
-        
-        // Precisamos recalcular o total desses pedidos (voltar ao original)
-        // Isso é complexo sem saber o valor original.
-        // Simplificação Segura: Aplicamos o cupom APENAS se ele for válido sobre o total, 
-        // mas registramos tudo no mainOrder.
-    }
-
-    // Atualiza o pedido principal com o desconto TOTAL da mesa
-    // O total_price deste pedido será: (Total Bruto deste pedido + Descontos antigos deste pedido) - (Desconto Novo Total - Descontos removidos dos outros)
-    // Vamos simplificar: O desconto é visualizado no total da mesa. Vamos aplicar o desconto no pedido mais recente.
-    
-    // Recupera valor original do mainOrder
-    const mainOrderOriginalPrice = mainOrder.total_price + (mainOrder.discount || 0);
-    const newMainOrderPrice = mainOrderOriginalPrice - discountAmount;
-
-    // Atualiza BD
-    const { error } = await supabase
-        .from("orders")
-        .update({ 
-            discount: discountAmount,
-            coupon_code: code,
-            total_price: newMainOrderPrice
-        })
-        .eq("id", mainOrder.id);
-    
-    if (error) return { success: false, error: "Erro ao aplicar desconto." };
-
-    // Incrementa uso do cupom (opcional, mas recomendado)
-    await supabase.rpc('increment_coupon_usage', { coupon_id: coupon.id });
-
-    revalidatePath("/");
-    return { success: true, discount: discountAmount };
+    const res = await calculateDiscount(supabase, storeId, currentAmount, code);
+    if(res.error) return { valid: false, message: res.error };
+    return { valid: true, discount: res.discount, finalPrice: currentAmount - res.discount };
 }
 
 // --- 6. FECHAR MESA ---
@@ -318,15 +289,9 @@ export async function closeTableAction(tableNum: string, storeId: string) {
   if (!orders || orders.length === 0) return { success: true };
   const ids = orders.map(o => o.id);
 
-  await supabase
-      .from("orders")
-      .update({ 
-          status: "concluido", 
-          payment_method: "card_machine", 
-          last_status_change: new Date().toISOString() 
-      })
+  await supabase.from("orders")
+      .update({ status: "concluido", payment_method: "card_machine", last_status_change: new Date().toISOString() })
       .in("id", ids);
-      
   await supabase.from("order_items").update({ status: 'concluido' }).in("order_id", ids);
 
   revalidatePath("/");
@@ -336,11 +301,7 @@ export async function closeTableAction(tableNum: string, storeId: string) {
 // --- 7. SERVIR ---
 export async function serveReadyOrdersAction(orderIds: string[]) {
     const supabase = await createClient();
-    await supabase
-        .from("orders")
-        .update({ status: "entregue", last_status_change: new Date().toISOString() })
-        .in("id", orderIds);
-
+    await supabase.from("orders").update({ status: "entregue", last_status_change: new Date().toISOString() }).in("id", orderIds);
     revalidatePath("/");
     return { success: true };
 }
