@@ -54,11 +54,11 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
        (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
-    // Verifica se tem itens prontos (Enviado pela cozinha)
+    // Verifica se tem itens prontos
     const readyOrders = tableOrders.filter(o => o.status === 'enviado');
     const hasReadyItems = readyOrders.length > 0;
     
-    // Verifica se tem itens sendo feitos (Aceito ou Preparando)
+    // Verifica se tem itens sendo feitos
     const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
     
     let status: TableStatus = 'free';
@@ -73,7 +73,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     return {
       id: tableNum,
       status: status,
-      orderId: tableOrders[0]?.id, // Pega o ID do primeiro pedido ativo
+      orderId: tableOrders[0]?.id, 
       customerName: tableOrders[0]?.customer_name,
       total: total,
       items: allItems,
@@ -121,24 +121,32 @@ export async function createTableOrderAction(
     items: any[], 
     clientName?: string, 
     clientPhone?: string,
-    coupon?: { id: string, code: string, value: number, type: 'percent' | 'fixed' } | null
+    coupon?: { id: string, code: string, value: number, type: 'percent' | 'fixed', min_order_value?: number } | null
 ) {
   const supabase = await createClient();
   
   try {
-      // Calcula total bruto dos itens
       const itemsTotal = items.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
       
-      // Calcula desconto se houver cupom
       let discount = 0;
       let couponId = null;
 
+      // SEGURANÇA: Validar se o total atinge o mínimo do cupom
       if (coupon) {
-          couponId = coupon.id;
-          if (coupon.type === 'percent') {
-              discount = (itemsTotal * coupon.value) / 100;
+          const minOrder = coupon.min_order_value || 0;
+          if (itemsTotal >= minOrder) {
+              couponId = coupon.id;
+              if (coupon.type === 'percent') {
+                  discount = (itemsTotal * coupon.value) / 100;
+              } else {
+                  discount = coupon.value;
+              }
           } else {
-              discount = coupon.value;
+             // Se não atingir o mínimo, ignoramos o cupom silenciosamente ou lançamos erro.
+             // Como o front já deve bloquear, aqui é apenas uma trava final.
+             // Se chegou aqui com valor baixo, não aplicamos o desconto.
+             couponId = null;
+             discount = 0;
           }
       }
 
@@ -147,7 +155,6 @@ export async function createTableOrderAction(
       const finalName = clientName && clientName.trim() !== "" ? clientName : `Mesa ${tableNum}`;
       const finalPhone = clientPhone && clientPhone.trim() !== "" ? clientPhone : "00000000000";
 
-      // CRIA COM STATUS 'aceito' PARA A COZINHA VER
       const { data: order, error: orderError } = await supabase.from("orders").insert({
         store_id: storeId,
         customer_name: finalName,
@@ -157,15 +164,14 @@ export async function createTableOrderAction(
         table_number: tableNum,
         payment_method: "card_machine",
         status: "aceito", 
-        total_price: finalTotal, // Salva o total já com desconto
-        discount: discount,      // Salva o valor do desconto
-        coupon_id: couponId,     // Salva o ID do cupom
+        total_price: finalTotal, 
+        discount: discount,      
+        coupon_id: couponId,     
         last_status_change: new Date().toISOString()
       }).select().single();
 
       if (orderError) return { error: `Erro SQL: ${orderError.message}` };
 
-      // Se usou cupom, incrementa o uso
       if (couponId) {
           await supabase.rpc('increment_coupon_usage', { coupon_id: couponId });
       }
@@ -213,9 +219,6 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
       const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
       if (itemsError) return { error: "Erro ao adicionar itens." };
 
-      // NOTA: Se já havia cupom, o desconto era fixo ou percentual sobre o total anterior.
-      // Aqui, estamos apenas somando o novo valor bruto. Para manter simples, não recalculamos o cupom antigo
-      // sobre os novos itens automaticamente nesta versão, para evitar conflitos de validação.
       const newTotal = currentTableTotal + addedTotal;
       
       const { error: updateError } = await supabase.from("orders")

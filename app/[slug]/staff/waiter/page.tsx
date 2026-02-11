@@ -168,7 +168,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
 
-  // Verifica validade do cupom em tempo real (baseado no total atual)
+  // LÓGICA DO ALERTA DE VALOR MÍNIMO
   const couponError = useMemo(() => {
     if (!appliedCoupon) return null;
     if (cartTotal < appliedCoupon.min_order_value) {
@@ -179,7 +179,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   }, [cartTotal, appliedCoupon]);
   
   const discountValue = useMemo(() => {
-    if (!appliedCoupon || couponError) return 0 // Se tiver erro, desconto é 0
+    if (!appliedCoupon || couponError) return 0
     if (appliedCoupon.type === 'percent') {
         return (cartTotal * appliedCoupon.value) / 100
     }
@@ -198,7 +198,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
           toast({ title: "Cupom Inválido", description: res.error, variant: "destructive" })
           setAppliedCoupon(null)
       } else if (res?.success && res.coupon) {
-          toast({ title: "Cupom Aplicado!", className: "bg-green-600 text-white" })
+          toast({ title: "Cupom Adicionado", className: "bg-blue-600 text-white" })
           setAppliedCoupon(res.coupon as any)
       }
   }
@@ -450,7 +450,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             {cart.length > 0 && (
                 <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t p-3 shadow-lg z-20 space-y-3">
                     
-                    {/* INPUT DE CUPOM */}
+                    {/* INPUT DE CUPOM (SOMENTE NOVA MESA) */}
                     {selectedTable?.status === 'free' && (
                         <div className="flex flex-col gap-2">
                             <div className="flex gap-2 items-center">
@@ -475,9 +475,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                 )}
                             </div>
                             
-                            {/* ALERTA DE VALOR MÍNIMO DO CUPOM */}
+                            {/* ALERTA VISUAL DE VALOR MÍNIMO */}
                             {couponError && (
-                                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-xs flex items-center gap-2 animate-in slide-in-from-bottom-2">
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-3 py-2 rounded-md text-xs flex items-center gap-2 animate-in slide-in-from-bottom-2">
                                     <AlertCircle className="w-4 h-4 shrink-0" />
                                     <span>{couponError}</span>
                                 </div>

@@ -135,11 +135,9 @@ export async function validateCouponAction(code: string, storeId: string, cartTo
     return { error: "Este cupom atingiu o limite de usos." };
   }
 
-  // Verifica valor mínimo do pedido para o cupom
-  if (cartTotal < coupon.min_order_value) {
-    const formattedMin = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(coupon.min_order_value);
-    return { error: `O valor mínimo para aplicação deste cupom é ${formattedMin}` };
-  }
+  // --- MUDANÇA: Não retornamos erro aqui se o valor for baixo.
+  // Apenas retornamos os dados para o front avisar o usuário.
+  // A validação restritiva deve ocorrer no momento de FECHAR o pedido.
 
   return { 
     success: true, 
@@ -148,7 +146,7 @@ export async function validateCouponAction(code: string, storeId: string, cartTo
       code: coupon.code,
       type: coupon.discount_type,
       value: coupon.discount_value,
-      min_order_value: coupon.min_order_value // <--- ADICIONADO AQUI
+      min_order_value: coupon.min_order_value
     }
   };
 }
@@ -156,7 +154,6 @@ export async function validateCouponAction(code: string, storeId: string, cartTo
 export async function incrementCouponUsageAction(couponId: string) {
   const supabase = await createClient();
   
-  // Tenta RPC primeiro, fallback para update direto
   const { error } = await supabase.rpc('increment_coupon_usage', { coupon_id: couponId });
   
   if (error) {
