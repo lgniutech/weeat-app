@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-export type TableStatus = 'free' | 'occupied' | 'payment';
+export type TableStatus = 'free' | 'occupied';
 
 export type TableData = {
   id: string;
@@ -30,8 +30,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     
   const totalTables = store?.total_tables || 10; 
 
-  // Garçom vê tudo que não está 'concluido'.
-  // Se o caixa fechar (concluido), some daqui.
+  // Busca tudo que NÃO foi pago/concluido
   const { data: activeOrders } = await supabase
     .from("orders")
     .select(`
@@ -45,17 +44,19 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
 
   const tables = Array.from({ length: totalTables }, (_, i) => {
     const tableNum = (i + 1).toString();
+    
+    // Filtra pedidos desta mesa
     const tableOrders = activeOrders?.filter(o => 
        o.table_number === tableNum || (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
-    const readyOrders = tableOrders.filter(o => o.status === 'enviado');
-    const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
+    const readyOrders = tableOrders.filter(o => o.status === 'enviado'); // Prontos da cozinha
+    const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status)); // Em produção
     
+    // Status Simples: Livre ou Ocupada
     let status: TableStatus = 'free';
     if (tableOrders.length > 0) {
-      if (tableOrders.some(o => o.status === 'pagando')) status = 'payment';
-      else status = 'occupied';
+      status = 'occupied';
     }
 
     const total = tableOrders.reduce((acc, o) => acc + (o.total_price || 0), 0);
@@ -78,7 +79,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   return tables;
 }
 
-// --- 2. MENU ---
+// --- 2. MENU (Mantido Igual) ---
 export async function getWaiterMenuAction(storeId: string) {
   const supabase = await createClient();
   const { data: categories } = await supabase
@@ -105,7 +106,7 @@ export async function getWaiterMenuAction(storeId: string) {
   })).filter(cat => cat.products.length > 0);
 }
 
-// --- 3. CRIAR PEDIDO ---
+// --- 3. CRIAR PEDIDO (Mantido Igual) ---
 export async function createTableOrderAction(
     storeId: string, 
     tableNum: string, 
@@ -126,7 +127,7 @@ export async function createTableOrderAction(
         delivery_type: "mesa",
         address: `Mesa ${tableNum}`,
         table_number: tableNum,
-        payment_method: "card_machine", // Padrão inicial
+        payment_method: "card_machine",
         status: "aceito", 
         total_price: total,
         last_status_change: new Date().toISOString()
@@ -156,7 +157,7 @@ export async function createTableOrderAction(
   } catch (err: any) { return { error: "Erro interno." }; }
 }
 
-// --- 4. ADICIONAR ITENS ---
+// --- 4. ADICIONAR ITENS (Mantido Igual) ---
 export async function addItemsToTableAction(orderId: string, newItems: any[], currentTableTotal: number) {
   const supabase = await createClient();
   try {
@@ -189,32 +190,9 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
   } catch (err) { return { error: "Erro ao processar." }; }
 }
 
-// --- 5. AÇÕES DE ENCERRAMENTO (DUPLA VIA) ---
-
-// VIA 1: Garçom apenas avisa (Status -> 'pagando')
-export async function requestBillAction(tableNum: string, storeId: string) {
-  const supabase = await createClient();
-  const { data: orders } = await supabase.from("orders")
-      .select("id")
-      .eq("store_id", storeId)
-      .eq("table_number", tableNum)
-      .neq("status", "concluido") 
-      .neq("status", "cancelado");
-      
-  if (!orders || orders.length === 0) return { success: true };
-  const ids = orders.map(o => o.id);
-
-  await supabase
-      .from("orders")
-      .update({ status: "pagando", last_status_change: new Date().toISOString() })
-      .in("id", ids);
-
-  revalidatePath("/");
-  return { success: true };
-}
-
-// VIA 2: Garçom recebe na mesa (Status -> 'concluido')
-export async function closeTableDirectlyAction(tableNum: string, storeId: string) {
+// --- 5. FECHAR MESA (GARÇOM) ---
+// Função única: Recebeu -> Fechou -> Sumiu
+export async function closeTableAction(tableNum: string, storeId: string) {
   const supabase = await createClient();
   const { data: orders } = await supabase.from("orders")
       .select("id")
@@ -226,16 +204,17 @@ export async function closeTableDirectlyAction(tableNum: string, storeId: string
   if (!orders || orders.length === 0) return { success: true };
   const ids = orders.map(o => o.id);
 
-  // Fecha direto. Assume 'card_machine' pois garçom geralmente usa maquininha.
+  // Define status 'concluido'. Isso limpa a mesa para o Garçom e para o Caixa.
   await supabase
       .from("orders")
       .update({ 
           status: "concluido", 
-          payment_method: "card_machine",
+          payment_method: "card_machine", // Assume maquininha se foi o garçom
           last_status_change: new Date().toISOString() 
       })
       .in("id", ids);
       
+  // Limpa itens do KDS
   await supabase.from("order_items").update({ status: 'concluido' }).in("order_id", ids);
 
   revalidatePath("/");

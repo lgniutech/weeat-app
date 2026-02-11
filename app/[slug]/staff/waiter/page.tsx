@@ -9,8 +9,7 @@ import {
     getWaiterMenuAction,
     createTableOrderAction, 
     addItemsToTableAction, 
-    requestBillAction,
-    closeTableDirectlyAction,
+    closeTableAction,
     serveReadyOrdersAction 
 } from "@/app/actions/waiter"
 import { Button } from "@/components/ui/button"
@@ -99,7 +98,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         if (selectedTable && isManagementOpen) {
             const updated = data.find(t => t.id === selectedTable.id)
             if (updated) setSelectedTable(updated)
-            else setSelectedTable(null) // Se fechou, fecha modal
+            else setSelectedTable(null) // Fecha modal se mesa foi fechada (ex: pelo caixa)
         }
     } catch (error) { console.error(error) }
   }
@@ -180,28 +179,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     })
   }
 
-  // --- VIA 1: Solicitar Conta (Avisa Caixa) ---
-  const handleRequestBill = async () => {
-    if(!confirm("Solicitar fechamento de conta ao caixa?")) return;
+  // --- FECHAR MESA (ÚNICO) ---
+  const handleCloseTable = async () => {
+    if(!confirm("Encerrar mesa? Certifique-se que o pagamento foi recebido.")) return;
     startTransition(async () => {
-        const res = await requestBillAction(selectedTable.id, storeId!)
-        if (res?.success) {
-            toast({ title: "Conta Solicitada!", description: "Mesa marcada como 'Pagando'.", className: "bg-blue-600 text-white" })
-            fetchTables()
-        } else {
-            toast({ title: "Erro", description: res?.error, variant: "destructive" })
-        }
-    })
-  }
-
-  // --- VIA 2: Fechar Direto (Garçom Recebeu) ---
-  const handleCloseDirectly = async () => {
-    if(!confirm("Confirmar recebimento do pagamento? Isso encerrará a mesa.")) return;
-    startTransition(async () => {
-        const res = await closeTableDirectlyAction(selectedTable.id, storeId!)
+        const res = await closeTableAction(selectedTable.id, storeId!)
         if (res?.success) {
             setIsManagementOpen(false)
-            toast({ title: "Pagamento Recebido!", description: "Mesa liberada com sucesso.", className: "bg-green-600 text-white" })
+            toast({ title: "Mesa Encerrada!", className: "bg-green-600 text-white" })
             fetchTables()
         } else {
             toast({ title: "Erro", description: res?.error, variant: "destructive" })
@@ -259,11 +244,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         {tables.length === 0 && <p className="col-span-full text-center text-muted-foreground">Carregando mesas...</p>}
         {tables.map(table => {
             const isReady = table.hasReadyItems;
-            const isPaying = table.status === 'payment';
             
             let statusLabel = "Servido";
             if(table.isPreparing) statusLabel = "Preparando...";
-            if(isPaying) statusLabel = "Pagando...";
 
             return (
               <div 
@@ -272,13 +255,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 className={cn(
                   "h-32 rounded-xl flex flex-col items-center justify-center cursor-pointer border-2 shadow-sm relative overflow-hidden transition-all active:scale-95",
                   table.status === 'free' && "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400",
-                  table.status === 'occupied' && !isReady && !isPaying && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
-                  isPaying && "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 text-yellow-700 dark:text-yellow-400",
+                  table.status === 'occupied' && !isReady && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
                   isReady && "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse"
                 )}
               >
                 {isReady && (<div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>)}
-                {isPaying && (<div className="absolute top-2 right-2"><Receipt className="w-5 h-5" /></div>)}
 
                 <span className="text-3xl font-bold">{table.id}</span>
                 <div className="mt-2 text-center">
@@ -315,7 +296,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                         )}
                     </span>
                     <Badge variant={selectedTable?.status === 'free' ? "outline" : "default"}>
-                        {selectedTable?.status === 'free' ? "Livre" : selectedTable?.status === 'payment' ? "Pagando" : "Ocupada"}
+                        {selectedTable?.status === 'free' ? "Livre" : "Ocupada"}
                     </Badge>
                 </DialogTitle>
             </DialogHeader>
@@ -375,27 +356,16 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                             ) : <p className="text-xs italic text-muted-foreground">Vazio.</p>}
                          </div>
 
-                         {/* GRID DE BOTÕES: ADICIONAR, SOLICITAR CONTA, ENCERRAR */}
                          <div className="grid grid-cols-2 gap-2 pt-2">
-                             <Button variant="outline" className="h-12 col-span-2" onClick={openMenu} disabled={selectedTable?.status === 'payment'}><Plus className="mr-2 h-4 w-4"/> Adicionar Mais Itens</Button>
+                             <Button variant="outline" className="h-12 col-span-2" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar Mais Itens</Button>
                              
-                             {/* Botão de Solicitar Conta (Para o Caixa) */}
+                             {/* Botão de Encerrar/Receber ÚNICO */}
                              <Button 
-                                variant={selectedTable?.status === 'payment' ? "ghost" : "secondary"}
-                                className={cn("h-12 font-bold shadow-sm", selectedTable?.status === 'payment' ? "bg-yellow-50 text-yellow-600 border border-yellow-200" : "bg-blue-50 text-blue-700 hover:bg-blue-100")}
-                                onClick={handleRequestBill} 
-                                disabled={isPending || selectedTable?.status === 'payment'} 
-                             >
-                                <Receipt className="mr-2 h-4 w-4"/> {selectedTable?.status === 'payment' ? "Aguardando..." : "Pedir Conta"}
-                             </Button>
-
-                             {/* Botão de Receber (Para o Garçom) */}
-                             <Button 
-                                className="h-12 font-bold shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
-                                onClick={handleCloseDirectly} 
+                                className="h-12 col-span-2 font-bold shadow-sm bg-red-500 hover:bg-red-600 text-white"
+                                onClick={handleCloseTable} 
                                 disabled={isPending} 
                              >
-                                <CreditCard className="mr-2 h-4 w-4"/> Receber Agora
+                                <CreditCard className="mr-2 h-4 w-4"/> Encerrar / Receber
                              </Button>
                          </div>
                     </div>
