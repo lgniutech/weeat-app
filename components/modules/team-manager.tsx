@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Trash2, ChefHat, Bike, User, ShieldCheck, Copy, ExternalLink, Check } from "lucide-react";
+import { Users, Plus, Trash2, ChefHat, Bike, User, ShieldCheck, Copy, ExternalLink, Check, DollarSign } from "lucide-react";
 import Link from "next/link";
 
 export function TeamManager({ store }: { store: any }) {
@@ -90,6 +90,7 @@ export function TeamManager({ store }: { store: any }) {
       case 'kitchen': return <ChefHat className="w-4 h-4 text-orange-500" />;
       case 'courier': return <Bike className="w-4 h-4 text-blue-500" />;
       case 'waiter': return <User className="w-4 h-4 text-emerald-500" />;
+      case 'cashier': return <DollarSign className="w-4 h-4 text-purple-500" />;
       default: return <Users className="w-4 h-4" />;
     }
   };
@@ -99,6 +100,7 @@ export function TeamManager({ store }: { store: any }) {
       case 'kitchen': return 'Cozinha';
       case 'courier': return 'Entregador';
       case 'waiter': return 'Garçom';
+      case 'cashier': return 'Caixa';
       default: return role;
     }
   };
@@ -165,7 +167,6 @@ export function TeamManager({ store }: { store: any }) {
             <CardContent>
               <div className="bg-slate-50 dark:bg-zinc-900/50 p-3 rounded-md flex items-center justify-between border border-dashed border-slate-200 dark:border-zinc-800">
                 <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">PIN de Acesso</span>
-                {/* REMOVIDO font-mono, agora usa a fonte do sistema (Gate) */}
                 <span className="text-lg font-bold tracking-[0.2em]">{member.pin}</span>
               </div>
             </CardContent>
@@ -178,7 +179,7 @@ export function TeamManager({ store }: { store: any }) {
                 <Users className="w-8 h-8 text-slate-400" />
              </div>
              <h3 className="font-semibold text-lg">Nenhum membro na equipe</h3>
-             <p className="text-muted-foreground text-sm mb-4">Adicione cozinheiros, garçons ou entregadores.</p>
+             <p className="text-muted-foreground text-sm mb-4">Adicione cozinheiros, garçons ou caixa.</p>
              <Button variant="outline" onClick={() => setIsOpen(true)}>Adicionar Primeiro</Button>
           </div>
         )}
@@ -213,6 +214,7 @@ export function TeamManager({ store }: { store: any }) {
                 <SelectContent>
                   <SelectItem value="kitchen">Cozinha (KDS)</SelectItem>
                   <SelectItem value="waiter">Garçom (Mesas)</SelectItem>
+                  <SelectItem value="cashier">Caixa (Frente de Loja)</SelectItem>
                   <SelectItem value="courier">Entregador (Delivery)</SelectItem>
                 </SelectContent>
               </Select>
@@ -220,7 +222,6 @@ export function TeamManager({ store }: { store: any }) {
 
             <div className="space-y-2">
               <Label>PIN de Acesso (4 Números)</Label>
-              {/* REMOVIDO font-mono, mantendo visual consistente */}
               <Input 
                 placeholder="Ex: 1234" 
                 maxLength={4}
