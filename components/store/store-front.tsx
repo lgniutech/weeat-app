@@ -69,11 +69,12 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [couponCode, setCouponCode] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null)
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
+  const [couponError, setCouponError] = useState<string | null>(null) // Novo estado para erro inline
 
   const { toast } = useToast()
   const { setTheme } = useTheme()
 
-  // --- VALORES DA LOJA (Corrigido acesso ao settings) ---
+  // --- VALORES DA LOJA ---
   const minOrderValue = Number(store.settings?.minimum_order) || 0;
 
   useEffect(() => {
@@ -115,7 +116,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const total = Math.max(0, subtotal - discountAmount + deliveryFee);
 
   // --- LÓGICA DO PEDIDO MÍNIMO ---
-  // Verifica se falta valor para atingir o mínimo (apenas se for entrega)
   const remainingForMin = minOrderValue - subtotal;
   const isBelowMin = deliveryMethod === 'entrega' && remainingForMin > 0;
 
@@ -144,11 +144,10 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const handleCheckout = async () => {
     if (cart.length === 0) return
     
-    // --- TRAVA PEDIDO MÍNIMO ---
     if (isBelowMin) {
         toast({ 
             title: "Pedido Mínimo não atingido", 
-            description: `Faltam ${formatCurrency(remainingForMin)} para finalizar o pedido.`, 
+            description: `Faltam ${formatCurrency(remainingForMin)} para finalizar.`, 
             variant: "destructive" 
         });
         return;
@@ -205,21 +204,30 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const removeCoupon = () => {
     setAppliedCoupon(null)
     setCouponCode("")
+    setCouponError(null)
   }
 
   const handleApplyCoupon = async () => {
     if (!couponCode) return;
     setIsValidatingCoupon(true);
-    // Passamos o subtotal (valor dos produtos) para validar o mínimo do cupom
-    const result = await validateCouponAction(couponCode, store.id, subtotal);
-    if (result.error) {
-      toast({ title: "Não foi possível aplicar", description: result.error, variant: "destructive" });
-      setAppliedCoupon(null);
-    } else {
-      setAppliedCoupon(result.coupon);
-      toast({ title: "Cupom Aplicado!", description: "Desconto adicionado ao pedido." });
+    setCouponError(null); // Limpa erro anterior
+    
+    try {
+        const result = await validateCouponAction(couponCode, store.id, subtotal);
+        if (result.error) {
+            setCouponError(result.error); // Define o erro para aparecer inline
+            setAppliedCoupon(null);
+        } else {
+            setAppliedCoupon(result.coupon);
+            setCouponError(null);
+            // Opcional: manter o toast de sucesso se ele estiver aparecendo
+            toast({ title: "Cupom Aplicado!", description: "Desconto adicionado." });
+        }
+    } catch (e) {
+        setCouponError("Erro ao validar cupom. Tente novamente.");
+    } finally {
+        setIsValidatingCoupon(false);
     }
-    setIsValidatingCoupon(false);
   }
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
@@ -246,7 +254,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                     <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-2">
                         <div className="flex items-center gap-1"><Clock className="w-3 h-3" /> <span>Aberto</span></div>
                         
-                        {/* INFORMAÇÃO DO PEDIDO MÍNIMO NO HEADER */}
                         {minOrderValue > 0 && !tableNumber && (
                             <>
                                 <span className="text-slate-300">|</span>
@@ -261,7 +268,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
              </div>
 
              <div className="flex items-center gap-2">
-                 {/* BOTÃO DA CONTA */}
                  {tableNumber && (
                      <Button variant="ghost" size="icon" onClick={handleOpenBill} title="Minha Conta">
                          <Receipt className="w-5 h-5 text-slate-600 dark:text-slate-300" />
@@ -279,7 +285,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
              </div>
           </div>
 
-          {/* BUSCA */}
           <div className="mt-4 space-y-3">
              <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -340,10 +345,10 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         </DialogContent>
       </Dialog>
 
-      {/* CHECKOUT */}
+      {/* CHECKOUT - Corrigido Scroll (h-[100dvh]) e Inline Error */}
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950">
-            <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm">
+        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-[100dvh]" side="right">
+            <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm flex-none">
                 <SheetTitle>Sua Sacola</SheetTitle>
                 <SheetDescription className="text-xs text-muted-foreground">Confira seus itens.</SheetDescription>
             </SheetHeader>
@@ -356,9 +361,9 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         <Button variant="link" onClick={() => setIsCartOpen(false)}>Ver Cardápio</Button>
                     </div>
                 ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-6 pb-6">
                         
-                        {/* ALERTA DE PEDIDO MÍNIMO (Só aparece na entrega) */}
+                        {/* ALERTA DE PEDIDO MÍNIMO */}
                         {isBelowMin && (
                             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                                 <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
@@ -409,9 +414,25 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                         <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-700 hover:bg-emerald-100" onClick={removeCoupon}><X className="w-4 h-4" /></Button>
                                     </div>
                                 ) : (
-                                    <div className="flex gap-2">
-                                        <Input placeholder="Código" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} className="uppercase font-bold" />
-                                        <Button variant="secondary" onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponCode}>{isValidatingCoupon ? "..." : "Aplicar"}</Button>
+                                    <div className="space-y-2">
+                                        <div className="flex gap-2">
+                                            <Input 
+                                                placeholder="Código" 
+                                                value={couponCode} 
+                                                onChange={e => {
+                                                    setCouponCode(e.target.value.toUpperCase())
+                                                    setCouponError(null)
+                                                }} 
+                                                className="uppercase font-bold" 
+                                            />
+                                            <Button variant="secondary" onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponCode}>{isValidatingCoupon ? "..." : "Aplicar"}</Button>
+                                        </div>
+                                        {/* MENSAGEM DE ERRO DO CUPOM INLINE */}
+                                        {couponError && (
+                                            <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 animate-in slide-in-from-top-1">
+                                                <AlertCircle className="w-3 h-3" /> {couponError}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -464,7 +485,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
             </ScrollArea>
 
             {cart.length > 0 && (
-                <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex-col gap-4 sm:flex-col sm:space-x-0">
+                <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex-col gap-4 sm:flex-col sm:space-x-0 flex-none">
                     <div className="space-y-1.5 w-full text-sm">
                         <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                         {discountAmount > 0 && <div className="flex justify-between text-emerald-600 font-medium"><span>Desconto</span><span>- {formatCurrency(discountAmount)}</span></div>}
@@ -507,8 +528,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
       {/* MODAL CONTA DA MESA */}
       <Sheet open={isBillOpen} onOpenChange={setIsBillOpen}>
-        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950">
-            <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm">
+        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-[100dvh]" side="right">
+            <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm flex-none">
                 <SheetTitle>Conta da Mesa {tableNumber}</SheetTitle>
                 <SheetDescription>Tudo que vocês já pediram.</SheetDescription>
             </SheetHeader>
@@ -541,7 +562,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                     </div>
                 )}
             </ScrollArea>
-            <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800">
+            <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex-none">
                 <div className="flex justify-between w-full font-bold text-lg">
                     <span>Total da Mesa</span>
                     <span>{formatCurrency(tableBill.reduce((acc, o) => acc + (o.total_price || 0), 0))}</span>
