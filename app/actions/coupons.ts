@@ -135,7 +135,7 @@ export async function validateCouponAction(code: string, storeId: string, cartTo
     return { error: "Este cupom atingiu o limite de usos." };
   }
 
-  // Verifica valor mínimo do pedido (Ajustado a mensagem)
+  // Verifica valor mínimo do pedido para o cupom
   if (cartTotal < coupon.min_order_value) {
     const formattedMin = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(coupon.min_order_value);
     return { error: `O valor mínimo para aplicação deste cupom é ${formattedMin}` };

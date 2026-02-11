@@ -73,8 +73,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const { toast } = useToast()
   const { setTheme } = useTheme()
 
-  // --- VALORES DA LOJA ---
-  const minOrderValue = Number(store.min_order_value) || 0;
+  // --- VALORES DA LOJA (Corrigido acesso ao settings) ---
+  const minOrderValue = Number(store.settings?.minimum_order) || 0;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -111,7 +111,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     return appliedCoupon.type === 'percent' ? (subtotal * appliedCoupon.value) / 100 : appliedCoupon.value;
   }, [subtotal, appliedCoupon]);
 
-  const deliveryFee = deliveryMethod === 'entrega' ? (Number(store.delivery_fee) || 5.00) : 0 
+  const deliveryFee = deliveryMethod === 'entrega' ? (Number(store.settings?.delivery_fee) || 5.00) : 0 
   const total = Math.max(0, subtotal - discountAmount + deliveryFee);
 
   // --- LÓGICA DO PEDIDO MÍNIMO ---
@@ -148,7 +148,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     if (isBelowMin) {
         toast({ 
             title: "Pedido Mínimo não atingido", 
-            description: `Faltam ${formatCurrency(remainingForMin)} para finalizar.`, 
+            description: `Faltam ${formatCurrency(remainingForMin)} para finalizar o pedido.`, 
             variant: "destructive" 
         });
         return;
@@ -202,16 +202,22 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     }
   }
 
+  const removeCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponCode("")
+  }
+
   const handleApplyCoupon = async () => {
     if (!couponCode) return;
     setIsValidatingCoupon(true);
+    // Passamos o subtotal (valor dos produtos) para validar o mínimo do cupom
     const result = await validateCouponAction(couponCode, store.id, subtotal);
     if (result.error) {
-      toast({ title: "Atenção", description: result.error, variant: "destructive" });
+      toast({ title: "Não foi possível aplicar", description: result.error, variant: "destructive" });
       setAppliedCoupon(null);
     } else {
       setAppliedCoupon(result.coupon);
-      toast({ title: "Cupom Aplicado!", description: "Desconto aplicado." });
+      toast({ title: "Cupom Aplicado!", description: "Desconto adicionado ao pedido." });
     }
     setIsValidatingCoupon(false);
   }
@@ -352,7 +358,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 ) : (
                     <div className="space-y-6">
                         
-                        {/* ALERTA DE PEDIDO MÍNIMO */}
+                        {/* ALERTA DE PEDIDO MÍNIMO (Só aparece na entrega) */}
                         {isBelowMin && (
                             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                                 <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
