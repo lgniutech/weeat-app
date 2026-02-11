@@ -69,7 +69,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [couponCode, setCouponCode] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null)
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
-  const [couponError, setCouponError] = useState<string | null>(null) // Novo estado para erro inline
+  const [couponError, setCouponError] = useState<string | null>(null)
 
   const { toast } = useToast()
   const { setTheme } = useTheme()
@@ -210,17 +210,16 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const handleApplyCoupon = async () => {
     if (!couponCode) return;
     setIsValidatingCoupon(true);
-    setCouponError(null); // Limpa erro anterior
+    setCouponError(null);
     
     try {
         const result = await validateCouponAction(couponCode, store.id, subtotal);
         if (result.error) {
-            setCouponError(result.error); // Define o erro para aparecer inline
+            setCouponError(result.error);
             setAppliedCoupon(null);
         } else {
             setAppliedCoupon(result.coupon);
             setCouponError(null);
-            // Opcional: manter o toast de sucesso se ele estiver aparecendo
             toast({ title: "Cupom Aplicado!", description: "Desconto adicionado." });
         }
     } catch (e) {
@@ -345,15 +344,16 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         </DialogContent>
       </Dialog>
 
-      {/* CHECKOUT - Corrigido Scroll (h-[100dvh]) e Inline Error */}
+      {/* CHECKOUT - FIXED SCROLLING */}
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-[100dvh]" side="right">
+        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-full max-h-[100dvh]" side="right">
             <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm flex-none">
                 <SheetTitle>Sua Sacola</SheetTitle>
                 <SheetDescription className="text-xs text-muted-foreground">Confira seus itens.</SheetDescription>
             </SheetHeader>
 
-            <ScrollArea className="flex-1 px-6 py-4">
+            {/* Substituído ScrollArea por div nativa para garantir o scroll */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
                 {cart.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4 py-20">
                         <ShoppingBag className="w-12 h-12 opacity-20" />
@@ -482,7 +482,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         </div>
                     </div>
                 )}
-            </ScrollArea>
+            </div>
 
             {cart.length > 0 && (
                 <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex-col gap-4 sm:flex-col sm:space-x-0 flex-none">
@@ -528,12 +528,12 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
       {/* MODAL CONTA DA MESA */}
       <Sheet open={isBillOpen} onOpenChange={setIsBillOpen}>
-        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-[100dvh]" side="right">
+        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-full max-h-[100dvh]" side="right">
             <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm flex-none">
                 <SheetTitle>Conta da Mesa {tableNumber}</SheetTitle>
                 <SheetDescription>Tudo que vocês já pediram.</SheetDescription>
             </SheetHeader>
-            <ScrollArea className="flex-1 px-6 py-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
                 {isLoadingBill ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground">Carregando...</div>
                 ) : tableBill.length === 0 ? (
@@ -561,7 +561,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         ))}
                     </div>
                 )}
-            </ScrollArea>
+            </div>
             <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex-none">
                 <div className="flex justify-between w-full font-bold text-lg">
                     <span>Total da Mesa</span>
