@@ -105,10 +105,15 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         if (selectedTable && isManagementOpen) {
             const updated = data.find(t => t.id === selectedTable.id)
             if (updated) setSelectedTable(updated)
+            else if (selectedTable.status === 'occupied' && !updated) {
+                 // Mesa foi liberada remotamente
+                 setIsManagementOpen(false)
+            }
         }
     } catch (error) { console.error(error) }
   }
 
+  // Polling a cada 3 segundos
   useEffect(() => {
     fetchTables()
     const interval = setInterval(fetchTables, 3000) 
@@ -168,7 +173,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
 
-  // LÓGICA DO ALERTA DE VALOR MÍNIMO
   const couponError = useMemo(() => {
     if (!appliedCoupon) return null;
     if (cartTotal < appliedCoupon.min_order_value) {
