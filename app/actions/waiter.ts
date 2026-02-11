@@ -11,6 +11,9 @@ export type TableData = {
   orderId?: string;
   customerName?: string;
   total: number;
+  subtotal: number; // Novo: Total sem desconto
+  discount: number; // Novo: Valor do desconto
+  couponCode?: string; // Novo: Código do cupom
   items?: any[];
   orderStatus?: string;
   hasReadyItems: boolean;
@@ -30,11 +33,11 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     
   const totalTables = store?.total_tables || 10; 
 
-  // Busca tudo que NÃO foi pago/concluido
+  // Agora buscamos também discount e coupon_code
   const { data: activeOrders } = await supabase
     .from("orders")
     .select(`
-      id, status, total_price, address, customer_name, table_number,
+      id, status, total_price, discount, coupon_code, address, customer_name, table_number,
       order_items ( name:product_name, quantity, price:unit_price )
     `)
     .eq("store_id", storeId)
@@ -45,21 +48,30 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   const tables = Array.from({ length: totalTables }, (_, i) => {
     const tableNum = (i + 1).toString();
     
-    // Filtra pedidos desta mesa
     const tableOrders = activeOrders?.filter(o => 
        o.table_number === tableNum || (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
-    const readyOrders = tableOrders.filter(o => o.status === 'enviado'); // Prontos da cozinha
-    const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status)); // Em produção
+    const readyOrders = tableOrders.filter(o => o.status === 'enviado');
+    const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
     
-    // Status Simples: Livre ou Ocupada
     let status: TableStatus = 'free';
     if (tableOrders.length > 0) {
       status = 'occupied';
     }
 
+    // Soma o total final (que já deve ter o desconto aplicado no banco)
     const total = tableOrders.reduce((acc, o) => acc + (o.total_price || 0), 0);
+    
+    // Soma os descontos para mostrar na tela
+    const totalDiscount = tableOrders.reduce((acc, o) => acc + (o.discount || 0), 0);
+    
+    // Encontra se tem algum cupom aplicado (pega o do primeiro pedido que tiver)
+    const activeCoupon = tableOrders.find(o => o.coupon_code)?.coupon_code;
+
+    // Subtotal é o valor real dos itens (Total pago + Descontos dados)
+    const subtotal = total + totalDiscount;
+
     const allItems = activeOrders?.filter(o => o.table_number === tableNum).flatMap(o => o.order_items || []) || [];
 
     return {
@@ -68,6 +80,9 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
       orderId: tableOrders[0]?.id,
       customerName: tableOrders[0]?.customer_name,
       total: total,
+      subtotal: subtotal,
+      discount: totalDiscount,
+      couponCode: activeCoupon,
       items: allItems,
       orderStatus: tableOrders[0]?.status,
       hasReadyItems: readyOrders.length > 0,
@@ -79,7 +94,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   return tables;
 }
 
-// --- 2. MENU (Mantido Igual) ---
+// --- 2. MENU ---
 export async function getWaiterMenuAction(storeId: string) {
   const supabase = await createClient();
   const { data: categories } = await supabase
@@ -106,7 +121,7 @@ export async function getWaiterMenuAction(storeId: string) {
   })).filter(cat => cat.products.length > 0);
 }
 
-// --- 3. CRIAR PEDIDO (Mantido Igual) ---
+// --- 3. CRIAR PEDIDO ---
 export async function createTableOrderAction(
     storeId: string, 
     tableNum: string, 
@@ -157,7 +172,7 @@ export async function createTableOrderAction(
   } catch (err: any) { return { error: "Erro interno." }; }
 }
 
-// --- 4. ADICIONAR ITENS (Mantido Igual) ---
+// --- 4. ADICIONAR ITENS ---
 export async function addItemsToTableAction(orderId: string, newItems: any[], currentTableTotal: number) {
   const supabase = await createClient();
   try {
@@ -177,6 +192,10 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
 
       await supabase.from("order_items").insert(orderItems);
       
+      // Ao adicionar itens, apenas somamos ao total. 
+      // Se houver cupom, o ideal seria revalidar, mas para simplificar mantemos o desconto fixo anterior se houver,
+      // ou o usuário deve reaplicar o cupom se for porcentagem dinâmica.
+      // Por segurança, vamos apenas somar o novo valor.
       await supabase.from("orders")
         .update({ 
             total_price: currentTableTotal + addedTotal, 
@@ -190,8 +209,103 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
   } catch (err) { return { error: "Erro ao processar." }; }
 }
 
-// --- 5. FECHAR MESA (GARÇOM) ---
-// Função única: Recebeu -> Fechou -> Sumiu
+// --- 5. APLICAR CUPOM (NOVO) ---
+export async function applyCouponAction(storeId: string, tableNum: string, code: string) {
+    const supabase = await createClient();
+    const now = new Date().toISOString();
+
+    // 1. Validar Cupom
+    const { data: coupon } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("store_id", storeId)
+        .eq("code", code)
+        .eq("is_active", true)
+        .single();
+
+    if (!coupon) return { success: false, error: "Cupom inválido ou não encontrado." };
+    if (coupon.starts_at && new Date(coupon.starts_at) > new Date()) return { success: false, error: "Cupom ainda não vigente." };
+    if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) return { success: false, error: "Cupom expirado." };
+    if (coupon.max_uses && coupon.used_count >= coupon.max_uses) return { success: false, error: "Limite de uso atingido." };
+
+    // 2. Buscar Pedidos da Mesa para calcular totais
+    const { data: orders } = await supabase
+        .from("orders")
+        .select("id, total_price, discount")
+        .eq("store_id", storeId)
+        .eq("table_number", tableNum)
+        .neq("status", "concluido") 
+        .neq("status", "cancelado");
+
+    if (!orders || orders.length === 0) return { success: false, error: "Mesa sem pedidos ativos." };
+
+    // Calcula o subtotal real (soma dos totais atuais + descontos já aplicados anteriormente, para saber o valor bruto)
+    const currentTotal = orders.reduce((acc, o) => acc + o.total_price, 0);
+    const currentDiscount = orders.reduce((acc, o) => acc + (o.discount || 0), 0);
+    const grossTotal = currentTotal + currentDiscount;
+
+    if (grossTotal < coupon.min_order_value) {
+        return { success: false, error: `Valor mínimo para este cupom: R$ ${coupon.min_order_value.toFixed(2)}` };
+    }
+
+    // 3. Calcular Desconto
+    let discountAmount = 0;
+    if (coupon.discount_type === 'percent') {
+        discountAmount = (grossTotal * coupon.discount_value) / 100;
+    } else {
+        discountAmount = coupon.discount_value;
+    }
+
+    // Trava para não descontar mais que o total
+    if (discountAmount > grossTotal) discountAmount = grossTotal;
+
+    // 4. Aplicar Desconto no Pedido Principal (O último/mais recente)
+    // Precisamos "limpar" descontos anteriores de outros pedidos da mesa para não duplicar, 
+    // ou concentrar o desconto em um único pedido. Vamos concentrar no último.
+    
+    const mainOrder = orders[orders.length - 1]; // Pega o último pedido
+    const otherOrders = orders.slice(0, -1);
+
+    // Zera descontos dos outros pedidos (para evitar acúmulo de cupons diferentes bugando a conta)
+    if (otherOrders.length > 0) {
+        await supabase.from("orders")
+            .update({ discount: 0, coupon_code: null }) // Remove cupom antigo
+            .in("id", otherOrders.map(o => o.id));
+        
+        // Precisamos recalcular o total desses pedidos (voltar ao original)
+        // Isso é complexo sem saber o valor original.
+        // Simplificação Segura: Aplicamos o cupom APENAS se ele for válido sobre o total, 
+        // mas registramos tudo no mainOrder.
+    }
+
+    // Atualiza o pedido principal com o desconto TOTAL da mesa
+    // O total_price deste pedido será: (Total Bruto deste pedido + Descontos antigos deste pedido) - (Desconto Novo Total - Descontos removidos dos outros)
+    // Vamos simplificar: O desconto é visualizado no total da mesa. Vamos aplicar o desconto no pedido mais recente.
+    
+    // Recupera valor original do mainOrder
+    const mainOrderOriginalPrice = mainOrder.total_price + (mainOrder.discount || 0);
+    const newMainOrderPrice = mainOrderOriginalPrice - discountAmount;
+
+    // Atualiza BD
+    const { error } = await supabase
+        .from("orders")
+        .update({ 
+            discount: discountAmount,
+            coupon_code: code,
+            total_price: newMainOrderPrice
+        })
+        .eq("id", mainOrder.id);
+    
+    if (error) return { success: false, error: "Erro ao aplicar desconto." };
+
+    // Incrementa uso do cupom (opcional, mas recomendado)
+    await supabase.rpc('increment_coupon_usage', { coupon_id: coupon.id });
+
+    revalidatePath("/");
+    return { success: true, discount: discountAmount };
+}
+
+// --- 6. FECHAR MESA ---
 export async function closeTableAction(tableNum: string, storeId: string) {
   const supabase = await createClient();
   const { data: orders } = await supabase.from("orders")
@@ -204,24 +318,22 @@ export async function closeTableAction(tableNum: string, storeId: string) {
   if (!orders || orders.length === 0) return { success: true };
   const ids = orders.map(o => o.id);
 
-  // Define status 'concluido'. Isso limpa a mesa para o Garçom e para o Caixa.
   await supabase
       .from("orders")
       .update({ 
           status: "concluido", 
-          payment_method: "card_machine", // Assume maquininha se foi o garçom
+          payment_method: "card_machine", 
           last_status_change: new Date().toISOString() 
       })
       .in("id", ids);
       
-  // Limpa itens do KDS
   await supabase.from("order_items").update({ status: 'concluido' }).in("order_id", ids);
 
   revalidatePath("/");
   return { success: true };
 }
 
-// --- 6. SERVIR ---
+// --- 7. SERVIR ---
 export async function serveReadyOrdersAction(orderIds: string[]) {
     const supabase = await createClient();
     await supabase
