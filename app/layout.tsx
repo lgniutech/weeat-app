@@ -131,7 +131,7 @@ export const metadata: Metadata = {
     icon: '/favicon.png',
     apple: '/favicon.png',
   },
-  generator: 'update2'
+  generator: 'update3'
 }
 
 export const viewport: Viewport = {

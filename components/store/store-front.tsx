@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt } from "lucide-react"
+import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge" 
@@ -69,9 +69,13 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [couponCode, setCouponCode] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null)
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
+  const [couponError, setCouponError] = useState<string | null>(null)
 
   const { toast } = useToast()
   const { setTheme } = useTheme()
+
+  // --- VALORES DA LOJA ---
+  const minOrderValue = Number(store.settings?.minimum_order) || 0;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -103,13 +107,38 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   
+  // --- LÓGICA DO PEDIDO MÍNIMO E CUPOM ---
+  
+  // 1. Remove cupom automaticamente se o subtotal cair abaixo do mínimo do cupom
+  useEffect(() => {
+    if (appliedCoupon && appliedCoupon.min_order_value > 0) {
+        if (subtotal < appliedCoupon.min_order_value) {
+            setAppliedCoupon(null);
+            setCouponCode("");
+            toast({
+                title: "Cupom Removido",
+                description: `Valor do pedido menor que o mínimo do cupom (${formatCurrency(appliedCoupon.min_order_value)}).`,
+                variant: "destructive"
+            })
+        }
+    }
+  }, [subtotal, appliedCoupon]);
+
+  // 2. Cálculo do desconto com proteção extra
   const discountAmount = useMemo(() => {
     if (!appliedCoupon) return 0;
+    
+    // Proteção extra: se por algum motivo o cupom estiver aplicado mas o valor for baixo, retorna 0
+    if (appliedCoupon.min_order_value && subtotal < appliedCoupon.min_order_value) return 0;
+
     return appliedCoupon.type === 'percent' ? (subtotal * appliedCoupon.value) / 100 : appliedCoupon.value;
   }, [subtotal, appliedCoupon]);
 
-  const deliveryFee = deliveryMethod === 'entrega' ? (Number(store.delivery_fee) || 5.00) : 0 
+  const deliveryFee = deliveryMethod === 'entrega' ? (Number(store.settings?.delivery_fee) || 5.00) : 0 
   const total = Math.max(0, subtotal - discountAmount + deliveryFee);
+
+  const remainingForMin = minOrderValue - subtotal;
+  const isBelowMin = deliveryMethod === 'entrega' && remainingForMin > 0;
 
   const filteredProducts = (products || []).filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -117,7 +146,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     return matchesSearch && matchesCategory && p.is_available
   })
 
-  // --- AÇÕES MESA (CORRIGIDO) ---
+  // --- AÇÕES MESA ---
   const handleOpenBill = async () => {
       if (!tableNumber) return;
       setIsLoadingBill(true);
@@ -136,6 +165,15 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const handleCheckout = async () => {
     if (cart.length === 0) return
     
+    if (isBelowMin) {
+        toast({ 
+            title: "Pedido Mínimo não atingido", 
+            description: `Faltam ${formatCurrency(remainingForMin)} para finalizar.`, 
+            variant: "destructive" 
+        });
+        return;
+    }
+
     if (!customerName) { toast({ title: "Faltou o nome", description: "Informe seu nome.", variant: "destructive" }); return; }
     if (deliveryMethod !== 'mesa' && !customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
     if (deliveryMethod === 'entrega' && !customerAddress.street) { toast({ title: "Endereço incompleto", description: "Informe a rua.", variant: "destructive" }); return; }
@@ -184,18 +222,32 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     }
   }
 
+  const removeCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponCode("")
+    setCouponError(null)
+  }
+
   const handleApplyCoupon = async () => {
     if (!couponCode) return;
     setIsValidatingCoupon(true);
-    const result = await validateCouponAction(couponCode, store.id, subtotal);
-    if (result.error) {
-      toast({ title: "Erro", description: result.error, variant: "destructive" });
-      setAppliedCoupon(null);
-    } else {
-      setAppliedCoupon(result.coupon);
-      toast({ title: "Cupom Aplicado!", description: "Desconto aplicado." });
+    setCouponError(null);
+    
+    try {
+        const result = await validateCouponAction(couponCode, store.id, subtotal);
+        if (result.error) {
+            setCouponError(result.error);
+            setAppliedCoupon(null);
+        } else {
+            setAppliedCoupon(result.coupon);
+            setCouponError(null);
+            toast({ title: "Cupom Aplicado!", description: "Desconto adicionado." });
+        }
+    } catch (e) {
+        setCouponError("Erro ao validar cupom. Tente novamente.");
+    } finally {
+        setIsValidatingCoupon(false);
     }
-    setIsValidatingCoupon(false);
   }
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
@@ -219,14 +271,23 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 )}
                 <div>
                     <h1 className="font-bold text-lg leading-tight">{store.name}</h1>
-                    <div className="flex items-center text-xs text-muted-foreground gap-1">
-                        <Clock className="w-3 h-3" /> <span>Aberto</span>
+                    <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-2">
+                        <div className="flex items-center gap-1"><Clock className="w-3 h-3" /> <span>Aberto</span></div>
+                        
+                        {minOrderValue > 0 && !tableNumber && (
+                            <>
+                                <span className="text-slate-300">|</span>
+                                <div className="flex items-center gap-1 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                                    <Info className="w-3 h-3" /> 
+                                    <span>Mínimo: {formatCurrency(minOrderValue)}</span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
              </div>
 
              <div className="flex items-center gap-2">
-                 {/* BOTÃO DA CONTA */}
                  {tableNumber && (
                      <Button variant="ghost" size="icon" onClick={handleOpenBill} title="Minha Conta">
                          <Receipt className="w-5 h-5 text-slate-600 dark:text-slate-300" />
@@ -244,7 +305,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
              </div>
           </div>
 
-          {/* BUSCA */}
           <div className="mt-4 space-y-3">
              <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -305,15 +365,15 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         </DialogContent>
       </Dialog>
 
-      {/* CHECKOUT */}
+      {/* CHECKOUT - SCROLL CORRIGIDO E VALIDAÇÃO CUPOM */}
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950">
-            <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm">
+        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-full max-h-[100dvh]" side="right">
+            <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm flex-none">
                 <SheetTitle>Sua Sacola</SheetTitle>
                 <SheetDescription className="text-xs text-muted-foreground">Confira seus itens.</SheetDescription>
             </SheetHeader>
 
-            <ScrollArea className="flex-1 px-6 py-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
                 {cart.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4 py-20">
                         <ShoppingBag className="w-12 h-12 opacity-20" />
@@ -321,7 +381,21 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         <Button variant="link" onClick={() => setIsCartOpen(false)}>Ver Cardápio</Button>
                     </div>
                 ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-6 pb-6">
+                        
+                        {/* ALERTA DE PEDIDO MÍNIMO */}
+                        {isBelowMin && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-bold text-red-800 dark:text-red-200 text-sm">Valor mínimo não atingido</p>
+                                    <p className="text-xs text-red-600 dark:text-red-300 mt-0.5">
+                                        Faltam <span className="font-bold underline">{formatCurrency(remainingForMin)}</span> para o pedido mínimo de {formatCurrency(minOrderValue)}.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {tableNumber && (
                              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                                 <div className="bg-emerald-100 dark:bg-emerald-800 p-2 rounded-full"><Utensils className="w-5 h-5 text-emerald-700 dark:text-emerald-300" /></div>
@@ -357,12 +431,28 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                 {appliedCoupon ? (
                                     <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 p-3 rounded border border-emerald-100 dark:border-emerald-800">
                                         <div className="flex flex-col"><span className="font-bold text-sm">{appliedCoupon.code}</span><span className="text-xs">Aplicado</span></div>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-700 hover:bg-emerald-100" onClick={() => {setAppliedCoupon(null); setCouponCode("")}}><X className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-700 hover:bg-emerald-100" onClick={removeCoupon}><X className="w-4 h-4" /></Button>
                                     </div>
                                 ) : (
-                                    <div className="flex gap-2">
-                                        <Input placeholder="Código" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} className="uppercase font-bold" />
-                                        <Button variant="secondary" onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponCode}>{isValidatingCoupon ? "..." : "Aplicar"}</Button>
+                                    <div className="space-y-2">
+                                        <div className="flex gap-2">
+                                            <Input 
+                                                placeholder="Código" 
+                                                value={couponCode} 
+                                                onChange={e => {
+                                                    setCouponCode(e.target.value.toUpperCase())
+                                                    setCouponError(null)
+                                                }} 
+                                                className="uppercase font-bold" 
+                                            />
+                                            <Button variant="secondary" onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponCode}>{isValidatingCoupon ? "..." : "Aplicar"}</Button>
+                                        </div>
+                                        {/* MENSAGEM DE ERRO DO CUPOM INLINE */}
+                                        {couponError && (
+                                            <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 animate-in slide-in-from-top-1">
+                                                <AlertCircle className="w-3 h-3" /> {couponError}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -412,10 +502,10 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         </div>
                     </div>
                 )}
-            </ScrollArea>
+            </div>
 
             {cart.length > 0 && (
-                <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex-col gap-4 sm:flex-col sm:space-x-0">
+                <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex-col gap-4 sm:flex-col sm:space-x-0 flex-none">
                     <div className="space-y-1.5 w-full text-sm">
                         <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                         {discountAmount > 0 && <div className="flex justify-between text-emerald-600 font-medium"><span>Desconto</span><span>- {formatCurrency(discountAmount)}</span></div>}
@@ -423,8 +513,15 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         <Separator className="my-2" />
                         <div className="flex justify-between font-bold text-lg"><span>Total</span><span>{formatCurrency(total)}</span></div>
                     </div>
-                    <Button size="lg" className="w-full font-bold text-base" onClick={handleCheckout} disabled={isOrderPlacing}>
-                        {isOrderPlacing ? "Enviando..." : "ENVIAR PEDIDO"}
+                    {/* BOTÃO COM LÓGICA DE BLOQUEIO */}
+                    <Button 
+                        size="lg" 
+                        className="w-full font-bold text-base" 
+                        onClick={handleCheckout} 
+                        disabled={isOrderPlacing || isBelowMin}
+                        variant={isBelowMin ? "outline" : "default"}
+                    >
+                        {isOrderPlacing ? "Enviando..." : (isBelowMin ? "Valor Mínimo não atingido" : "ENVIAR PEDIDO")}
                     </Button>
                 </SheetFooter>
             )}
@@ -451,12 +548,12 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
       {/* MODAL CONTA DA MESA */}
       <Sheet open={isBillOpen} onOpenChange={setIsBillOpen}>
-        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950">
-            <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm">
+        <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-full max-h-[100dvh]" side="right">
+            <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm flex-none">
                 <SheetTitle>Conta da Mesa {tableNumber}</SheetTitle>
                 <SheetDescription>Tudo que vocês já pediram.</SheetDescription>
             </SheetHeader>
-            <ScrollArea className="flex-1 px-6 py-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
                 {isLoadingBill ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground">Carregando...</div>
                 ) : tableBill.length === 0 ? (
@@ -484,8 +581,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         ))}
                     </div>
                 )}
-            </ScrollArea>
-            <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800">
+            </div>
+            <SheetFooter className="p-6 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex-none">
                 <div className="flex justify-between w-full font-bold text-lg">
                     <span>Total da Mesa</span>
                     <span>{formatCurrency(tableBill.reduce((acc, o) => acc + (o.total_price || 0), 0))}</span>

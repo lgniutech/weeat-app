@@ -51,7 +51,6 @@ export async function saveCouponAction(formData: FormData, storeId: string) {
   
   if (!code || !value) return { error: "Código e Valor são obrigatórios." };
   
-  // Limpa o código (uppercase, sem espaços)
   const cleanCode = code.toUpperCase().trim().replace(/\s/g, "");
 
   const couponData = {
@@ -66,7 +65,6 @@ export async function saveCouponAction(formData: FormData, storeId: string) {
 
   try {
     if (id) {
-      // Editar
       const { error } = await supabase
         .from("coupons")
         .update(couponData)
@@ -74,7 +72,6 @@ export async function saveCouponAction(formData: FormData, storeId: string) {
         .eq("store_id", storeId);
       if (error) throw error;
     } else {
-      // Criar Novo
       const { error } = await supabase
         .from("coupons")
         .insert(couponData);
@@ -92,7 +89,7 @@ export async function saveCouponAction(formData: FormData, storeId: string) {
   }
 }
 
-// --- ALTERAR STATUS (ATIVO/INATIVO) ---
+// --- ALTERAR STATUS ---
 export async function toggleCouponStatusAction(couponId: string, isActive: boolean) {
   const supabase = await createClient();
   await supabase.from("coupons").update({ is_active: isActive }).eq("id", couponId);
@@ -130,19 +127,18 @@ export async function validateCouponAction(code: string, storeId: string, cartTo
     return { error: "Este cupom foi desativado." };
   }
 
-  // Verifica validade (Data)
   if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
     return { error: "Este cupom expirou." };
   }
 
-  // Verifica limite de usos
   if (coupon.max_uses && coupon.used_count >= coupon.max_uses) {
     return { error: "Este cupom atingiu o limite de usos." };
   }
 
-  // Verifica valor mínimo do pedido
+  // Verifica valor mínimo do pedido (Ajustado a mensagem)
   if (cartTotal < coupon.min_order_value) {
-    return { error: `Pedido mínimo para este cupom: R$ ${coupon.min_order_value.toFixed(2)}` };
+    const formattedMin = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(coupon.min_order_value);
+    return { error: `O valor mínimo para aplicação deste cupom é ${formattedMin}` };
   }
 
   return { 
@@ -151,21 +147,25 @@ export async function validateCouponAction(code: string, storeId: string, cartTo
       id: coupon.id,
       code: coupon.code,
       type: coupon.discount_type,
-      value: coupon.discount_value
+      value: coupon.discount_value,
+      min_order_value: coupon.min_order_value // <--- AQUI ESTAVA FALTANDO
     }
   };
 }
 
-// --- INCREMENTAR USO (CHAMADO AO FECHAR O PEDIDO) ---
 export async function incrementCouponUsageAction(couponId: string) {
   const supabase = await createClient();
   
-  const { data: coupon } = await supabase.from("coupons").select("used_count").eq("id", couponId).single();
+  // Tenta RPC primeiro, fallback para update direto
+  const { error } = await supabase.rpc('increment_coupon_usage', { coupon_id: couponId });
   
-  if (coupon) {
-    await supabase
-      .from("coupons")
-      .update({ used_count: (coupon.used_count || 0) + 1 })
-      .eq("id", couponId);
+  if (error) {
+    const { data: coupon } = await supabase.from("coupons").select("used_count").eq("id", couponId).single();
+    if (coupon) {
+      await supabase
+        .from("coupons")
+        .update({ used_count: (coupon.used_count || 0) + 1 })
+        .eq("id", couponId);
+    }
   }
 }

@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 
 const COOKIE_NAME = "weeat_staff_session";
 
-// --- LOGIN (JÁ EXISTIA) ---
+// --- LOGIN COM REDIRECIONAMENTO ---
 export async function verifyStaffPinAction(slug: string, pin: string) {
   const supabase = await createClient();
   const cookieStore = await cookies();
@@ -39,10 +39,13 @@ export async function verifyStaffPinAction(slug: string, pin: string) {
     path: "/",
   });
 
-  let redirectUrl = `/${slug}/staff/`;
-  if (staff.role === "kitchen") redirectUrl += "kitchen";
-  else if (staff.role === "waiter") redirectUrl += "waiter";
-  else if (staff.role === "courier") redirectUrl += "courier";
+  // REDIRECIONAMENTO INTELIGENTE
+  let redirectUrl = `/${slug}/staff`; 
+  
+  if (staff.role === "kitchen") redirectUrl += "/kitchen";
+  else if (staff.role === "waiter") redirectUrl += "/waiter";
+  else if (staff.role === "cashier") redirectUrl += "/cashier"; 
+  else if (staff.role === "courier") redirectUrl += "/courier";
 
   return { success: true, redirectUrl };
 }
@@ -60,7 +63,7 @@ export async function getStaffSession() {
   try { return JSON.parse(session.value); } catch { return null; }
 }
 
-// --- NOVAS FUNÇÕES: GERENCIAMENTO (CRUD) ---
+// --- CRUD DE FUNCIONÁRIOS ---
 
 export async function getStoreStaffAction(storeId: string) {
   const supabase = await createClient();
@@ -77,7 +80,6 @@ export async function getStoreStaffAction(storeId: string) {
 export async function createStaffAction(storeId: string, name: string, role: string, pin: string) {
   const supabase = await createClient();
 
-  // Validação simples
   if (!name || !role || !pin) return { error: "Preencha todos os campos." };
   if (pin.length !== 4 || isNaN(Number(pin))) return { error: "O PIN deve ter 4 números." };
 
@@ -90,16 +92,22 @@ export async function createStaffAction(storeId: string, name: string, role: str
     });
 
     if (error) {
+      // Tratamento específico para PIN duplicado
       if (error.message.includes("unique_pin_per_store")) {
         return { error: "Este PIN já está sendo usado por outro funcionário." };
       }
-      throw error;
+      // Se for erro de constraint (role inválida), o 'message' vai avisar
+      console.error("Erro Supabase:", error); 
+      throw new Error(error.message);
     }
 
-    revalidatePath("/"); // Atualiza a lista
+    revalidatePath("/");
     return { success: true };
-  } catch (err) {
-    return { error: "Erro ao criar funcionário." };
+
+  } catch (err: any) {
+    console.error("Erro Create Staff:", err);
+    // Retorna o erro real para o toast do front-end
+    return { error: err.message || "Erro ao criar funcionário." };
   }
 }
 
