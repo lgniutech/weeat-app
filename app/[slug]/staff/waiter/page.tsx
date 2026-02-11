@@ -12,8 +12,6 @@ import {
     closeTableAction,
     serveReadyOrdersAction 
 } from "@/app/actions/waiter"
-import { validateCouponAction } from "@/app/actions/coupons"
-
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -21,7 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Ticket, AlertCircle } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -66,11 +64,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
 
-  // --- CUPOM ---
-  const [couponCode, setCouponCode] = useState("")
-  const [appliedCoupon, setAppliedCoupon] = useState<{id: string, code: string, value: number, type: 'percent'|'fixed', min_order_value: number} | null>(null)
-  const [validatingCoupon, setValidatingCoupon] = useState(false)
-
   const [tempQuantity, setTempQuantity] = useState(1)
   const [tempObs, setTempObs] = useState("")
   const [tempRemovedIngredients, setTempRemovedIngredients] = useState<string[]>([])
@@ -79,6 +72,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
   const router = useRouter()
+  // Hook do tema isolado
   const { theme, setTheme } = useTheme()
 
   useEffect(() => {
@@ -102,20 +96,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     try {
         const data = await getTablesStatusAction(storeId)
         setTables(data)
-        // Atualiza a mesa selecionada se ela estiver aberta, para ver mudanças em tempo real
         if (selectedTable && isManagementOpen) {
             const updated = data.find(t => t.id === selectedTable.id)
             if (updated) setSelectedTable(updated)
-            // Se a mesa ficou livre (fechada pelo caixa), fecha o modal
-            else if (selectedTable.status !== 'free' && (!updated || updated.status === 'free')) {
-                 setIsManagementOpen(false)
-                 toast({ title: "Mesa Liberada", description: "O caixa encerrou esta mesa." })
-            }
         }
     } catch (error) { console.error(error) }
   }
 
-  // Polling a cada 3 segundos
   useEffect(() => {
     fetchTables()
     const interval = setInterval(fetchTables, 3000) 
@@ -134,8 +121,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const openMenu = () => {
     setCart([]) 
     setSearchQuery("")
-    setCouponCode("")
-    setAppliedCoupon(null)
     setIsMenuOpen(true)
     setIsManagementOpen(false) 
   }
@@ -173,49 +158,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const removeFromCart = (cartId: string) => setCart(prev => prev.filter(i => i.cartId !== cartId))
 
-  const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
-
-  const couponError = useMemo(() => {
-    if (!appliedCoupon) return null;
-    if (cartTotal < appliedCoupon.min_order_value) {
-        const formattedMin = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(appliedCoupon.min_order_value);
-        return `O valor mínimo para este cupom é ${formattedMin}`;
-    }
-    return null;
-  }, [cartTotal, appliedCoupon]);
-  
-  const discountValue = useMemo(() => {
-    if (!appliedCoupon || couponError) return 0
-    if (appliedCoupon.type === 'percent') {
-        return (cartTotal * appliedCoupon.value) / 100
-    }
-    return appliedCoupon.value
-  }, [cartTotal, appliedCoupon, couponError])
-
-  const finalTotal = Math.max(0, cartTotal - discountValue)
-
-  const handleValidateCoupon = async () => {
-      if(!couponCode || !storeId) return;
-      setValidatingCoupon(true)
-      const res = await validateCouponAction(couponCode, storeId, cartTotal)
-      setValidatingCoupon(false)
-
-      if (res?.error) {
-          toast({ title: "Cupom Inválido", description: res.error, variant: "destructive" })
-          setAppliedCoupon(null)
-      } else if (res?.success && res.coupon) {
-          toast({ title: "Cupom Adicionado", className: "bg-blue-600 text-white" })
-          setAppliedCoupon(res.coupon as any)
-      }
-  }
-
   const sendOrder = () => {
     if (cart.length === 0) return
     startTransition(async () => {
       let res;
       try {
           if (selectedTable.status === 'free') {
-            res = await createTableOrderAction(storeId!, selectedTable.id, cart, clientName, clientPhone, appliedCoupon)
+            res = await createTableOrderAction(storeId!, selectedTable.id, cart, clientName, clientPhone)
           } else {
             res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
           }
@@ -272,6 +221,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     return (Number(productToCustomize.price) + addonsPrice) * tempQuantity;
   }, [productToCustomize, tempSelectedAddons, tempQuantity]);
 
+  const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 transition-colors duration-300">
       
@@ -281,6 +232,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </h1>
         <div className="flex gap-2">
             <Button variant="ghost" size="icon" onClick={() => fetchTables()}><RefreshCw className="w-4 h-4 text-slate-500" /></Button>
+            {/* BOTÃO DE TEMA */}
             <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                 {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </Button>
@@ -451,68 +403,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     ))}
                 </div>
             </ScrollArea>
-            
-            {/* ÁREA DO CARRINHO */}
             {cart.length > 0 && (
-                <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t p-3 shadow-lg z-20 space-y-3">
-                    
-                    {/* INPUT DE CUPOM (SOMENTE NOVA MESA) */}
-                    {selectedTable?.status === 'free' && (
-                        <div className="flex flex-col gap-2">
-                            <div className="flex gap-2 items-center">
-                                <div className="relative flex-1">
-                                    <Ticket className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input 
-                                        placeholder="Cupom de Desconto" 
-                                        className="pl-9 h-9" 
-                                        value={couponCode} 
-                                        onChange={e => setCouponCode(e.target.value)} 
-                                        disabled={!!appliedCoupon}
-                                    />
-                                </div>
-                                {appliedCoupon ? (
-                                    <Button variant="ghost" size="sm" onClick={() => { setAppliedCoupon(null); setCouponCode("") }} className="text-red-500 h-9">
-                                        <Trash2 className="w-4 h-4"/>
-                                    </Button>
-                                ) : (
-                                    <Button variant="outline" size="sm" onClick={handleValidateCoupon} disabled={!couponCode || validatingCoupon} className="h-9">
-                                        {validatingCoupon ? <RefreshCw className="animate-spin w-4 h-4"/> : "Aplicar"}
-                                    </Button>
-                                )}
-                            </div>
-                            
-                            {/* ALERTA VISUAL DE VALOR MÍNIMO */}
-                            {couponError && (
-                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-3 py-2 rounded-md text-xs flex items-center gap-2 animate-in slide-in-from-bottom-2">
-                                    <AlertCircle className="w-4 h-4 shrink-0" />
-                                    <span>{couponError}</span>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    <div className="flex flex-col gap-1">
-                         <div className="flex justify-between items-center text-sm text-slate-500">
-                             <span>Subtotal</span>
-                             <span>R$ {cartTotal.toFixed(2)}</span>
-                         </div>
-                         {appliedCoupon && !couponError && (
-                             <div className="flex justify-between items-center text-sm text-emerald-600 font-medium">
-                                 <span>Desconto ({appliedCoupon.code})</span>
-                                 <span>- R$ {discountValue.toFixed(2)}</span>
-                             </div>
-                         )}
-                         <div className="flex justify-between items-center font-bold text-lg border-t pt-2 mt-1">
-                             <span>Total</span>
-                             <span className={cn(couponError ? "text-slate-900 dark:text-slate-100" : "text-emerald-600")}>
-                                R$ {finalTotal.toFixed(2)}
-                             </span>
-                         </div>
-                    </div>
-                    
-                    <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white" onClick={sendOrder} disabled={isPending || !!couponError}>
-                        {isPending ? "Enviando..." : "CONFIRMAR PEDIDO"}
-                    </Button>
+                <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t p-3 shadow-lg z-20">
+                    <div className="flex justify-between items-center mb-2"><span className="font-bold text-sm">{cart.length} itens</span><span className="font-bold text-emerald-600">Total: R$ {cartTotal.toFixed(2)}</span></div>
+                    <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white" onClick={sendOrder} disabled={isPending}>{isPending ? "Enviando..." : "CONFIRMAR PEDIDO"}</Button>
                 </div>
             )}
         </DialogContent>
@@ -595,6 +489,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 // --- WRAPPER FINAL COM TEMA ISOLADO ---
 export default function WaiterPage({ params }: { params: { slug: string } }) {
     return (
+        // storageKey="waiter-theme" isola o tema do garçom
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="waiter-theme" disableTransitionOnChange>
             <WaiterContent params={params} />
         </ThemeProvider>
