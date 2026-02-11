@@ -548,5 +548,5 @@ export default function WaiterPage({ params }: { params: { slug: string } }) {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="waiter-theme" disableTransitionOnChange>
             <WaiterContent params={params} />
         </ThemeProvider>
-    )a
+    )
 }
