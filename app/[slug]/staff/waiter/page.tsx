@@ -12,7 +12,6 @@ import {
     closeTableAction,
     serveReadyOrdersAction 
 } from "@/app/actions/waiter"
-// Importar ação de validação de cupom
 import { validateCouponAction } from "@/app/actions/coupons"
 
 import { Button } from "@/components/ui/button"
@@ -22,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Ticket } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Ticket, AlertCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -69,7 +68,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   // --- CUPOM ---
   const [couponCode, setCouponCode] = useState("")
-  const [appliedCoupon, setAppliedCoupon] = useState<{id: string, code: string, value: number, type: 'percent'|'fixed'} | null>(null)
+  const [appliedCoupon, setAppliedCoupon] = useState<{id: string, code: string, value: number, type: 'percent'|'fixed', min_order_value: number} | null>(null)
   const [validatingCoupon, setValidatingCoupon] = useState(false)
 
   const [tempQuantity, setTempQuantity] = useState(1)
@@ -128,7 +127,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const openMenu = () => {
     setCart([]) 
     setSearchQuery("")
-    // Limpa cupom ao abrir novo menu
     setCouponCode("")
     setAppliedCoupon(null)
     setIsMenuOpen(true)
@@ -168,20 +166,28 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const removeFromCart = (cartId: string) => setCart(prev => prev.filter(i => i.cartId !== cartId))
 
-  // Lógica de cálculo do carrinho
   const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
+
+  // Verifica validade do cupom em tempo real (baseado no total atual)
+  const couponError = useMemo(() => {
+    if (!appliedCoupon) return null;
+    if (cartTotal < appliedCoupon.min_order_value) {
+        const formattedMin = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(appliedCoupon.min_order_value);
+        return `O valor mínimo para este cupom é ${formattedMin}`;
+    }
+    return null;
+  }, [cartTotal, appliedCoupon]);
   
   const discountValue = useMemo(() => {
-    if (!appliedCoupon) return 0
+    if (!appliedCoupon || couponError) return 0 // Se tiver erro, desconto é 0
     if (appliedCoupon.type === 'percent') {
         return (cartTotal * appliedCoupon.value) / 100
     }
     return appliedCoupon.value
-  }, [cartTotal, appliedCoupon])
+  }, [cartTotal, appliedCoupon, couponError])
 
   const finalTotal = Math.max(0, cartTotal - discountValue)
 
-  // Validar Cupom
   const handleValidateCoupon = async () => {
       if(!couponCode || !storeId) return;
       setValidatingCoupon(true)
@@ -203,7 +209,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       let res;
       try {
           if (selectedTable.status === 'free') {
-            // Passa o cupom aqui
             res = await createTableOrderAction(storeId!, selectedTable.id, cart, clientName, clientPhone, appliedCoupon)
           } else {
             res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
@@ -444,27 +449,38 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             {/* ÁREA DO CARRINHO */}
             {cart.length > 0 && (
                 <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t p-3 shadow-lg z-20 space-y-3">
-                    {/* ÁREA DE CUPOM (APENAS PARA NOVAS MESAS) */}
+                    
+                    {/* INPUT DE CUPOM */}
                     {selectedTable?.status === 'free' && (
-                        <div className="flex gap-2 items-center">
-                            <div className="relative flex-1">
-                                <Ticket className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input 
-                                    placeholder="Cupom de Desconto" 
-                                    className="pl-9 h-9" 
-                                    value={couponCode} 
-                                    onChange={e => setCouponCode(e.target.value)} 
-                                    disabled={!!appliedCoupon}
-                                />
+                        <div className="flex flex-col gap-2">
+                            <div className="flex gap-2 items-center">
+                                <div className="relative flex-1">
+                                    <Ticket className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        placeholder="Cupom de Desconto" 
+                                        className="pl-9 h-9" 
+                                        value={couponCode} 
+                                        onChange={e => setCouponCode(e.target.value)} 
+                                        disabled={!!appliedCoupon}
+                                    />
+                                </div>
+                                {appliedCoupon ? (
+                                    <Button variant="ghost" size="sm" onClick={() => { setAppliedCoupon(null); setCouponCode("") }} className="text-red-500 h-9">
+                                        <Trash2 className="w-4 h-4"/>
+                                    </Button>
+                                ) : (
+                                    <Button variant="outline" size="sm" onClick={handleValidateCoupon} disabled={!couponCode || validatingCoupon} className="h-9">
+                                        {validatingCoupon ? <RefreshCw className="animate-spin w-4 h-4"/> : "Aplicar"}
+                                    </Button>
+                                )}
                             </div>
-                            {appliedCoupon ? (
-                                <Button variant="ghost" size="sm" onClick={() => { setAppliedCoupon(null); setCouponCode("") }} className="text-red-500 h-9">
-                                    <Trash2 className="w-4 h-4"/>
-                                </Button>
-                            ) : (
-                                <Button variant="outline" size="sm" onClick={handleValidateCoupon} disabled={!couponCode || validatingCoupon} className="h-9">
-                                    {validatingCoupon ? <RefreshCw className="animate-spin w-4 h-4"/> : "Aplicar"}
-                                </Button>
+                            
+                            {/* ALERTA DE VALOR MÍNIMO DO CUPOM */}
+                            {couponError && (
+                                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-xs flex items-center gap-2 animate-in slide-in-from-bottom-2">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    <span>{couponError}</span>
+                                </div>
                             )}
                         </div>
                     )}
@@ -474,7 +490,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                              <span>Subtotal</span>
                              <span>R$ {cartTotal.toFixed(2)}</span>
                          </div>
-                         {appliedCoupon && (
+                         {appliedCoupon && !couponError && (
                              <div className="flex justify-between items-center text-sm text-emerald-600 font-medium">
                                  <span>Desconto ({appliedCoupon.code})</span>
                                  <span>- R$ {discountValue.toFixed(2)}</span>
@@ -482,11 +498,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                          )}
                          <div className="flex justify-between items-center font-bold text-lg border-t pt-2 mt-1">
                              <span>Total</span>
-                             <span className="text-emerald-600">R$ {finalTotal.toFixed(2)}</span>
+                             <span className={cn(couponError ? "text-slate-900 dark:text-slate-100" : "text-emerald-600")}>
+                                R$ {finalTotal.toFixed(2)}
+                             </span>
                          </div>
                     </div>
                     
-                    <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white" onClick={sendOrder} disabled={isPending}>
+                    <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white" onClick={sendOrder} disabled={isPending || !!couponError}>
                         {isPending ? "Enviando..." : "CONFIRMAR PEDIDO"}
                     </Button>
                 </div>

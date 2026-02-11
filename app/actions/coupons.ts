@@ -147,7 +147,8 @@ export async function validateCouponAction(code: string, storeId: string, cartTo
       id: coupon.id,
       code: coupon.code,
       type: coupon.discount_type,
-      value: coupon.discount_value
+      value: coupon.discount_value,
+      min_order_value: coupon.min_order_value // <--- ADICIONADO AQUI
     }
   };
 }
