@@ -17,9 +17,10 @@ export type CashierOrder = {
 
 export type TableSummary = {
   table_number: string;
+  customer_name?: string; // <--- NOVO CAMPO: Nome do Cliente
   orders: CashierOrder[];
   total: number;
-  status: 'livre' | 'ocupada' | 'pagando';
+  status: 'livre' | 'ocupada';
   last_activity: string;
 };
 
@@ -34,10 +35,6 @@ export async function getStoreIdBySlug(slug: string) {
 export async function getCashierDataAction(storeId: string) {
   const supabase = await createClient();
 
-  // AQUI ESTÁ A HARMONIA:
-  // O Caixa vê TUDO que não estiver 'concluido' (pago) nem 'cancelado'.
-  // Se o garçom já encerrou (concluido), some daqui automaticamente.
-  // Se o garçom serviu (entregue), aparece aqui para cobrar.
   const { data: activeOrders, error } = await supabase
     .from("orders")
     .select(`
@@ -76,6 +73,7 @@ export async function getCashierDataAction(storeId: string) {
       if (!tablesMap.has(tableNum)) {
         tablesMap.set(tableNum, {
           table_number: tableNum,
+          customer_name: order.customer_name, // Define o primeiro nome encontrado
           orders: [],
           total: 0,
           status: 'ocupada',
@@ -86,12 +84,15 @@ export async function getCashierDataAction(storeId: string) {
       const table = tablesMap.get(tableNum)!;
       table.orders.push(order);
       table.total += order.total_price;
-
-      // Se o garçom marcou como 'pagando', a mesa brilha no caixa
-      if (order.status === 'pagando') {
-          table.status = 'pagando';
-      }
       
+      // LÓGICA DE NOME: Se o nome atual for genérico ("Mesa X") e o novo pedido tiver nome real, atualiza!
+      const currentNameIsGeneric = !table.customer_name || table.customer_name.toLowerCase().includes("mesa");
+      const newNameIsReal = order.customer_name && !order.customer_name.toLowerCase().includes("mesa");
+
+      if (currentNameIsGeneric && newNameIsReal) {
+          table.customer_name = order.customer_name;
+      }
+
       if (new Date(order.created_at) > new Date(table.last_activity)) {
         table.last_activity = order.created_at;
       }
@@ -107,7 +108,7 @@ export async function getCashierDataAction(storeId: string) {
   return { tables, pickups };
 }
 
-// --- FECHAR MESA (CAIXA) ---
+// --- FECHAR MESA ---
 export async function closeTableAction(storeId: string, tableNumber: string, paymentMethod: string) {
   const supabase = await createClient();
 
@@ -123,8 +124,6 @@ export async function closeTableAction(storeId: string, tableNumber: string, pay
 
   const ids = ordersToClose.map(o => o.id);
 
-  // Define status final 'concluido'.
-  // Isso remove a mesa da tela do Garçom e do Caixa instantaneamente.
   const { error } = await supabase
     .from("orders")
     .update({ 
