@@ -120,12 +120,30 @@ export async function createTableOrderAction(
     tableNum: string, 
     items: any[], 
     clientName?: string, 
-    clientPhone?: string 
+    clientPhone?: string,
+    coupon?: { id: string, code: string, value: number, type: 'percent' | 'fixed' } | null
 ) {
   const supabase = await createClient();
   
   try {
-      const total = items.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
+      // Calcula total bruto dos itens
+      const itemsTotal = items.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
+      
+      // Calcula desconto se houver cupom
+      let discount = 0;
+      let couponId = null;
+
+      if (coupon) {
+          couponId = coupon.id;
+          if (coupon.type === 'percent') {
+              discount = (itemsTotal * coupon.value) / 100;
+          } else {
+              discount = coupon.value;
+          }
+      }
+
+      const finalTotal = Math.max(0, itemsTotal - discount);
+      
       const finalName = clientName && clientName.trim() !== "" ? clientName : `Mesa ${tableNum}`;
       const finalPhone = clientPhone && clientPhone.trim() !== "" ? clientPhone : "00000000000";
 
@@ -139,11 +157,18 @@ export async function createTableOrderAction(
         table_number: tableNum,
         payment_method: "card_machine",
         status: "aceito", 
-        total_price: total,
+        total_price: finalTotal, // Salva o total já com desconto
+        discount: discount,      // Salva o valor do desconto
+        coupon_id: couponId,     // Salva o ID do cupom
         last_status_change: new Date().toISOString()
       }).select().single();
 
       if (orderError) return { error: `Erro SQL: ${orderError.message}` };
+
+      // Se usou cupom, incrementa o uso
+      if (couponId) {
+          await supabase.rpc('increment_coupon_usage', { coupon_id: couponId });
+      }
 
       if (items.length > 0) {
           const orderItemsData = items.map(i => ({
@@ -167,7 +192,7 @@ export async function createTableOrderAction(
   } catch (err: any) { return { error: "Erro interno no servidor." }; }
 }
 
-// --- 4. ADICIONAR ITENS (CORRIGIDO PARA BUG 1) ---
+// --- 4. ADICIONAR ITENS ---
 export async function addItemsToTableAction(orderId: string, newItems: any[], currentTableTotal: number) {
   const supabase = await createClient();
   try {
@@ -188,13 +213,15 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
       const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
       if (itemsError) return { error: "Erro ao adicionar itens." };
 
+      // NOTA: Se já havia cupom, o desconto era fixo ou percentual sobre o total anterior.
+      // Aqui, estamos apenas somando o novo valor bruto. Para manter simples, não recalculamos o cupom antigo
+      // sobre os novos itens automaticamente nesta versão, para evitar conflitos de validação.
       const newTotal = currentTableTotal + addedTotal;
       
-      // MUDANÇA AQUI: Status volta para 'aceito' para alertar a cozinha
       const { error: updateError } = await supabase.from("orders")
         .update({ 
             total_price: newTotal, 
-            status: "aceito", // <--- FORÇA 'aceito' (antes era 'preparando')
+            status: "aceito", 
             last_status_change: new Date().toISOString() 
         })
         .eq("id", orderId);
@@ -227,7 +254,6 @@ export async function closeTableAction(tableNum: string, storeId: string) {
       .update({ status: "concluido", last_status_change: new Date().toISOString() })
       .in("id", ids);
 
-  // Também conclui todos os itens para limpar KDS se houver algo solto
   await supabase.from("order_items").update({ status: 'concluido' }).in("order_id", ids);
 
   if (error) return { error: `Erro no Banco: ${error.message}` };
