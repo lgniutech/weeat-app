@@ -44,7 +44,7 @@ export async function verifyStaffPinAction(slug: string, pin: string) {
   
   if (staff.role === "kitchen") redirectUrl += "/kitchen";
   else if (staff.role === "waiter") redirectUrl += "/waiter";
-  else if (staff.role === "cashier") redirectUrl += "/cashier"; // <--- ADICIONADO AQUI
+  else if (staff.role === "cashier") redirectUrl += "/cashier"; 
   else if (staff.role === "courier") redirectUrl += "/courier";
 
   return { success: true, redirectUrl };
@@ -92,16 +92,22 @@ export async function createStaffAction(storeId: string, name: string, role: str
     });
 
     if (error) {
+      // Tratamento específico para PIN duplicado
       if (error.message.includes("unique_pin_per_store")) {
         return { error: "Este PIN já está sendo usado por outro funcionário." };
       }
-      throw error;
+      // Se for erro de constraint (role inválida), o 'message' vai avisar
+      console.error("Erro Supabase:", error); 
+      throw new Error(error.message);
     }
 
     revalidatePath("/");
     return { success: true };
-  } catch (err) {
-    return { error: "Erro ao criar funcionário." };
+
+  } catch (err: any) {
+    console.error("Erro Create Staff:", err);
+    // Retorna o erro real para o toast do front-end
+    return { error: err.message || "Erro ao criar funcionário." };
   }
 }
 
