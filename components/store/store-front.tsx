@@ -107,15 +107,36 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   
+  // --- LÓGICA DO PEDIDO MÍNIMO E CUPOM ---
+  
+  // 1. Remove cupom automaticamente se o subtotal cair abaixo do mínimo do cupom
+  useEffect(() => {
+    if (appliedCoupon && appliedCoupon.min_order_value > 0) {
+        if (subtotal < appliedCoupon.min_order_value) {
+            setAppliedCoupon(null);
+            setCouponCode("");
+            toast({
+                title: "Cupom Removido",
+                description: `Valor do pedido menor que o mínimo do cupom (${formatCurrency(appliedCoupon.min_order_value)}).`,
+                variant: "destructive"
+            })
+        }
+    }
+  }, [subtotal, appliedCoupon]);
+
+  // 2. Cálculo do desconto com proteção extra
   const discountAmount = useMemo(() => {
     if (!appliedCoupon) return 0;
+    
+    // Proteção extra: se por algum motivo o cupom estiver aplicado mas o valor for baixo, retorna 0
+    if (appliedCoupon.min_order_value && subtotal < appliedCoupon.min_order_value) return 0;
+
     return appliedCoupon.type === 'percent' ? (subtotal * appliedCoupon.value) / 100 : appliedCoupon.value;
   }, [subtotal, appliedCoupon]);
 
   const deliveryFee = deliveryMethod === 'entrega' ? (Number(store.settings?.delivery_fee) || 5.00) : 0 
   const total = Math.max(0, subtotal - discountAmount + deliveryFee);
 
-  // --- LÓGICA DO PEDIDO MÍNIMO ---
   const remainingForMin = minOrderValue - subtotal;
   const isBelowMin = deliveryMethod === 'entrega' && remainingForMin > 0;
 
@@ -344,7 +365,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         </DialogContent>
       </Dialog>
 
-      {/* CHECKOUT - FIXED SCROLLING */}
+      {/* CHECKOUT - SCROLL CORRIGIDO E VALIDAÇÃO CUPOM */}
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
         <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-full max-h-[100dvh]" side="right">
             <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm flex-none">
@@ -352,7 +373,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 <SheetDescription className="text-xs text-muted-foreground">Confira seus itens.</SheetDescription>
             </SheetHeader>
 
-            {/* Substituído ScrollArea por div nativa para garantir o scroll */}
             <div className="flex-1 overflow-y-auto px-6 py-4">
                 {cart.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4 py-20">
