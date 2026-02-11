@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt } from "lucide-react"
+import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge" 
@@ -73,6 +73,9 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const { toast } = useToast()
   const { setTheme } = useTheme()
 
+  // --- VALORES DA LOJA ---
+  const minOrderValue = Number(store.min_order_value) || 0;
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
@@ -111,13 +114,18 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const deliveryFee = deliveryMethod === 'entrega' ? (Number(store.delivery_fee) || 5.00) : 0 
   const total = Math.max(0, subtotal - discountAmount + deliveryFee);
 
+  // --- LÓGICA DO PEDIDO MÍNIMO ---
+  // Verifica se falta valor para atingir o mínimo (apenas se for entrega)
+  const remainingForMin = minOrderValue - subtotal;
+  const isBelowMin = deliveryMethod === 'entrega' && remainingForMin > 0;
+
   const filteredProducts = (products || []).filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesCategory = selectedCategory === "todos" || p.category_id === selectedCategory
     return matchesSearch && matchesCategory && p.is_available
   })
 
-  // --- AÇÕES MESA (CORRIGIDO) ---
+  // --- AÇÕES MESA ---
   const handleOpenBill = async () => {
       if (!tableNumber) return;
       setIsLoadingBill(true);
@@ -136,6 +144,16 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const handleCheckout = async () => {
     if (cart.length === 0) return
     
+    // --- TRAVA PEDIDO MÍNIMO ---
+    if (isBelowMin) {
+        toast({ 
+            title: "Pedido Mínimo não atingido", 
+            description: `Faltam ${formatCurrency(remainingForMin)} para finalizar.`, 
+            variant: "destructive" 
+        });
+        return;
+    }
+
     if (!customerName) { toast({ title: "Faltou o nome", description: "Informe seu nome.", variant: "destructive" }); return; }
     if (deliveryMethod !== 'mesa' && !customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
     if (deliveryMethod === 'entrega' && !customerAddress.street) { toast({ title: "Endereço incompleto", description: "Informe a rua.", variant: "destructive" }); return; }
@@ -189,7 +207,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     setIsValidatingCoupon(true);
     const result = await validateCouponAction(couponCode, store.id, subtotal);
     if (result.error) {
-      toast({ title: "Erro", description: result.error, variant: "destructive" });
+      toast({ title: "Atenção", description: result.error, variant: "destructive" });
       setAppliedCoupon(null);
     } else {
       setAppliedCoupon(result.coupon);
@@ -219,8 +237,19 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 )}
                 <div>
                     <h1 className="font-bold text-lg leading-tight">{store.name}</h1>
-                    <div className="flex items-center text-xs text-muted-foreground gap-1">
-                        <Clock className="w-3 h-3" /> <span>Aberto</span>
+                    <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-2">
+                        <div className="flex items-center gap-1"><Clock className="w-3 h-3" /> <span>Aberto</span></div>
+                        
+                        {/* INFORMAÇÃO DO PEDIDO MÍNIMO NO HEADER */}
+                        {minOrderValue > 0 && !tableNumber && (
+                            <>
+                                <span className="text-slate-300">|</span>
+                                <div className="flex items-center gap-1 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                                    <Info className="w-3 h-3" /> 
+                                    <span>Mínimo: {formatCurrency(minOrderValue)}</span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
              </div>
@@ -322,6 +351,20 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                     </div>
                 ) : (
                     <div className="space-y-6">
+                        
+                        {/* ALERTA DE PEDIDO MÍNIMO */}
+                        {isBelowMin && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-bold text-red-800 dark:text-red-200 text-sm">Valor mínimo não atingido</p>
+                                    <p className="text-xs text-red-600 dark:text-red-300 mt-0.5">
+                                        Faltam <span className="font-bold underline">{formatCurrency(remainingForMin)}</span> para o pedido mínimo de {formatCurrency(minOrderValue)}.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {tableNumber && (
                              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                                 <div className="bg-emerald-100 dark:bg-emerald-800 p-2 rounded-full"><Utensils className="w-5 h-5 text-emerald-700 dark:text-emerald-300" /></div>
@@ -357,7 +400,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                 {appliedCoupon ? (
                                     <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 p-3 rounded border border-emerald-100 dark:border-emerald-800">
                                         <div className="flex flex-col"><span className="font-bold text-sm">{appliedCoupon.code}</span><span className="text-xs">Aplicado</span></div>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-700 hover:bg-emerald-100" onClick={() => {setAppliedCoupon(null); setCouponCode("")}}><X className="w-4 h-4" /></Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-700 hover:bg-emerald-100" onClick={removeCoupon}><X className="w-4 h-4" /></Button>
                                     </div>
                                 ) : (
                                     <div className="flex gap-2">
@@ -423,8 +466,15 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         <Separator className="my-2" />
                         <div className="flex justify-between font-bold text-lg"><span>Total</span><span>{formatCurrency(total)}</span></div>
                     </div>
-                    <Button size="lg" className="w-full font-bold text-base" onClick={handleCheckout} disabled={isOrderPlacing}>
-                        {isOrderPlacing ? "Enviando..." : "ENVIAR PEDIDO"}
+                    {/* BOTÃO COM LÓGICA DE BLOQUEIO */}
+                    <Button 
+                        size="lg" 
+                        className="w-full font-bold text-base" 
+                        onClick={handleCheckout} 
+                        disabled={isOrderPlacing || isBelowMin}
+                        variant={isBelowMin ? "outline" : "default"}
+                    >
+                        {isOrderPlacing ? "Enviando..." : (isBelowMin ? "Valor Mínimo não atingido" : "ENVIAR PEDIDO")}
                     </Button>
                 </SheetFooter>
             )}
