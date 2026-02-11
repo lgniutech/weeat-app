@@ -102,12 +102,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     try {
         const data = await getTablesStatusAction(storeId)
         setTables(data)
+        // Atualiza a mesa selecionada se ela estiver aberta, para ver mudanças em tempo real
         if (selectedTable && isManagementOpen) {
             const updated = data.find(t => t.id === selectedTable.id)
             if (updated) setSelectedTable(updated)
-            else if (selectedTable.status === 'occupied' && !updated) {
-                 // Mesa foi liberada remotamente
+            // Se a mesa ficou livre (fechada pelo caixa), fecha o modal
+            else if (selectedTable.status !== 'free' && (!updated || updated.status === 'free')) {
                  setIsManagementOpen(false)
+                 toast({ title: "Mesa Liberada", description: "O caixa encerrou esta mesa." })
             }
         }
     } catch (error) { console.error(error) }
