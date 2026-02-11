@@ -9,7 +9,8 @@ import {
     getWaiterMenuAction,
     createTableOrderAction, 
     addItemsToTableAction, 
-    closeTableAction,
+    requestBillAction,
+    closeTableDirectlyAction,
     serveReadyOrdersAction 
 } from "@/app/actions/waiter"
 import { Button } from "@/components/ui/button"
@@ -19,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -72,7 +73,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
   const router = useRouter()
-  // Hook do tema isolado
   const { theme, setTheme } = useTheme()
 
   useEffect(() => {
@@ -99,6 +99,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         if (selectedTable && isManagementOpen) {
             const updated = data.find(t => t.id === selectedTable.id)
             if (updated) setSelectedTable(updated)
+            else setSelectedTable(null) // Se fechou, fecha modal
         }
     } catch (error) { console.error(error) }
   }
@@ -179,16 +180,31 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     })
   }
 
-  const handleCloseTable = async () => {
-    if(!confirm("Tem certeza que deseja encerrar a conta?")) return;
+  // --- VIA 1: Solicitar Conta (Avisa Caixa) ---
+  const handleRequestBill = async () => {
+    if(!confirm("Solicitar fechamento de conta ao caixa?")) return;
     startTransition(async () => {
-        const res = await closeTableAction(selectedTable.id, storeId!)
+        const res = await requestBillAction(selectedTable.id, storeId!)
+        if (res?.success) {
+            toast({ title: "Conta Solicitada!", description: "Mesa marcada como 'Pagando'.", className: "bg-blue-600 text-white" })
+            fetchTables()
+        } else {
+            toast({ title: "Erro", description: res?.error, variant: "destructive" })
+        }
+    })
+  }
+
+  // --- VIA 2: Fechar Direto (Garçom Recebeu) ---
+  const handleCloseDirectly = async () => {
+    if(!confirm("Confirmar recebimento do pagamento? Isso encerrará a mesa.")) return;
+    startTransition(async () => {
+        const res = await closeTableDirectlyAction(selectedTable.id, storeId!)
         if (res?.success) {
             setIsManagementOpen(false)
+            toast({ title: "Pagamento Recebido!", description: "Mesa liberada com sucesso.", className: "bg-green-600 text-white" })
             fetchTables()
-            toast({ title: "Conta Encerrada!", className: "bg-blue-600 text-white" })
         } else {
-            toast({ title: "Erro ao fechar", description: res?.error || "Verifique o SQL do Banco.", variant: "destructive" })
+            toast({ title: "Erro", description: res?.error, variant: "destructive" })
         }
     })
   }
@@ -232,7 +248,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </h1>
         <div className="flex gap-2">
             <Button variant="ghost" size="icon" onClick={() => fetchTables()}><RefreshCw className="w-4 h-4 text-slate-500" /></Button>
-            {/* BOTÃO DE TEMA */}
             <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                 {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </Button>
@@ -244,7 +259,12 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         {tables.length === 0 && <p className="col-span-full text-center text-muted-foreground">Carregando mesas...</p>}
         {tables.map(table => {
             const isReady = table.hasReadyItems;
-            const statusLabel = table.isPreparing ? "Preparando..." : "Servido";
+            const isPaying = table.status === 'payment';
+            
+            let statusLabel = "Servido";
+            if(table.isPreparing) statusLabel = "Preparando...";
+            if(isPaying) statusLabel = "Pagando...";
+
             return (
               <div 
                 key={table.id}
@@ -252,11 +272,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 className={cn(
                   "h-32 rounded-xl flex flex-col items-center justify-center cursor-pointer border-2 shadow-sm relative overflow-hidden transition-all active:scale-95",
                   table.status === 'free' && "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400",
-                  table.status === 'occupied' && !isReady && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
+                  table.status === 'occupied' && !isReady && !isPaying && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
+                  isPaying && "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 text-yellow-700 dark:text-yellow-400",
                   isReady && "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse"
                 )}
               >
                 {isReady && (<div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>)}
+                {isPaying && (<div className="absolute top-2 right-2"><Receipt className="w-5 h-5" /></div>)}
 
                 <span className="text-3xl font-bold">{table.id}</span>
                 <div className="mt-2 text-center">
@@ -293,7 +315,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                         )}
                     </span>
                     <Badge variant={selectedTable?.status === 'free' ? "outline" : "default"}>
-                        {selectedTable?.status === 'free' ? "Livre" : "Ocupada"}
+                        {selectedTable?.status === 'free' ? "Livre" : selectedTable?.status === 'payment' ? "Pagando" : "Ocupada"}
                     </Badge>
                 </DialogTitle>
             </DialogHeader>
@@ -353,15 +375,27 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                             ) : <p className="text-xs italic text-muted-foreground">Vazio.</p>}
                          </div>
 
-                         <div className="grid grid-cols-2 gap-3 pt-2">
-                             <Button variant="outline" className="h-12" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar</Button>
+                         {/* GRID DE BOTÕES: ADICIONAR, SOLICITAR CONTA, ENCERRAR */}
+                         <div className="grid grid-cols-2 gap-2 pt-2">
+                             <Button variant="outline" className="h-12 col-span-2" onClick={openMenu} disabled={selectedTable?.status === 'payment'}><Plus className="mr-2 h-4 w-4"/> Adicionar Mais Itens</Button>
+                             
+                             {/* Botão de Solicitar Conta (Para o Caixa) */}
                              <Button 
-                                variant="destructive" 
-                                className="h-12 font-bold shadow-sm"
-                                onClick={handleCloseTable} 
+                                variant={selectedTable?.status === 'payment' ? "ghost" : "secondary"}
+                                className={cn("h-12 font-bold shadow-sm", selectedTable?.status === 'payment' ? "bg-yellow-50 text-yellow-600 border border-yellow-200" : "bg-blue-50 text-blue-700 hover:bg-blue-100")}
+                                onClick={handleRequestBill} 
+                                disabled={isPending || selectedTable?.status === 'payment'} 
+                             >
+                                <Receipt className="mr-2 h-4 w-4"/> {selectedTable?.status === 'payment' ? "Aguardando..." : "Pedir Conta"}
+                             </Button>
+
+                             {/* Botão de Receber (Para o Garçom) */}
+                             <Button 
+                                className="h-12 font-bold shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
+                                onClick={handleCloseDirectly} 
                                 disabled={isPending} 
                              >
-                                <CheckCircle2 className="mr-2 h-4 w-4"/> Encerrar Mesa
+                                <CreditCard className="mr-2 h-4 w-4"/> Receber Agora
                              </Button>
                          </div>
                     </div>
@@ -370,6 +404,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </DialogContent>
       </Dialog>
       
+      {/* ... (MODAIS MENU E PRODUTO IGUAIS ANTES) ... */}
        <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>
         <DialogContent className="h-[95vh] w-full max-w-lg flex flex-col p-0 gap-0">
              <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
@@ -411,6 +446,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             )}
         </DialogContent>
       </Dialog>
+      
       <Dialog open={!!productToCustomize} onOpenChange={(o) => !o && setProductToCustomize(null)}>
         <DialogContent className="h-[90vh] sm:h-auto sm:max-w-lg flex flex-col p-0 gap-0 overflow-hidden">
              {productToCustomize && (
@@ -486,10 +522,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   )
 }
 
-// --- WRAPPER FINAL COM TEMA ISOLADO ---
+// --- WRAPPER FINAL ---
 export default function WaiterPage({ params }: { params: { slug: string } }) {
     return (
-        // storageKey="waiter-theme" isola o tema do garçom
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="waiter-theme" disableTransitionOnChange>
             <WaiterContent params={params} />
         </ThemeProvider>
