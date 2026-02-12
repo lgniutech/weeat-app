@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useTransition, useMemo, use } from "react"
+import { useState, useEffect, useTransition, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { ThemeProvider, useTheme } from "next-themes" 
 import { getStaffSession, logoutStaffAction } from "@/app/actions/staff"
@@ -10,7 +10,8 @@ import {
     createTableOrderAction, 
     addItemsToTableAction, 
     closeTableAction,
-    serveReadyOrdersAction 
+    serveReadyOrdersAction,
+    validateCouponUiAction 
 } from "@/app/actions/waiter"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -44,7 +45,6 @@ type CartItem = Product & {
     totalPrice: number;
 }
 
-// --- CONTEÚDO DO GARÇOM ---
 function WaiterContent({ params }: { params: { slug: string } }) {
   const slug = params.slug
   const [tables, setTables] = useState<any[]>([])
@@ -61,29 +61,30 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
   
+  // Cliente Info
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
 
+  // Item Temp
   const [tempQuantity, setTempQuantity] = useState(1)
   const [tempObs, setTempObs] = useState("")
   const [tempRemovedIngredients, setTempRemovedIngredients] = useState<string[]>([])
   const [tempSelectedAddons, setTempSelectedAddons] = useState<string[]>([])
 
+  // Cupom no Carrinho
+  const [cartCoupon, setCartCoupon] = useState("")
+  const [validatedCouponData, setValidatedCouponData] = useState<{valid: boolean, discount: number, message?: string} | null>(null)
+
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
   const router = useRouter()
-  // Hook do tema isolado
   const { theme, setTheme } = useTheme()
 
   useEffect(() => {
     async function init() {
       const session = await getStaffSession()
-      // Garante que slug e session existam antes de validar
       if (!session || session.storeSlug !== slug || session.role !== 'waiter') {
-        // Se o slug ainda não estiver carregado ou a sessão for inválida
-        if (slug) {
-            router.push(`/${slug}/staff`)
-        }
+        router.push(`/${slug}/staff`)
         return
       }
       setStoreId(session.storeId)
@@ -103,6 +104,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         if (selectedTable && isManagementOpen) {
             const updated = data.find(t => t.id === selectedTable.id)
             if (updated) setSelectedTable(updated)
+            else setSelectedTable(null)
         }
     } catch (error) { console.error(error) }
   }
@@ -125,6 +127,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const openMenu = () => {
     setCart([]) 
     setSearchQuery("")
+    setCartCoupon("") // Reset cupom ao abrir
+    setValidatedCouponData(null)
     setIsMenuOpen(true)
     setIsManagementOpen(false) 
   }
@@ -157,20 +161,43 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     }
     setCart(prev => [...prev, newItem])
     setProductToCustomize(null)
+    // Se adicionar item, o cupom validado anteriormente pode mudar (ex: % sobre total maior), invalida visual
+    if (validatedCouponData) setValidatedCouponData(null) 
     toast({ title: "Adicionado ao carrinho" })
   }
 
-  const removeFromCart = (cartId: string) => setCart(prev => prev.filter(i => i.cartId !== cartId))
+  const removeFromCart = (cartId: string) => {
+      setCart(prev => prev.filter(i => i.cartId !== cartId))
+      setValidatedCouponData(null)
+  }
+
+  // Valida cupom visualmente antes de enviar
+  const handleValidateCartCoupon = async () => {
+      if(!cartCoupon.trim()) return;
+      const total = cart.reduce((acc, item) => acc + item.totalPrice, 0);
+      
+      const res = await validateCouponUiAction(storeId!, cartCoupon, total);
+      if(res.valid) {
+          setValidatedCouponData({ valid: true, discount: res.discount })
+          toast({ title: "Cupom Válido!", description: `- R$ ${res.discount?.toFixed(2)}`, className: "bg-green-600 text-white" })
+      } else {
+          setValidatedCouponData({ valid: false, discount: 0, message: res.message })
+          toast({ title: "Inválido", description: res.message, variant: "destructive" })
+      }
+  }
 
   const sendOrder = () => {
     if (cart.length === 0) return
     startTransition(async () => {
-      let res;
       try {
+          let res;
+          // Envia o cupom junto (se validado ou apenas digitado, a action revalida de qualquer forma por segurança)
+          const codeToSend = cartCoupon.trim().toUpperCase();
+
           if (selectedTable.status === 'free') {
-            res = await createTableOrderAction(storeId!, selectedTable.id, cart, clientName, clientPhone)
+            res = await createTableOrderAction(storeId!, selectedTable.id, cart, clientName, clientPhone, codeToSend)
           } else {
-            res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total)
+            res = await addItemsToTableAction(selectedTable.orderId, cart, selectedTable.total, codeToSend)
           }
           if (res?.success) {
             toast({ title: "Pedido Enviado!", className: "bg-green-600 text-white" })
@@ -184,15 +211,15 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   }
 
   const handleCloseTable = async () => {
-    if(!confirm("Tem certeza que deseja encerrar a conta?")) return;
+    if(!confirm("Encerrar mesa? Certifique-se que o pagamento foi recebido.")) return;
     startTransition(async () => {
         const res = await closeTableAction(selectedTable.id, storeId!)
         if (res?.success) {
             setIsManagementOpen(false)
+            toast({ title: "Mesa Encerrada!", className: "bg-green-600 text-white" })
             fetchTables()
-            toast({ title: "Conta Encerrada!", className: "bg-blue-600 text-white" })
         } else {
-            toast({ title: "Erro ao fechar", description: res?.error || "Verifique o SQL do Banco.", variant: "destructive" })
+            toast({ title: "Erro", description: res?.error, variant: "destructive" })
         }
     })
   }
@@ -226,6 +253,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   }, [productToCustomize, tempSelectedAddons, tempQuantity]);
 
   const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
+  const finalCartTotal = validatedCouponData?.valid ? cartTotal - validatedCouponData.discount : cartTotal;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 transition-colors duration-300">
@@ -236,7 +264,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </h1>
         <div className="flex gap-2">
             <Button variant="ghost" size="icon" onClick={() => fetchTables()}><RefreshCw className="w-4 h-4 text-slate-500" /></Button>
-            {/* BOTÃO DE TEMA */}
             <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                 {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </Button>
@@ -248,7 +275,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         {tables.length === 0 && <p className="col-span-full text-center text-muted-foreground">Carregando mesas...</p>}
         {tables.map(table => {
             const isReady = table.hasReadyItems;
-            const statusLabel = table.isPreparing ? "Preparando..." : "Servido";
+            
+            let statusLabel = "Servido";
+            if(table.isPreparing) statusLabel = "Preparando...";
+
             return (
               <div 
                 key={table.id}
@@ -272,6 +302,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                 <span className="text-xs font-black bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-0.5 rounded-full uppercase">PRONTO!</span>
                             ) : (
                                 <>
+                                    {table.discount > 0 && (
+                                        <span className="text-[10px] line-through text-muted-foreground">R$ {table.subtotal?.toFixed(0)}</span>
+                                    )}
                                     <span className="text-xs font-bold">R$ {table.total.toFixed(0)}</span>
                                     <span className={cn("text-[10px] font-medium uppercase", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
                                         {statusLabel}
@@ -344,7 +377,16 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 ) : (
                     <div className="space-y-4">
                          <div className="border rounded-lg p-3 max-h-[200px] overflow-y-auto bg-slate-50 dark:bg-slate-950">
-                            <p className="text-xs font-bold text-muted-foreground mb-2 uppercase flex items-center justify-between"><span>Consumo Total</span><span className="text-emerald-600 dark:text-emerald-400">R$ {selectedTable?.total?.toFixed(2)}</span></p>
+                            <div className="flex justify-between items-center mb-2 pb-2 border-b border-dashed">
+                                 <span className="text-xs font-bold text-muted-foreground uppercase">Conta Final</span>
+                                 <div className="text-right">
+                                    {selectedTable?.discount > 0 && (
+                                        <div className="text-[10px] text-muted-foreground line-through">Sub: R$ {selectedTable.subtotal?.toFixed(2)}</div>
+                                    )}
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-bold text-lg">R$ {selectedTable?.total?.toFixed(2)}</span>
+                                 </div>
+                            </div>
+
                             {selectedTable?.items?.length > 0 ? (
                                 <ul className="space-y-2">
                                     {selectedTable.items.map((item: any, i: number) => (
@@ -357,15 +399,21 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                             ) : <p className="text-xs italic text-muted-foreground">Vazio.</p>}
                          </div>
 
-                         <div className="grid grid-cols-2 gap-3 pt-2">
-                             <Button variant="outline" className="h-12" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar</Button>
+                         {selectedTable?.couponCode && (
+                             <div className="text-center text-xs font-bold text-green-600 bg-green-50 dark:bg-green-900/20 py-1 rounded">
+                                 CUPOM ATIVO: {selectedTable.couponCode}
+                             </div>
+                         )}
+
+                         <div className="grid grid-cols-2 gap-2 pt-2">
+                             <Button variant="outline" className="h-12 col-span-2" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar Mais Itens</Button>
+                             
                              <Button 
-                                variant="destructive" 
-                                className="h-12 font-bold shadow-sm"
+                                className="h-12 col-span-2 font-bold shadow-sm bg-red-500 hover:bg-red-600 text-white"
                                 onClick={handleCloseTable} 
                                 disabled={isPending} 
                              >
-                                <CheckCircle2 className="mr-2 h-4 w-4"/> Encerrar Mesa
+                                <CreditCard className="mr-2 h-4 w-4"/> Encerrar / Receber
                              </Button>
                          </div>
                     </div>
@@ -407,14 +455,41 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     ))}
                 </div>
             </ScrollArea>
+            
             {cart.length > 0 && (
-                <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t p-3 shadow-lg z-20">
-                    <div className="flex justify-between items-center mb-2"><span className="font-bold text-sm">{cart.length} itens</span><span className="font-bold text-emerald-600">Total: R$ {cartTotal.toFixed(2)}</span></div>
-                    <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white" onClick={sendOrder} disabled={isPending}>{isPending ? "Enviando..." : "CONFIRMAR PEDIDO"}</Button>
+                <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t p-3 shadow-lg z-20 space-y-3">
+                    
+                    <div className="flex gap-2">
+                         <div className="relative flex-1">
+                             <Tag className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                             <Input 
+                                placeholder="Cupom de desconto" 
+                                className="pl-9 uppercase" 
+                                value={cartCoupon}
+                                onChange={(e) => { setCartCoupon(e.target.value); setValidatedCouponData(null); }}
+                             />
+                         </div>
+                         <Button variant="secondary" onClick={handleValidateCartCoupon}>Aplicar</Button>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                        <span className="font-bold text-sm text-slate-500">{cart.length} itens</span>
+                        <div className="text-right">
+                             {validatedCouponData?.valid && (
+                                 <span className="text-xs text-green-600 block">Desconto: -R$ {validatedCouponData.discount.toFixed(2)}</span>
+                             )}
+                             <span className="font-bold text-emerald-600 text-lg">Total: R$ {finalCartTotal.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    
+                    <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white" onClick={sendOrder} disabled={isPending}>
+                        {isPending ? "Enviando..." : "CONFIRMAR PEDIDO"}
+                    </Button>
                 </div>
             )}
         </DialogContent>
       </Dialog>
+      
       <Dialog open={!!productToCustomize} onOpenChange={(o) => !o && setProductToCustomize(null)}>
         <DialogContent className="h-[90vh] sm:h-auto sm:max-w-lg flex flex-col p-0 gap-0 overflow-hidden">
              {productToCustomize && (
@@ -428,9 +503,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     </div>
                     <ScrollArea className="flex-1 p-4">
                         <div className="space-y-6 pb-10">
-                            {productToCustomize.ingredients && productToCustomize.ingredients.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Ingredientes</h4>
+                             <div className="space-y-3">
+                                <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Ingredientes</h4>
+                                {productToCustomize.ingredients && productToCustomize.ingredients.length > 0 ? (
                                     <div className="grid grid-cols-2 gap-2">
                                         {productToCustomize.ingredients.map(ing => {
                                             const isRemoved = tempRemovedIngredients.includes(ing.id)
@@ -442,11 +517,12 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                             )
                                         })}
                                     </div>
-                                </div>
-                            )}
-                            {productToCustomize.addons && productToCustomize.addons.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Adicionais</h4>
+                                ) : <p className="text-sm text-muted-foreground italic">Nenhum ingrediente removível.</p>}
+                             </div>
+
+                             <div className="space-y-3">
+                                 <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Adicionais</h4>
+                                 {productToCustomize.addons && productToCustomize.addons.length > 0 ? (
                                     <div className="space-y-2">
                                         {productToCustomize.addons.map(addon => {
                                             const isSelected = tempSelectedAddons.includes(addon.id)
@@ -461,8 +537,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                             )
                                         })}
                                     </div>
-                                </div>
-                            )}
+                                 ) : <p className="text-sm text-muted-foreground italic">Nenhum adicional disponível.</p>}
+                             </div>
+
                              <div className="space-y-3">
                                 <h4 className="font-medium text-sm text-slate-500 uppercase tracking-wider">Observação</h4>
                                 <Textarea placeholder="Ex: Ponto da carne, sem sal..." value={tempObs} onChange={e => setTempObs(e.target.value)} />
@@ -490,15 +567,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   )
 }
 
-// --- WRAPPER FINAL COM TEMA ISOLADO ---
-// Correção Next.js 15: params é uma Promise
-export default function WaiterPage({ params }: { params: Promise<{ slug: string }> }) {
-    const unwrappedParams = use(params);
-
+export default function WaiterPage({ params }: { params: { slug: string } }) {
     return (
-        // storageKey="waiter-theme" isola o tema do garçom
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="waiter-theme" disableTransitionOnChange>
-            <WaiterContent params={unwrappedParams} />
+            <WaiterContent params={params} />
         </ThemeProvider>
     )
 }
