@@ -1,0 +1,239 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* --- CONFIGURAÇÃO ORIGINAL (AZUL - WEEAT) --- */
+:root {
+  /* Paleta definida: 02B5FF, FEFEFE, 8CDCFF, 00B4FF */
+  
+  --background: #FEFEFE;
+  --foreground: #0F172A;
+  
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+  
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+  
+  /* Azul Principal (#02B5FF) */
+  --primary: #02B5FF;
+  --primary-foreground: #FFFFFF;
+  
+  /* Azul Claro (#8CDCFF) */
+  --secondary: #F0F9FF;
+  --secondary-foreground: #02B5FF;
+  
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  
+  --accent: #8CDCFF;
+  --accent-foreground: #00364D;
+  
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  
+  --border: #E2E8F0;
+  --input: #E2E8F0;
+  --ring: #02B5FF;
+  
+  --radius: 0.625rem;
+  
+  /* Cores de Gráficos */
+  --chart-1: #02B5FF;
+  --chart-2: #8CDCFF;
+  --chart-3: #00B4FF;
+  --chart-4: #38BDF8;
+  --chart-5: #7DD3FC;
+  
+  /* SIDEBAR ORIGINAL */
+  --sidebar: #FEFEFE;
+  --sidebar-foreground: #0F172A;
+  --sidebar-primary: #02B5FF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F0F9FF;
+  --sidebar-accent-foreground: #02B5FF;
+  --sidebar-border: #E2E8F0;
+  --sidebar-ring: #02B5FF;
+}
+
+.dark {
+  --background: #121212; 
+  --foreground: #FAFAFA;
+  
+  --card: #1E1E1E;
+  --card-foreground: #FAFAFA;
+  
+  --popover: #1E1E1E;
+  --popover-foreground: #FAFAFA;
+  
+  --primary: #02B5FF;
+  --primary-foreground: #FFFFFF;
+  
+  --secondary: #27272A;
+  --secondary-foreground: #FAFAFA;
+  
+  --muted: #27272A;
+  --muted-foreground: #A1A1AA;
+  
+  --accent: #27272A;
+  --accent-foreground: #FAFAFA;
+  
+  --destructive: #7F1D1D;
+  --destructive-foreground: #FEFEFE;
+  
+  --border: #333333;
+  --input: #333333;
+  --ring: #00B4FF;
+  
+  --chart-1: #02B5FF;
+  --chart-2: #00B4FF;
+  --chart-3: #8CDCFF;
+  --chart-4: #38BDF8;
+  --chart-5: #7DD3FC;
+  
+  /* SIDEBAR DARK */
+  --sidebar: #121212;
+  --sidebar-foreground: #FAFAFA;
+  --sidebar-primary: #02B5FF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #27272A;
+  --sidebar-accent-foreground: #FAFAFA;
+  --sidebar-border: #333333;
+  --sidebar-ring: #00B4FF;
+}
+
+/* --- TEMAS DO PAINEL ADMIN (ADMIN THEMES) --- */
+/* Aqui forçamos a troca das variáveis --primary E --sidebar-primary */
+
+/* 1. ZINCO (Preto/Branco) */
+body.theme-zinc {
+  --primary: #18181B;
+  --ring: #18181B;
+  --sidebar-primary: #18181B;
+  --sidebar-ring: #18181B;
+  --sidebar-accent-foreground: #18181B; /* Ícones ativos ficam pretos */
+}
+.dark body.theme-zinc {
+  --primary: #FAFAFA;
+  --primary-foreground: #18181B;
+  --ring: #FAFAFA;
+  --sidebar-primary: #FAFAFA;
+  --sidebar-primary-foreground: #18181B;
+  --sidebar-ring: #FAFAFA;
+  --sidebar-accent-foreground: #FAFAFA;
+}
+
+/* 2. VERMELHO (Red) */
+body.theme-red {
+  --primary: #EA1D2C;
+  --ring: #EA1D2C;
+  --sidebar-primary: #EA1D2C;
+  --sidebar-ring: #EA1D2C;
+  --sidebar-accent-foreground: #EA1D2C;
+}
+/* No Dark mode vermelho, mantemos o vermelho vibrante */
+.dark body.theme-red {
+  --primary: #EA1D2C;
+  --ring: #EA1D2C;
+  --sidebar-primary: #EA1D2C;
+  --sidebar-ring: #EA1D2C;
+  --sidebar-accent-foreground: #EA1D2C;
+}
+
+/* 3. LARANJA (Orange) */
+body.theme-orange {
+  --primary: #F97316;
+  --ring: #F97316;
+  --sidebar-primary: #F97316;
+  --sidebar-ring: #F97316;
+  --sidebar-accent-foreground: #F97316;
+}
+.dark body.theme-orange {
+  --primary: #FB923C;
+  --ring: #FB923C;
+  --sidebar-primary: #FB923C;
+  --sidebar-ring: #FB923C;
+  --sidebar-accent-foreground: #FB923C;
+}
+
+/* 4. VERDE (Green) */
+body.theme-green {
+  --primary: #16A34A;
+  --ring: #16A34A;
+  --sidebar-primary: #16A34A;
+  --sidebar-ring: #16A34A;
+  --sidebar-accent-foreground: #16A34A;
+}
+.dark body.theme-green {
+  --primary: #22C55E;
+  --ring: #22C55E;
+  --sidebar-primary: #22C55E;
+  --sidebar-ring: #22C55E;
+  --sidebar-accent-foreground: #22C55E;
+}
+
+/* 5. AZUL (Blue - Padrão) */
+body.theme-blue {
+  /* Não precisa sobrescrever muito pois já é o default, mas garante consistência */
+  --primary: #02B5FF;
+  --ring: #02B5FF;
+  --sidebar-primary: #02B5FF;
+  --sidebar-ring: #02B5FF;
+  --sidebar-accent-foreground: #02B5FF;
+}
+
+
+@theme inline {
+  --font-sans: var(--font-gate), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-poppins: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
