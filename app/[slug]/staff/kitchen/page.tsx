@@ -35,7 +35,9 @@ function safeParse(data: any) {
   if (Array.isArray(data)) return data;
   if (typeof data === 'string') {
     try {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+      return [];
     } catch (e) {
       return [];
     }
@@ -119,8 +121,8 @@ function OrderCard({ order, onAction, btnText, btnColor, icon, isCooking }: any)
                         {addons.length > 0 && (
                           <div className="flex flex-wrap gap-1">
                              {addons.map((addon: any, idx: number) => {
-                               // Garante que pegamos apenas o nome, ignorando preço se existir
-                               const addonName = typeof addon === 'string' ? addon : addon.name;
+                               // CORREÇÃO: Verifica se é objeto ou string para evitar Crash
+                               const addonName = (typeof addon === 'object' && addon?.name) ? addon.name : addon;
                                
                                return (
                                  <span key={idx} className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 px-1.5 rounded uppercase flex items-center">
@@ -134,11 +136,16 @@ function OrderCard({ order, onAction, btnText, btnColor, icon, isCooking }: any)
                         {/* 2. INGREDIENTES REMOVIDOS (EM VERMELHO) */}
                         {removed.length > 0 && (
                            <div className="flex flex-wrap gap-1">
-                             {removed.map((ing: string, idx: number) => (
-                               <span key={idx} className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900 px-1.5 rounded uppercase">
-                                 SEM {ing}
-                               </span>
-                             ))}
+                             {removed.map((ing: any, idx: number) => {
+                               // CORREÇÃO: Verifica se é objeto ou string para evitar Crash
+                               const ingName = (typeof ing === 'object' && ing?.name) ? ing.name : ing;
+
+                               return (
+                                 <span key={idx} className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900 px-1.5 rounded uppercase">
+                                   SEM {ingName}
+                                 </span>
+                               )
+                             })}
                            </div>
                         )}
 
@@ -396,7 +403,9 @@ function KitchenContent({ params }: { params: { slug: string } }) {
                                         {addons.length > 0 && (
                                             <div className="flex flex-wrap gap-1">
                                                 {addons.map((addon: any, i: number) => {
-                                                    const addonName = typeof addon === 'string' ? addon : addon.name;
+                                                    // CORREÇÃO: Verifica se é objeto ou string
+                                                    const addonName = (typeof addon === 'object' && addon?.name) ? addon.name : addon;
+                                                    
                                                     return (
                                                         <span key={i} className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 px-1.5 py-0.5 rounded uppercase flex items-center">
                                                             <Plus className="w-2.5 h-2.5 mr-0.5"/> ADICIONAL DE {addonName}
@@ -409,11 +418,16 @@ function KitchenContent({ params }: { params: { slug: string } }) {
                                         {/* Removidos (Em Vermelho) */}
                                         {removed.length > 0 && (
                                             <div className="flex flex-wrap gap-1">
-                                                {removed.map((ing: string, i: number) => (
-                                                <span key={i} className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900 px-1.5 py-0.5 rounded uppercase">
-                                                    SEM {ing}
-                                                </span>
-                                                ))}
+                                                {removed.map((ing: any, i: number) => {
+                                                    // CORREÇÃO: Verifica se é objeto ou string
+                                                    const ingName = (typeof ing === 'object' && ing?.name) ? ing.name : ing;
+
+                                                    return (
+                                                        <span key={i} className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900 px-1.5 py-0.5 rounded uppercase">
+                                                            SEM {ingName}
+                                                        </span>
+                                                    )
+                                                })}
                                             </div>
                                         )}
 
