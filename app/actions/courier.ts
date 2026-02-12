@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 /**
- * Busca pedidos disponíveis para visualização do entregador.
+ * Busca pedidos disponíveis para visualização do entregador (A Retirar).
  */
 export async function getAvailableDeliveriesAction(storeId: string) {
   const supabase = await createClient();
@@ -39,7 +39,7 @@ export async function getAvailableDeliveriesAction(storeId: string) {
 }
 
 /**
- * Busca pedidos que já saíram para entrega.
+ * Busca pedidos que já saíram para entrega (Minha Rota).
  */
 export async function getActiveDeliveriesAction(storeId: string, courierId: string) {
   const supabase = await createClient();
@@ -61,7 +61,7 @@ export async function getActiveDeliveriesAction(storeId: string, courierId: stri
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "entrega")
-    .eq("status", "em_rota")
+    .eq("status", "em_rota") // Só mostra o que está na rua
     .eq("courier_id", courierId) 
     .order("last_status_change", { ascending: false });
 
@@ -74,7 +74,7 @@ export async function getActiveDeliveriesAction(storeId: string, courierId: stri
 }
 
 /**
- * CORREÇÃO: Recebe um objeto único para evitar erro de serialização (400)
+ * Inicia a rota com vários pedidos de uma vez.
  */
 interface StartBatchParams {
   orderIds: string[];
@@ -93,7 +93,7 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
     return { success: false, message: "Nenhum pedido selecionado." };
   }
 
-  // Verifica se os pedidos ainda estão com status 'enviado' antes de pegar
+  // Verifica se os pedidos ainda estão disponíveis
   const { data: validOrders } = await supabase
     .from("orders")
     .select("id")
@@ -126,11 +126,12 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
 }
 
 /**
- * Atualiza o status da entrega individual.
+ * Atualiza o status da entrega individual para ENTREGUE.
  */
 export async function updateDeliveryStatusAction(orderId: string, newStatus: 'entregue') {
   const supabase = await createClient();
 
+  // Verifica status atual
   const { data: currentOrder } = await supabase
     .from("orders")
     .select("status")
@@ -139,6 +140,7 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
 
   if (!currentOrder) return { success: false, message: "Pedido não encontrado." };
 
+  // Atualiza para 'entregue'
   const { error: updateError } = await supabase
     .from("orders")
     .update({ 
@@ -152,13 +154,13 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
     return { success: false, message: "Falha ao atualizar status." };
   }
 
-  // Opcional: Registrar histórico se a tabela existir
+  // Registrar histórico
   await supabase.from("order_history").insert({
     order_id: orderId,
     previous_status: currentOrder.status,
     new_status: newStatus,
     changed_at: new Date().toISOString()
-  }).catch(() => null); // Ignora erro se tabela não existir
+  }).catch((err) => console.error("Erro ao criar histórico (não bloqueante):", err));
 
   revalidatePath("/");
   return { success: true };
