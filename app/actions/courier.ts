@@ -151,6 +151,16 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'co
     return { success: false, message: "Falha ao finalizar entrega." };
   }
 
+  // CORREÇÃO: Marca também os itens do pedido como concluídos para sumir da Cozinha/Garçom
+  try {
+    await supabase
+      .from("order_items")
+      .update({ status: 'concluido' })
+      .eq("order_id", orderId);
+  } catch (err) {
+    console.error("Erro ao atualizar itens do pedido:", err);
+  }
+
   // Registra no histórico para auditoria do dashboard
   try {
     await supabase.from("order_history").insert({
