@@ -389,12 +389,41 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
                             {selectedTable?.items?.length > 0 ? (
                                 <ul className="space-y-2">
-                                    {selectedTable.items.map((item: any, i: number) => (
-                                        <li key={i} className="text-sm border-b border-dashed pb-1 last:border-0 flex justify-between">
-                                            <span className="truncate max-w-[70%]">{item.quantity}x {item.name || item.product_name}</span>
-                                            <span className="font-mono text-xs">R$ {((item.price || item.unit_price) * item.quantity).toFixed(2)}</span>
-                                        </li>
-                                    ))}
+                                    {selectedTable.items.map((item: any, i: number) => {
+                                        let removed = [];
+                                        let addons = [];
+                                        try {
+                                            removed = typeof item.removed_ingredients === 'string' ? JSON.parse(item.removed_ingredients) : item.removed_ingredients || [];
+                                            addons = typeof item.selected_addons === 'string' ? JSON.parse(item.selected_addons) : item.selected_addons || [];
+                                        } catch(e) {}
+
+                                        return (
+                                            <li key={i} className="text-sm border-b border-dashed pb-2 last:border-0 flex flex-col">
+                                                <div className="flex justify-between">
+                                                    <span className="truncate max-w-[70%] font-medium">{item.quantity}x {item.name || item.product_name}</span>
+                                                    <span className="font-mono text-xs">R$ {((item.price || item.unit_price) * item.quantity).toFixed(2)}</span>
+                                                </div>
+                                                
+                                                <div className="text-xs text-muted-foreground pl-4 space-y-0.5 mt-1">
+                                                    {removed.length > 0 && (
+                                                        <div className="text-red-500/80">
+                                                            Sem: {removed.map((r: any) => r.name).join(", ")}
+                                                        </div>
+                                                    )}
+                                                    {addons.length > 0 && (
+                                                        <div className="text-green-600/80">
+                                                            Add: {addons.map((a: any) => a.name).join(", ")}
+                                                        </div>
+                                                    )}
+                                                    {item.observation && (
+                                                        <div className="text-amber-600/90 italic">
+                                                            Obs: {item.observation}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        )
+                                    })}
                                 </ul>
                             ) : <p className="text-xs italic text-muted-foreground">Vazio.</p>}
                          </div>
