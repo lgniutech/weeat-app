@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { getStoreOrdersAction, updateOrderStatusAction } from "@/app/actions/order"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft, MessageSquareWarning, Printer, Phone, ExternalLink, MessageCircle, DollarSign, BellRing } from "lucide-react"
+import { AlertCircle, Bike, CheckCircle2, Package, Volume2, VolumeX, Eye, EyeOff, RotateCcw, XCircle, Trash2, MapPin, Store, Clock, Timer, ArrowLeft, MessageSquareWarning, Printer, Phone, ExternalLink, MessageCircle, DollarSign, BellRing, Utensils } from "lucide-react"
 import { format, differenceInMinutes, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
@@ -19,9 +19,8 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 
-// DEFINIÇÃO DAS COLUNAS
+// DEFINIÇÃO DAS COLUNAS (Removida a coluna 'Pendente')
 const BASE_COLUMNS = [
-  { id: 'pendente', label: 'Pendente', color: 'bg-yellow-500', text: 'text-yellow-700 dark:text-yellow-400', icon: AlertCircle },
   { id: 'preparando', label: 'Cozinha', color: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-400', icon: Package },
   { id: 'enviado', label: 'Pronto / Expedição', color: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-400', icon: BellRing },
   { id: 'entregue', label: 'Concluído', color: 'bg-green-600', text: 'text-green-700 dark:text-green-400', icon: CheckCircle2 },
@@ -91,7 +90,6 @@ export function OrderManager({ store }: { store: any }) {
         { event: 'UPDATE', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
         (payload) => {
            fetchOrders()
-           // Atualiza modal se estiver aberto
            if (viewOrder && payload.new.id === viewOrder.id) {
                setTimeout(async () => {
                    const dateStr = format(selectedDate, 'yyyy-MM-dd')
@@ -199,13 +197,11 @@ export function OrderManager({ store }: { store: any }) {
   }
   const visibleColumns = useMemo(() => { return showCanceled ? [...BASE_COLUMNS, CANCELED_COLUMN] : BASE_COLUMNS }, [showCanceled])
 
-  // --- CORREÇÃO AQUI (ACEITA CONCLUIDO) ---
   const getOrdersForColumn = (columnId: string) => {
     const colOrders = orders.filter(o => {
         if (columnId === 'preparando') {
             return o.status === 'preparando' || o.status === 'aceito'; 
         }
-        // AQUI ESTÁ A CORREÇÃO:
         if (columnId === 'entregue') {
              return o.status === 'entregue' || o.status === 'concluido';
         }
@@ -362,7 +358,7 @@ export function OrderManager({ store }: { store: any }) {
                                                     {timeInStage}
                                                 </div>
                                                 
-                                                {['pendente', 'preparando', 'aceito', 'enviado'].includes(order.status) && (
+                                                {['preparando', 'aceito', 'enviado'].includes(order.status) && (
                                                     <button 
                                                         className="text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 transition-colors p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20" 
                                                         onClick={(e) => handleCancelClick(order.id, e)}
@@ -409,18 +405,9 @@ export function OrderManager({ store }: { store: any }) {
                                     </div>
 
                                     {/* Botões de Ação */}
-                                    {col.id === 'pendente' && (
-                                        <div className="grid grid-cols-2 h-6 mt-px">
-                                            <button onClick={(e) => handleCancelClick(order.id, e)} className="bg-slate-50 hover:bg-red-50 dark:bg-zinc-800 dark:hover:bg-red-900/30 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-300 text-[10px] font-bold border-t border-r border-slate-100 dark:border-zinc-700 transition-colors">RECUSAR</button>
-                                            <button onClick={() => moveOrder(order.id, 'preparando')} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors">ACEITAR</button>
-                                        </div>
-                                    )}
                                     {col.id === 'preparando' && (
-                                        <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
-                                             {/* Se for aceito, não tem como voltar pra pendente, pois pulou essa etapa. Se for preparando, pode voltar pra pendente? Melhor não complicar. */}
-                                             <button onClick={() => moveOrder(order.id, 'pendente')} className="bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-[10px] border-t border-r border-slate-100 dark:border-zinc-700"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
-                                             
-                                             <button onClick={() => moveOrder(order.id, 'enviado')} className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-colors uppercase">
+                                        <div className="w-full h-6 mt-px">
+                                             <button onClick={() => moveOrder(order.id, 'enviado')} className="w-full h-full bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-colors uppercase rounded-b">
                                                  {order.delivery_type === 'mesa' ? "SERVIR" : "PRONTO"}
                                              </button>
                                         </div>
@@ -439,7 +426,7 @@ export function OrderManager({ store }: { store: any }) {
                                         </button>
                                     )}
                                     {col.id === 'cancelado' && (
-                                        <button onClick={() => moveOrder(order.id, 'pendente')} className="w-full h-5 bg-slate-50 hover:bg-blue-50 dark:bg-zinc-800 dark:hover:bg-blue-900/30 text-slate-300 hover:text-blue-400 dark:text-slate-600 dark:hover:text-blue-300 text-[9px] border-t border-slate-100 dark:border-zinc-700 transition-colors flex items-center justify-center gap-1">
+                                        <button onClick={() => moveOrder(order.id, 'aceito')} className="w-full h-5 bg-slate-50 hover:bg-blue-50 dark:bg-zinc-800 dark:hover:bg-blue-900/30 text-slate-300 hover:text-blue-400 dark:text-slate-600 dark:hover:text-blue-300 text-[9px] border-t border-slate-100 dark:border-zinc-700 transition-colors flex items-center justify-center gap-1">
                                             <RotateCcw className="w-2.5 h-2.5" /> Restaurar
                                         </button>
                                     )}
@@ -499,7 +486,7 @@ export function OrderManager({ store }: { store: any }) {
                          </Button>
                     </DialogHeader>
 
-                    {/* CONTEÚDO DO MODAL MANTIDO IGUAL */}
+                    {/* CONTEÚDO DO MODAL */}
                     <div className="grid md:grid-cols-2 gap-6 py-4">
                         <div className="space-y-6">
                              {/* CLIENTE */}
@@ -582,15 +569,16 @@ export function OrderManager({ store }: { store: any }) {
                     </div>
 
                     <DialogFooter className="flex flex-col sm:flex-row gap-2 border-t dark:border-zinc-800 pt-4">
-                        {/* Botões de controle no modal iguais aos cards */}
-                        {(viewOrder.status === 'pendente' || viewOrder.status === 'aceito') && (
+                        {(viewOrder.status === 'preparando' || viewOrder.status === 'aceito') ? (
                             <>
-                                <Button variant="destructive" className="flex-1" onClick={() => handleCancelClick(viewOrder.id)}>Recusar Pedido</Button>
-                                <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => moveOrder(viewOrder.id, 'preparando')}>Aceitar e Cozinhar</Button>
+                                <Button variant="destructive" className="flex-1" onClick={() => handleCancelClick(viewOrder.id)}>Cancelar Pedido</Button>
+                                <Button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white" onClick={() => moveOrder(viewOrder.id, 'enviado')}>
+                                     {viewOrder.delivery_type === 'mesa' ? "SERVIR" : "PRONTO"}
+                                </Button>
                             </>
+                        ) : (
+                             <Button className="w-full" variant="outline" onClick={() => setViewOrder(null)}>Fechar</Button>
                         )}
-                         {/* Outros status omitidos para brevidade */}
-                        {viewOrder.status !== 'pendente' && viewOrder.status !== 'aceito' && <Button className="w-full" variant="outline" onClick={() => setViewOrder(null)}>Fechar</Button>}
                     </DialogFooter>
                  </>
              )}
