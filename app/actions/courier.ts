@@ -130,12 +130,10 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
 
 /**
  * 4. AÇÃO DE FINALIZAR: Marca como 'entregue'.
- * Isso faz o pedido sair da lista de 'em_rota'.
  */
 export async function updateDeliveryStatusAction(orderId: string, newStatus: 'entregue') {
   const supabase = await createClient();
 
-  // 1. Busca o status atual para histórico (opcional, boa prática)
   const { data: currentOrder } = await supabase
     .from("orders")
     .select("status")
@@ -144,7 +142,6 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
 
   if (!currentOrder) return { success: false, message: "Pedido não encontrado." };
 
-  // 2. Atualiza o pedido para 'entregue'
   const { error: updateError } = await supabase
     .from("orders")
     .update({ 
@@ -158,7 +155,6 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
     return { success: false, message: "Falha ao finalizar entrega." };
   }
 
-  // 3. Registra no histórico (opcional - try/catch para não bloquear o fluxo se falhar)
   try {
     await supabase.from("order_history").insert({
       order_id: orderId,
@@ -170,8 +166,6 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
     console.error("Erro silencioso ao criar histórico:", err);
   }
 
-  // 4. Revalida o cache
   revalidatePath("/");
-  
   return { success: true };
 }
