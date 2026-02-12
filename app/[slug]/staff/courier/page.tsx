@@ -79,6 +79,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         setAvailableOrders(available || []);
         setActiveOrders(active || []);
         
+        // Mantém selecionados apenas os que ainda estão disponíveis e prontos
         setSelectedOrders(prev => prev.filter(id => available?.some(o => o.id === id && o.status === 'enviado')));
       } catch (error) {
         console.error("Erro ao buscar pedidos:", error);
@@ -176,10 +177,8 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     
     startTransition(async () => {
       try {
-        // Alterado de 'entregue' para 'concluido' para refletir no dashboard global
         const result = await updateDeliveryStatusAction(orderId, 'concluido');
         if (result.success) {
-          // Remove localmente para resposta imediata
           setActiveOrders(prev => prev.filter(o => o.id !== orderId));
           toast({
             title: "Entrega Finalizada!",
@@ -352,6 +351,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
           <TabsContent value="pickup" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* SEÇÃO: PRONTO PARA RETIRAR */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h2 className="font-bold text-lg flex items-center gap-2 text-green-700 dark:text-green-400">
@@ -413,7 +413,8 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                 )}
               </div>
               
-              <div className="space-y-4 opacity-75">
+              {/* SEÇÃO: AGUARDANDO COZINHA */}
+              <div className="space-y-4">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h2 className="font-bold text-lg flex items-center gap-2 text-orange-600 dark:text-orange-400">
                     <ChefHat className="w-5 h-5" />
@@ -423,20 +424,30 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                     </Badge>
                   </h2>
                 </div>
-                {cookingOrders.map((order) => (
-                  <Card key={order.id} className="border-l-4 border-l-orange-300 bg-slate-50 dark:bg-slate-900/50">
-                    <CardHeader className="p-3 pb-0">
-                      <div className="flex justify-between">
-                        <span className="font-bold text-sm">#{order.id.slice(0, 5).toUpperCase()}</span>
-                        <Badge variant="secondary" className="text-[10px]">PREPARANDO</Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-1 text-[10px] text-muted-foreground">
-                       <Clock className="w-3 h-3 inline mr-1" />
-                       {calculateTimeElapsed(order.last_status_change)}
-                    </CardContent>
-                  </Card>
-                ))}
+                
+                {cookingOrders.length === 0 ? (
+                  <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-dashed">
+                    <p className="text-sm text-muted-foreground">Nenhum pedido em preparo.</p>
+                  </div>
+                ) : (
+                  cookingOrders.map((order) => (
+                    <Card key={order.id} className="border-l-4 border-l-orange-300 bg-slate-50 dark:bg-slate-900/50 opacity-80">
+                      <CardHeader className="p-3 pb-0">
+                        <div className="flex justify-between">
+                          <span className="font-bold text-sm">#{order.id.slice(0, 5).toUpperCase()}</span>
+                          <Badge variant="secondary" className="text-[10px] bg-orange-100 text-orange-700 border-none">PREPARANDO</Badge>
+                        </div>
+                        <p className="text-xs font-semibold mt-1">{order.customer_name}</p>
+                      </CardHeader>
+                      <CardContent className="p-3 pt-1 text-[10px] text-muted-foreground">
+                         <div className="flex items-center gap-1">
+                           <Clock className="w-3 h-3" />
+                           <span>Em preparo há {calculateTimeElapsed(order.last_status_change)}</span>
+                         </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
             </div>
           </TabsContent>
