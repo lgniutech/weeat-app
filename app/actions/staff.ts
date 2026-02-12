@@ -32,11 +32,12 @@ export async function verifyStaffPinAction(slug: string, pin: string) {
     storeSlug: slug
   });
 
+  // Define o cookie com path '/'
   cookieStore.set(COOKIE_NAME, sessionData, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 24, 
-    path: "/",
+    path: "/", 
   });
 
   // REDIRECIONAMENTO INTELIGENTE
@@ -50,9 +51,19 @@ export async function verifyStaffPinAction(slug: string, pin: string) {
   return { success: true, redirectUrl };
 }
 
+// --- LOGOUT CORRIGIDO ---
 export async function logoutStaffAction(slug: string) {
   const cookieStore = await cookies();
-  cookieStore.delete(COOKIE_NAME);
+  
+  // É crucial passar o path '/' para deletar o cookie global corretamente
+  cookieStore.delete({
+    name: COOKIE_NAME,
+    path: '/',
+  });
+
+  // Garante que o cache da página seja limpo antes de redirecionar
+  revalidatePath(`/${slug}/staff`);
+  
   redirect(`/${slug}/staff`);
 }
 
@@ -92,11 +103,9 @@ export async function createStaffAction(storeId: string, name: string, role: str
     });
 
     if (error) {
-      // Tratamento específico para PIN duplicado
       if (error.message.includes("unique_pin_per_store")) {
         return { error: "Este PIN já está sendo usado por outro funcionário." };
       }
-      // Se for erro de constraint (role inválida), o 'message' vai avisar
       console.error("Erro Supabase:", error); 
       throw new Error(error.message);
     }
@@ -106,7 +115,6 @@ export async function createStaffAction(storeId: string, name: string, role: str
 
   } catch (err: any) {
     console.error("Erro Create Staff:", err);
-    // Retorna o erro real para o toast do front-end
     return { error: err.message || "Erro ao criar funcionário." };
   }
 }
