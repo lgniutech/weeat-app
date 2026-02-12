@@ -140,6 +140,28 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
       return table.customer_name;
   }
 
+  // Helper para ícones de pagamento
+  const getPaymentIcon = (method: string) => {
+    switch(method) {
+        case 'pix': return <Smartphone className="w-3 h-3" />;
+        case 'money': return <Banknote className="w-3 h-3" />;
+        case 'credit_card': 
+        case 'debit_card': 
+            return <CreditCard className="w-3 h-3" />;
+        default: return <DollarSign className="w-3 h-3" />;
+    }
+  }
+
+  const getPaymentLabel = (method: string) => {
+      const map: Record<string, string> = {
+          'credit_card': 'Crédito',
+          'debit_card': 'Débito',
+          'pix': 'Pix',
+          'money': 'Dinheiro'
+      };
+      return map[method] || method;
+  }
+
   if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-8 h-8 text-muted-foreground" /></div>
 
   return (
@@ -238,11 +260,19 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                                             <p className="text-xs text-muted-foreground mt-0.5">
                                                 {order.order_items.map((i:any) => `${i.quantity}x ${i.product_name}`).join(", ")}
                                             </p>
-                                            <div className="flex items-center gap-2 mt-2">
+                                            <div className="flex flex-wrap items-center gap-2 mt-2">
                                                 <Badge variant={order.status === 'pronto' ? 'default' : 'secondary'} className={order.status === 'pronto' ? 'bg-green-500' : ''}>
                                                     {order.status.toUpperCase()}
                                                 </Badge>
                                                 <span className="text-xs font-mono font-bold">{formatCurrency(order.total_price)}</span>
+                                                
+                                                {/* Exibição da Forma de Pagamento */}
+                                                {order.payment_method && (
+                                                    <div className="flex items-center gap-1 text-xs text-muted-foreground bg-slate-100 dark:bg-zinc-800 border px-2 py-0.5 rounded-md ml-1">
+                                                        {getPaymentIcon(order.payment_method)}
+                                                        <span className="font-medium">{getPaymentLabel(order.payment_method)}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -339,7 +369,7 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                 <div className="grid gap-4 py-4">
                     <p className="text-xs font-medium text-muted-foreground mb-2">Selecione a forma de pagamento:</p>
                     <div className="grid grid-cols-2 gap-4">
-                        {/* Opções de Pagamento (Mantidas iguais para brevidade) */}
+                        {/* Opções de Pagamento */}
                         {['credit_card', 'debit_card', 'pix', 'money'].map((method) => (
                             <div 
                                 key={method}
