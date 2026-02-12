@@ -89,7 +89,7 @@ const navigationItems = [
     items: [
       { title: "Fluxo de Caixa", url: "#" },
       { title: "Relatórios Detalhados", url: "#", icon: BarChart3, id: "financial" }, 
-      { title: "Entregadores & Fretes", url: "#" },
+      { title: "Entregadores & Fretes", url: "#", id: "courier-management" },
     ],
   },
   {
