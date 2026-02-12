@@ -313,16 +313,25 @@ function KitchenContent({ params }: { params: { slug: string } }) {
 // --- SUB-COMPONENTES VISUAIS ---
 
 function OrderCard({ order, onAction, btnText, btnColor, icon, isCooking }: any) {
+  // Lógica para definir o que exibir no cabeçalho do card
+  const isTable = order.delivery_type === 'mesa';
+  const displayTitle = isTable 
+    ? (order.table_number || "?") 
+    : `${order.delivery_type === 'delivery' ? 'Delivery' : 'Retirada'} - ${order.customer_name}`;
+
   return (
     <Card className={cn("border shadow-sm overflow-hidden transition-all", isCooking ? "border-orange-200 dark:border-orange-900 ring-1 ring-orange-100 dark:ring-orange-900" : "border-slate-200")}>
       <div className="p-4">
         <div className="flex justify-between items-start mb-3">
           <div>
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-              {order.delivery_type === 'mesa' ? 'Mesa' : 'Pedido'}
+              {isTable ? 'Mesa' : 'Pedido'}
             </span>
-            <span className="text-3xl font-black text-slate-800 dark:text-slate-100 leading-none">
-              {order.table_number || "?"}
+            <span className={cn(
+                "font-black text-slate-800 dark:text-slate-100 leading-none", 
+                isTable ? "text-3xl" : "text-lg" // Ajusta tamanho da fonte se for texto longo (Delivery) ou número (Mesa)
+            )}>
+              {displayTitle}
             </span>
           </div>
           <OrderTimer createdAt={order.created_at} />
