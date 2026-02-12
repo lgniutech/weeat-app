@@ -176,8 +176,10 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     
     startTransition(async () => {
       try {
-        const result = await updateDeliveryStatusAction(orderId, 'entregue');
+        // Alterado de 'entregue' para 'concluido' para refletir no dashboard global
+        const result = await updateDeliveryStatusAction(orderId, 'concluido');
         if (result.success) {
+          // Remove localmente para resposta imediata
           setActiveOrders(prev => prev.filter(o => o.id !== orderId));
           toast({
             title: "Entrega Finalizada!",
@@ -203,7 +205,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   const openMaps = (address: string) => {
     if (!address) return;
     const encoded = encodeURIComponent(address);
-    // Link corrigido para Google Maps
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
   };
 
@@ -350,6 +351,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
           </TabsContent>
 
           <TabsContent value="pickup" className="space-y-6">
+            {/* ... restante do código da aba Pickup permanece igual ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b pb-2">
@@ -405,19 +407,13 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                               </div>
                             </div>
                           </CardHeader>
-                          <CardContent className="pb-3 pl-11 text-xs space-y-1 p-4 pt-0">
-                            <div className="flex items-start gap-2 text-muted-foreground">
-                              <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                              <span className="line-clamp-1">{order.address || "Local não informado"}</span>
-                            </div>
-                          </CardContent>
                         </Card>
                       </div>
                     );
                   })
                 )}
               </div>
-
+              
               <div className="space-y-4 opacity-75">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h2 className="font-bold text-lg flex items-center gap-2 text-orange-600 dark:text-orange-400">
@@ -435,7 +431,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                         <span className="font-bold text-sm">#{order.id.slice(0, 5).toUpperCase()}</span>
                         <Badge variant="secondary" className="text-[10px]">PREPARANDO</Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground">{order.customer_name}</p>
                     </CardHeader>
                     <CardContent className="p-3 pt-1 text-[10px] text-muted-foreground">
                        <Clock className="w-3 h-3 inline mr-1" />
@@ -445,28 +440,23 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                 ))}
               </div>
             </div>
-            <div className="h-20" />
           </TabsContent>
         </Tabs>
       </main>
 
       {selectedOrders.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-lg z-50 animate-in slide-in-from-bottom-5">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-lg z-50">
           <div className="max-w-md mx-auto flex items-center gap-4">
-            <div className="flex-1 text-sm">
-              <span className="font-bold">{selectedOrders.length}</span> selecionados
+            <div className="flex-1 text-sm font-bold">
+              {selectedOrders.length} selecionados
             </div>
             <Button 
               size="lg" 
-              className="font-bold bg-primary text-primary-foreground shadow-xl w-2/3"
+              className="font-bold bg-primary text-primary-foreground w-2/3"
               onClick={handleBatchStart}
               disabled={isPending}
             >
-              {isPending ? (
-                <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-              ) : (
-                <Bike className="w-5 h-5 mr-2" />
-              )}
+              {isPending ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <Bike className="w-5 h-5 mr-2" />}
               INICIAR ROTA
             </Button>
           </div>
