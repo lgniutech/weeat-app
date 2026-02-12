@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -31,6 +32,8 @@ import {
 } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { createOrderAction, getTableOrdersAction } from "@/app/actions/order"
 import { validateCouponAction, incrementCouponUsageAction } from "@/app/actions/coupons"
@@ -43,10 +46,31 @@ interface StoreFrontProps {
   products: any[]
 }
 
+// Interface para item do carrinho
+interface CartItem {
+  cartItemId: string
+  id: string
+  name: string
+  price: number // Preço unitário (base + adicionais)
+  quantity: number
+  removedIngredients: string[] // Nomes ou IDs
+  selectedAddons: string[] // IDs
+  selectedAddonsDetails: any[] // Objetos completos para exibição
+  note: string
+  image_url?: string
+}
+
 export function StoreFront({ store, categories, products = [] }: StoreFrontProps) {
-  const [cart, setCart] = useState<any[]>([])
+  const [cart, setCart] = useState<CartItem[]>([])
   const [isCartOpen, setIsCartOpen] = useState(false)
+  
+  // Produto Selecionado e Personalização
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
+  const [quantity, setQuantity] = useState(1)
+  const [removedIngredients, setRemovedIngredients] = useState<string[]>([])
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([])
+  const [orderNote, setOrderNote] = useState("")
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("todos")
   
@@ -103,19 +127,63 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     if (store.theme_mode) setTheme(store.theme_mode)
   }, [])
 
-  const addToCart = (product: any) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id)
-      if (existing) return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
-      return [...prev, { ...product, quantity: 1 }]
-    })
+  // Resetar estados ao abrir modal de produto
+  useEffect(() => {
+    if (selectedProduct) {
+        setQuantity(1)
+        setRemovedIngredients([])
+        setSelectedAddons([])
+        setOrderNote("")
+    }
+  }, [selectedProduct])
+
+  // Lógica de Adicionar ao Carrinho (Com personalização)
+  const handleAddToCart = () => {
+    if (!selectedProduct) return
+
+    // Calcular preço base + adicionais
+    const addonsTotal = selectedAddons.reduce((acc, addonId) => {
+        const addon = selectedProduct.addons.find((a: any) => a.id === addonId)
+        return acc + (addon ? Number(addon.price) : 0)
+    }, 0)
+    
+    const unitPrice = Number(selectedProduct.price) + addonsTotal
+
+    // Pegar detalhes dos adicionais para exibição
+    const addonsDetails = selectedAddons.map(id => selectedProduct.addons.find((a: any) => a.id === id)).filter(Boolean)
+
+    // Pegar nomes dos ingredientes removidos para exibição/envio
+    const removedDetails = removedIngredients.map(id => {
+        const ing = selectedProduct.ingredients.find((i: any) => i.id === id)
+        return ing ? ing.name : null
+    }).filter(Boolean) as string[]
+
+    const newItem: CartItem = {
+        cartItemId: crypto.randomUUID(), // ID único para o item no carrinho
+        id: selectedProduct.id,
+        name: selectedProduct.name,
+        image_url: selectedProduct.image_url,
+        price: unitPrice,
+        quantity: quantity,
+        removedIngredients: removedDetails,
+        selectedAddons: selectedAddons, // IDs
+        selectedAddonsDetails: addonsDetails,
+        note: orderNote
+    }
+
+    setCart(prev => [...prev, newItem])
     setIsCartOpen(true)
     setSelectedProduct(null)
-    toast({ title: "Adicionado!", description: `${product.name} foi para a sacola.` })
+    toast({ title: "Adicionado!", description: `${quantity}x ${selectedProduct.name} na sacola.` })
   }
 
-  const updateQuantity = (itemId: string, delta: number) => {
-    setCart(prev => prev.map(item => item.id === itemId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter(item => item.quantity > 0))
+  const updateQuantity = (cartItemId: string, delta: number) => {
+    setCart(prev => prev.map(item => {
+        if (item.cartItemId === cartItemId) {
+            return { ...item, quantity: Math.max(0, item.quantity + delta) }
+        }
+        return item
+    }).filter(item => item.quantity > 0))
   }
 
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
@@ -185,10 +253,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
       if (storeCityNormalized !== cepCityNormalized) {
         setCepError(`Desculpe, só entregamos em ${store.city}.`);
-        // Opcional: Limpar os campos para evitar envio
         setCustomerAddress(prev => ({ ...prev, street: "", neighborhood: "", state: "", city: "" }));
       } else {
-        // Cidade bate, preencher dados
         setCustomerAddress(prev => ({
           ...prev,
           street: data.logradouro,
@@ -224,7 +290,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const handleCheckout = async () => {
     if (cart.length === 0) return
     
-    // Bloqueios de validação
     if (isBelowMin) {
         toast({ title: "Pedido Mínimo", description: `Faltam ${formatCurrency(remainingForMin)} para finalizar.`, variant: "destructive" });
         return;
@@ -264,8 +329,9 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         product_name: item.name,
         quantity: item.quantity,
         unit_price: item.price,
-        removed_ingredients: [],
-        selected_addons: [] 
+        removed_ingredients: item.removedIngredients,
+        selected_addons: item.selectedAddonsDetails.map(a => `${a.name} (+${formatCurrency(a.price)})`),
+        notes: item.note
       })),
       notes: appliedCoupon ? `Cupom: ${appliedCoupon.code}` : undefined
     }
@@ -326,6 +392,17 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     store.city ? `- ${store.city}` : null,
     store.state
   ].filter(Boolean).join(", ").replace(", -", " -");
+
+  // Calculo do preço total no modal
+  const modalTotalPrice = useMemo(() => {
+    if(!selectedProduct) return 0;
+    const addonsTotal = selectedAddons.reduce((acc, addonId) => {
+        const addon = selectedProduct.addons.find((a: any) => a.id === addonId)
+        return acc + (addon ? Number(addon.price) : 0)
+    }, 0)
+    return (Number(selectedProduct.price) + addonsTotal) * quantity
+  }, [selectedProduct, selectedAddons, quantity])
+
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20 font-sans">
@@ -427,21 +504,104 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         </div>
       </div>
 
-      {/* MODAL PRODUTO */}
+      {/* MODAL PRODUTO (ATUALIZADO) */}
       <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
-        <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden flex flex-col h-[90vh] sm:h-auto">
             {selectedProduct && (
                 <>
-                    {selectedProduct.image_url && <div className="w-full h-48 relative"><Image src={selectedProduct.image_url} alt={selectedProduct.name} fill className="object-cover" /></div>}
-                    <div className="p-6">
-                        <DialogHeader>
-                            <DialogTitle className="text-xl">{selectedProduct.name}</DialogTitle>
-                            <DialogDescription className="text-base mt-2">{selectedProduct.description || "Sem descrição."}</DialogDescription>
-                        </DialogHeader>
-                        <div className="mt-8 flex items-center justify-between">
-                            <span className="text-xl font-bold text-emerald-600">{formatCurrency(selectedProduct.price)}</span>
-                            <Button onClick={() => addToCart(selectedProduct)}>Adicionar à Sacola</Button>
+                   <ScrollArea className="flex-1 w-full max-h-[calc(90vh-80px)] sm:max-h-[60vh]">
+                        {selectedProduct.image_url && (
+                            <div className="w-full h-48 relative shrink-0">
+                                <Image src={selectedProduct.image_url} alt={selectedProduct.name} fill className="object-cover" />
+                            </div>
+                        )}
+                        <div className="p-6 space-y-6">
+                            <DialogHeader>
+                                <DialogTitle className="text-xl">{selectedProduct.name}</DialogTitle>
+                                <DialogDescription className="text-base mt-2">{selectedProduct.description || "Sem descrição."}</DialogDescription>
+                            </DialogHeader>
+
+                            {/* INGREDIENTES (Remoção) */}
+                            {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && (
+                                <div className="space-y-3">
+                                    <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Ingredientes</h4>
+                                    <p className="text-xs text-muted-foreground">Desmarque o que deseja remover.</p>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {selectedProduct.ingredients.map((ing: any) => (
+                                            <div key={ing.id} className="flex items-center space-x-2 border rounded-md p-3">
+                                                <Checkbox 
+                                                    id={`ing-${ing.id}`} 
+                                                    checked={!removedIngredients.includes(ing.id)}
+                                                    onCheckedChange={(checked) => {
+                                                        if (!checked) {
+                                                            setRemovedIngredients([...removedIngredients, ing.id])
+                                                        } else {
+                                                            setRemovedIngredients(removedIngredients.filter(id => id !== ing.id))
+                                                        }
+                                                    }}
+                                                />
+                                                <Label htmlFor={`ing-${ing.id}`} className="flex-1 cursor-pointer font-normal">
+                                                    {ing.name}
+                                                </Label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ADICIONAIS (Seleção) */}
+                            {selectedProduct.addons && selectedProduct.addons.length > 0 && (
+                                <div className="space-y-3">
+                                    <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Adicionais</h4>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {selectedProduct.addons.map((addon: any) => (
+                                            <div key={addon.id} className="flex items-center space-x-2 border rounded-md p-3 justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Checkbox 
+                                                        id={`addon-${addon.id}`}
+                                                        checked={selectedAddons.includes(addon.id)}
+                                                        onCheckedChange={(checked) => {
+                                                            if (checked) {
+                                                                setSelectedAddons([...selectedAddons, addon.id])
+                                                            } else {
+                                                                setSelectedAddons(selectedAddons.filter(id => id !== addon.id))
+                                                            }
+                                                        }}
+                                                    />
+                                                    <Label htmlFor={`addon-${addon.id}`} className="cursor-pointer font-normal">
+                                                        {addon.name}
+                                                    </Label>
+                                                </div>
+                                                <span className="text-emerald-600 font-medium text-sm">+ {formatCurrency(addon.price)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* OBSERVAÇÕES */}
+                            <div className="space-y-3">
+                                <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Observações</h4>
+                                <Textarea 
+                                    placeholder="Ex: Carne bem passada, sem sal, etc." 
+                                    value={orderNote}
+                                    onChange={(e) => setOrderNote(e.target.value)}
+                                    className="resize-none"
+                                />
+                            </div>
                         </div>
+                    </ScrollArea>
+                    
+                    {/* FOOTER FIXO */}
+                    <div className="p-4 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-4 shrink-0 z-20 shadow-[0_-5px_10px_rgba(0,0,0,0.03)]">
+                         <div className="flex items-center gap-3 bg-slate-100 dark:bg-zinc-800 rounded-lg p-1">
+                            <Button variant="ghost" size="icon" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="h-8 w-8"><Minus className="w-4 h-4"/></Button>
+                            <span className="font-semibold w-4 text-center">{quantity}</span>
+                            <Button variant="ghost" size="icon" onClick={() => setQuantity(quantity + 1)} className="h-8 w-8"><Plus className="w-4 h-4"/></Button>
+                         </div>
+                         <Button className="flex-1 h-12 text-base font-bold" onClick={handleAddToCart}>
+                            Adicionar - {formatCurrency(modalTotalPrice)}
+                         </Button>
                     </div>
                 </>
             )}
@@ -491,17 +651,37 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
                         <div className="space-y-4">
                             {cart.map((item) => (
-                                <div key={item.id} className="flex items-center gap-4 bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-100 dark:border-zinc-800">
-                                    <div className="flex-1">
-                                        <p className="font-medium text-sm">{item.name}</p>
-                                        <p className="text-xs text-muted-foreground">{formatCurrency(item.price)}</p>
+                                <div key={item.cartItemId} className="flex flex-col bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-100 dark:border-zinc-800 gap-3">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <p className="font-medium text-sm">{item.name}</p>
+                                            <p className="text-xs font-bold text-emerald-600">{formatCurrency(item.price)}</p>
+                                            
+                                            {/* DETALHES DE PERSONALIZAÇÃO */}
+                                            {(item.removedIngredients.length > 0 || item.selectedAddons.length > 0 || item.note) && (
+                                                <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5 border-l-2 pl-2 border-slate-200">
+                                                    {item.removedIngredients.map(ing => (
+                                                        <div key={ing} className="text-red-500 line-through decoration-red-500/50">Sem {ing}</div>
+                                                    ))}
+                                                    {item.selectedAddonsDetails.map((add: any) => (
+                                                        <div key={add.id} className="text-emerald-600 font-medium">+ {add.name} ({formatCurrency(add.price)})</div>
+                                                    ))}
+                                                    {item.note && (
+                                                        <div className="italic text-slate-500">"Obs: {item.note}"</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-500 hover:bg-red-50" onClick={() => updateQuantity(item.cartItemId, -item.quantity)}><Trash2 className="w-4 h-4" /></Button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-zinc-800 rounded-md p-1">
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, -1)}><Minus className="w-3 h-3" /></Button>
-                                        <span className="text-xs font-medium w-4 text-center">{item.quantity}</span>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, 1)}><Plus className="w-3 h-3" /></Button>
+                                    
+                                    <div className="flex items-center justify-end gap-2 bg-slate-50 dark:bg-zinc-800/50 p-1.5 rounded-md self-end">
+                                         <Button variant="ghost" size="icon" className="h-6 w-6 bg-white shadow-sm" onClick={() => updateQuantity(item.cartItemId, -1)}><Minus className="w-3 h-3" /></Button>
+                                         <span className="text-xs font-medium w-6 text-center">{item.quantity}</span>
+                                         <Button variant="ghost" size="icon" className="h-6 w-6 bg-white shadow-sm" onClick={() => updateQuantity(item.cartItemId, 1)}><Plus className="w-3 h-3" /></Button>
                                     </div>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-500 hover:bg-red-50" onClick={() => updateQuantity(item.id, -item.quantity)}><Trash2 className="w-4 h-4" /></Button>
                                 </div>
                             ))}
                         </div>
