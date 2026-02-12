@@ -5,9 +5,6 @@ import { revalidatePath } from "next/cache";
 
 /**
  * Busca pedidos disponíveis para visualização do entregador.
- * Traz status: 
- * - 'enviado': Pronto para retirada (pode aceitar).
- * - 'preparando': Ainda na cozinha (apenas visualização).
  */
 export async function getAvailableDeliveriesAction(storeId: string) {
   const supabase = await createClient();
@@ -42,8 +39,7 @@ export async function getAvailableDeliveriesAction(storeId: string) {
 }
 
 /**
- * Busca pedidos que já saíram para entrega (Status: 'em_rota').
- * Filtra PELO COURIER_ID para ser uma lista privada.
+ * Busca pedidos que já saíram para entrega.
  */
 export async function getActiveDeliveriesAction(storeId: string, courierId: string) {
   const supabase = await createClient();
@@ -78,13 +74,23 @@ export async function getActiveDeliveriesAction(storeId: string, courierId: stri
 }
 
 /**
- * Ação em LOTE: Assume vários pedidos de uma vez e atribui ao entregador.
+ * CORREÇÃO: Recebe um objeto único para evitar erro de serialização (400)
  */
-export async function startBatchDeliveriesAction(orderIds: string[], courierId: string) {
+interface StartBatchParams {
+  orderIds: string[];
+  courierId: string;
+}
+
+export async function startBatchDeliveriesAction(params: StartBatchParams) {
+  const { orderIds, courierId } = params;
   const supabase = await createClient();
 
-  if (!courierId) {
+  if (!courierId || typeof courierId !== 'string') {
     return { success: false, message: "ID do entregador inválido." };
+  }
+
+  if (!orderIds || orderIds.length === 0) {
+    return { success: false, message: "Nenhum pedido selecionado." };
   }
 
   // Verifica se os pedidos ainda estão com status 'enviado' antes de pegar
@@ -112,7 +118,7 @@ export async function startBatchDeliveriesAction(orderIds: string[], courierId: 
 
   if (error) {
     console.error("Erro ao iniciar rota em lote:", error);
-    return { success: false, message: "Erro ao iniciar entregas." };
+    return { success: false, message: "Erro ao iniciar entregas no banco de dados." };
   }
 
   revalidatePath("/");
@@ -120,7 +126,7 @@ export async function startBatchDeliveriesAction(orderIds: string[], courierId: 
 }
 
 /**
- * Atualiza o status da entrega individual (Apenas finalizar).
+ * Atualiza o status da entrega individual.
  */
 export async function updateDeliveryStatusAction(orderId: string, newStatus: 'entregue') {
   const supabase = await createClient();
@@ -146,12 +152,13 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
     return { success: false, message: "Falha ao atualizar status." };
   }
 
+  // Opcional: Registrar histórico se a tabela existir
   await supabase.from("order_history").insert({
     order_id: orderId,
     previous_status: currentOrder.status,
     new_status: newStatus,
     changed_at: new Date().toISOString()
-  });
+  }).catch(() => null); // Ignora erro se tabela não existir
 
   revalidatePath("/");
   return { success: true };
