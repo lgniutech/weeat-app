@@ -30,11 +30,8 @@ interface OrderInput {
 export async function createOrderAction(order: OrderInput) {
   const supabase = await createClient();
 
-  // CORREÇÃO: Para garantir que o pedido caia na cozinha imediatamente,
-  // definimos o status inicial como 'aceito' para todos os tipos.
-  // Se quiser voltar ao fluxo de aprovação (Delivery -> Pendente), mude a lógica aqui.
+  // Define status inicial como 'aceito' para cair direto na cozinha
   const initialStatus = 'aceito'; 
-  // const initialStatus = order.deliveryType === 'mesa' ? 'aceito' : 'pendente';
 
   const orderData = {
     store_id: order.storeId,
@@ -73,7 +70,7 @@ export async function createOrderAction(order: OrderInput) {
     observation: item.observation,
     removed_ingredients: JSON.stringify(item.removed_ingredients),
     selected_addons: JSON.stringify(item.selected_addons),
-    status: 'pendente' // Status do item individual na linha de produção
+    status: 'aceito' // Alinhado com o status do pedido
   }));
 
   // 3. Insere os Itens
