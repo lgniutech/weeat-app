@@ -28,7 +28,8 @@ import {
   Clock, 
   DollarSign,
   Package,
-  CheckSquare
+  ChefHat,
+  ArrowRight
 } from "lucide-react";
 
 type OrderView = {
@@ -40,17 +41,23 @@ type OrderView = {
   total_price: number;
   change_for: string | null;
   created_at: string;
+  status: string; // Adicionado status para filtragem
   items: { quantity: number; product_name: string }[];
+  last_status_change: string | null;
 };
 
 export default function CourierPage({ params }: { params: { slug: string } }) {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Dados
+  // Dados Gerais
   const [availableOrders, setAvailableOrders] = useState<OrderView[]>([]);
   const [activeOrders, setActiveOrders] = useState<OrderView[]>([]);
   
+  // Listas derivadas
+  const readyOrders = availableOrders.filter(o => o.status === 'enviado');
+  const cookingOrders = availableOrders.filter(o => o.status === 'preparando');
+
   // Controle de Seleção (Lote)
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   
@@ -62,13 +69,12 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   useEffect(() => {
     const checkSession = async () => {
       const sess = await getStaffSession();
-      // Assume que sess contém { id, role, storeId, ... }
       if (!sess || sess.role !== "courier" || sess.storeSlug !== params.slug) {
         router.push(`/${params.slug}/staff`);
         return;
       }
       setSession(sess);
-      fetchOrders(sess.storeId, sess.id); // Passa ID do staff
+      fetchOrders(sess.storeId, sess.id);
       setLoading(false);
     };
     checkSession();
@@ -79,13 +85,13 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     startTransition(async () => {
       const [available, active] = await Promise.all([
         getAvailableDeliveriesAction(storeId),
-        getActiveDeliveriesAction(storeId, courierId) // Passa courierId para filtrar a lista privada
+        getActiveDeliveriesAction(storeId, courierId)
       ]);
       setAvailableOrders(available);
       setActiveOrders(active);
       
-      // Limpa seleção se os pedidos não existirem mais na lista disponível
-      setSelectedOrders(prev => prev.filter(id => available.some(o => o.id === id)));
+      // Limpa seleção se os pedidos não existirem mais na lista de prontos
+      setSelectedOrders(prev => prev.filter(id => available.some(o => o.id === id && o.status === 'enviado')));
     });
   };
 
@@ -99,7 +105,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     await logoutStaffAction(params.slug);
   };
 
-  // 3. Lógica de Seleção (Checkbox)
+  // 3. Lógica de Seleção (Checkbox) - Apenas para Ready Orders
   const toggleOrderSelection = (orderId: string) => {
     setSelectedOrders(prev => 
       prev.includes(orderId) 
@@ -109,10 +115,10 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   };
 
   const toggleSelectAll = () => {
-    if (selectedOrders.length === availableOrders.length) {
+    if (selectedOrders.length === readyOrders.length && readyOrders.length > 0) {
       setSelectedOrders([]);
     } else {
-      setSelectedOrders(availableOrders.map(o => o.id));
+      setSelectedOrders(readyOrders.map(o => o.id));
     }
   };
 
@@ -133,10 +139,11 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         handleRefresh();
       } else {
         toast({
-          title: "Erro",
-          description: result.message,
+          title: "Atenção",
+          description: result.message, // Mensagem caso alguém já tenha pego
           variant: "destructive"
         });
+        handleRefresh(); // Atualiza para ver o estado real
       }
     });
   };
@@ -205,14 +212,14 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
       </header>
 
       {/* Conteúdo */}
-      <main className="p-4 max-w-md mx-auto">
+      <main className="p-4 max-w-5xl mx-auto">
         <Tabs defaultValue="pickup" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="pickup" className="relative">
               A Retirar
-              {availableOrders.length > 0 && (
+              {readyOrders.length > 0 && (
                 <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]">
-                  {availableOrders.length}
+                  {readyOrders.length}
                 </Badge>
               )}
             </TabsTrigger>
@@ -226,87 +233,147 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </TabsTrigger>
           </TabsList>
 
-          {/* ABA: A RETIRAR (COLETIVO) */}
-          <TabsContent value="pickup" className="space-y-4">
+          {/* ABA: A RETIRAR (COLETIVO) - Dividido em 2 Colunas */}
+          <TabsContent value="pickup" className="space-y-6">
             
-            {availableOrders.length > 0 && (
-               <div className="flex items-center justify-between px-1 mb-2">
-                 <div className="flex items-center gap-2">
-                    <Checkbox 
-                      id="select-all" 
-                      checked={selectedOrders.length === availableOrders.length && availableOrders.length > 0}
-                      onCheckedChange={toggleSelectAll}
-                    />
-                    <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
-                      Selecionar Todos
-                    </label>
-                 </div>
-                 <span className="text-xs text-muted-foreground">
-                   {selectedOrders.length} selecionado(s)
-                 </span>
-               </div>
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* COLUNA 1: PRONTO PARA RETIRADA */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h2 className="font-bold text-lg flex items-center gap-2 text-green-700 dark:text-green-400">
+                    <CheckCircle className="w-5 h-5" />
+                    Pronto para Retirada
+                    <Badge variant="outline" className="ml-2 bg-green-100 text-green-700 border-green-200">
+                      {readyOrders.length}
+                    </Badge>
+                  </h2>
+                  
+                  {readyOrders.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox 
+                        id="select-all" 
+                        checked={selectedOrders.length === readyOrders.length && readyOrders.length > 0}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                      <label htmlFor="select-all" className="text-xs font-medium cursor-pointer text-muted-foreground">
+                        Todos
+                      </label>
+                    </div>
+                  )}
+                </div>
 
-            {availableOrders.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground">
-                <Package className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                <p>Nenhum pedido aguardando retirada.</p>
-              </div>
-            ) : (
-              availableOrders.map((order) => {
-                const isSelected = selectedOrders.includes(order.id);
-                return (
-                  <div key={order.id} 
-                       className={`transition-all duration-200 ${isSelected ? 'scale-[1.02]' : ''}`}
-                  >
-                    <Card className={`border-l-4 shadow-sm cursor-pointer ${isSelected ? 'border-l-primary ring-2 ring-primary/20' : 'border-l-orange-500'}`}
-                          onClick={() => toggleOrderSelection(order.id)}
-                    >
-                      <CardHeader className="pb-2 flex flex-row items-start gap-3 space-y-0">
-                        <Checkbox 
-                          checked={isSelected}
-                          onCheckedChange={() => toggleOrderSelection(order.id)}
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <CardTitle className="text-lg">#{order.id.slice(0, 5).toUpperCase()}</CardTitle>
-                              <p className="text-sm text-muted-foreground font-medium">{order.customer_name}</p>
+                {readyOrders.length === 0 ? (
+                  <div className="text-center py-8 bg-white dark:bg-slate-900 rounded-lg border border-dashed">
+                    <p className="text-sm text-muted-foreground">Nenhum pedido pronto.</p>
+                  </div>
+                ) : (
+                  readyOrders.map((order) => {
+                    const isSelected = selectedOrders.includes(order.id);
+                    return (
+                      <div key={order.id} className={`transition-all duration-200 ${isSelected ? 'scale-[1.02]' : ''}`}>
+                        <Card className={`border-l-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow ${isSelected ? 'border-l-primary ring-2 ring-primary/20' : 'border-l-green-500'}`}
+                              onClick={() => toggleOrderSelection(order.id)}
+                        >
+                          <CardHeader className="pb-2 flex flex-row items-start gap-3 space-y-0 p-4">
+                            <Checkbox 
+                              checked={isSelected}
+                              onCheckedChange={() => toggleOrderSelection(order.id)}
+                              className="mt-1"
+                            />
+                            <div className="flex-1">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <CardTitle className="text-base">#{order.id.slice(0, 5).toUpperCase()}</CardTitle>
+                                  <p className="text-sm font-semibold">{order.customer_name}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs font-bold text-green-600">PRONTO</p>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {calculateTimeElapsed(order.last_status_change)}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                            <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200">
-                              Aguardando
-                            </Badge>
+                          </CardHeader>
+                          <CardContent className="pb-3 pl-11 text-xs space-y-1 p-4 pt-0">
+                            <div className="flex items-start gap-2 text-muted-foreground">
+                              <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                              <span className="line-clamp-2">{order.address || "Endereço não informado"}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="secondary" className="text-[10px] h-5">
+                                {order.items.length} itens
+                              </Badge>
+                              <span className="text-muted-foreground">•</span>
+                              <span className="font-medium">R$ {Number(order.total_price).toFixed(2)}</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* COLUNA 2: AGUARDANDO COZINHA */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h2 className="font-bold text-lg flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                    <ChefHat className="w-5 h-5" />
+                    Aguardando Cozinha
+                    <Badge variant="outline" className="ml-2 bg-orange-100 text-orange-700 border-orange-200">
+                      {cookingOrders.length}
+                    </Badge>
+                  </h2>
+                </div>
+
+                {cookingOrders.length === 0 ? (
+                  <div className="text-center py-8 bg-white dark:bg-slate-900 rounded-lg border border-dashed">
+                    <p className="text-sm text-muted-foreground">A cozinha está vazia.</p>
+                  </div>
+                ) : (
+                  cookingOrders.map((order) => (
+                    <Card key={order.id} className="border-l-4 border-l-orange-300 opacity-80 bg-slate-50 dark:bg-slate-900/50">
+                      <CardHeader className="pb-2 p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-base text-muted-foreground">#{order.id.slice(0, 5).toUpperCase()}</CardTitle>
+                            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{order.customer_name}</p>
                           </div>
+                          <Badge variant="outline" className="bg-orange-50 text-orange-500 border-orange-200 text-[10px]">
+                            PREPARANDO
+                          </Badge>
                         </div>
                       </CardHeader>
-                      <CardContent className="pb-3 pl-12 text-sm space-y-2">
-                        <div className="flex items-start gap-2">
-                          <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                          <span className="line-clamp-2">{order.address || "Endereço não informado"}</span>
+                      <CardContent className="pb-3 text-xs p-4 pt-0 space-y-1">
+                        <div className="flex items-start gap-2 text-muted-foreground">
+                          <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          <span className="line-clamp-1">{order.address || "Local não informado"}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span>Pronto há: {calculateTimeElapsed(order.last_status_change)}</span>
+                        <div className="flex items-center gap-1 mt-2 text-orange-600/70 text-[10px]">
+                          <Clock className="w-3 h-3" />
+                          <span>Na cozinha há: {calculateTimeElapsed(order.last_status_change)}</span>
                         </div>
                       </CardContent>
                     </Card>
-                  </div>
-                );
-              })
-            )}
+                  ))
+                )}
+              </div>
+
+            </div>
             
             {/* Espaço extra para não cobrir com o botão flutuante */}
             <div className="h-20" />
           </TabsContent>
 
           {/* ABA: MINHA ROTA (PRIVADO) */}
-          <TabsContent value="active" className="space-y-4">
+          <TabsContent value="active" className="space-y-4 max-w-md mx-auto">
             {activeOrders.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground">
                 <Bike className="w-12 h-12 mx-auto mb-3 opacity-20" />
                 <p>Você não tem entregas em andamento.</p>
-                <p className="text-xs mt-2">Vá na aba "A Retirar" para pegar pedidos.</p>
+                <p className="text-xs mt-2">Vá na aba "A Retirar" para pegar pedidos prontos.</p>
               </div>
             ) : (
               activeOrders.map((order) => (
@@ -357,6 +424,17 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                         ⚠️ Troco para: {order.change_for}
                       </div>
                     )}
+                    
+                    {/* Lista rápida de itens */}
+                    <div className="text-xs text-muted-foreground border-t pt-2 mt-1">
+                      <p className="mb-1 font-medium">Itens:</p>
+                      <ul className="list-disc pl-4 space-y-0.5">
+                        {order.items.map((item, idx) => (
+                           <li key={idx}>{item.quantity}x {item.product_name}</li>
+                        ))}
+                      </ul>
+                    </div>
+
                   </CardContent>
 
                   <CardFooter className="grid grid-cols-[1fr_3fr] gap-2">
@@ -383,7 +461,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-lg z-50 animate-in slide-in-from-bottom-5">
           <div className="max-w-md mx-auto flex items-center gap-4">
             <div className="flex-1 text-sm">
-              <span className="font-bold">{selectedOrders.length}</span> pedidos selecionados
+              <span className="font-bold">{selectedOrders.length}</span> para retirada
             </div>
             <Button 
               size="lg" 
