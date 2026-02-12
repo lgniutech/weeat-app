@@ -199,13 +199,13 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
   const openWhatsApp = (phone: string) => {
     const cleanPhone = phone.replace(/\D/g, "");
-    window.open(`https://wa.me/55${cleanPhone}`, "_blank");
+    window.open(`https://wa.me/55${cleanPhone}`, "_blank" );
   };
 
   const openMaps = (address: string) => {
     if (!address) return;
     const encoded = encodeURIComponent(address);
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank" );
   };
 
   if (loading) {
@@ -286,8 +286,8 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                     >
                       <MapPin className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
                       <div>
-                        <p className="font-medium leading-tight text-sm">{order.address || "Sem endereço"}</p>
-                        <p className="text-[10px] text-blue-600 mt-1 font-bold uppercase tracking-wide">Abrir no GPS</p>
+                        <p className="text-sm font-medium leading-snug">{order.address || "Endereço não informado"}</p>
+                        <p className="text-[10px] text-blue-600 font-bold mt-1 uppercase tracking-wider">Ver no Mapa</p>
                       </div>
                     </div>
 
@@ -351,7 +351,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
           </TabsContent>
 
           <TabsContent value="pickup" className="space-y-6">
-            {/* ... restante do código da aba Pickup permanece igual ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b pb-2">
