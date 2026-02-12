@@ -19,6 +19,14 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { 
   Bike, 
   MapPin, 
   Phone, 
@@ -28,7 +36,10 @@ import {
   Clock, 
   DollarSign,
   Package,
-  ChefHat
+  ChefHat,
+  AlertTriangle,
+  CreditCard,
+  Wallet
 } from "lucide-react";
 
 type OrderView = {
@@ -53,6 +64,9 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   const [availableOrders, setAvailableOrders] = useState<OrderView[]>([]);
   const [activeOrders, setActiveOrders] = useState<OrderView[]>([]);
   
+  // Controle de Confirmação (Modal)
+  const [orderToFinalize, setOrderToFinalize] = useState<OrderView | null>(null);
+
   // Listas derivadas
   const readyOrders = availableOrders.filter(o => o.status === 'enviado');
   const cookingOrders = availableOrders.filter(o => o.status === 'preparando');
@@ -64,13 +78,12 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   const router = useRouter();
   const { toast } = useToast();
 
-  // Helper para obter o ID do entregador de forma segura
   const getCourierId = useCallback((sessData: any) => {
     if (!sessData) return null;
     return sessData.id || sessData.staffId;
   }, []);
 
-  // 2. Busca de Pedidos
+  // Busca de Pedidos
   const fetchOrders = useCallback(async (storeId: string, courierId: string) => {
     if (!storeId || !courierId) return;
     
@@ -91,7 +104,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     });
   }, []);
 
-  // 1. Verificação de Sessão
+  // Verificação de Sessão
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -128,7 +141,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     await logoutStaffAction(params.slug);
   };
 
-  // 3. Lógica de Seleção (Checkbox)
+  // Seleção (Lote)
   const toggleOrderSelection = (orderId: string) => {
     setSelectedOrders(prev => 
       prev.includes(orderId) 
@@ -145,42 +158,32 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     }
   };
 
-  // 4. Ação: Sair com itens coletados (LOTE)
+  // Ação: Sair com itens coletados (LOTE)
   const handleBatchStart = async () => {
     const courierId = getCourierId(session);
 
     if (selectedOrders.length === 0 || !courierId) {
-      console.error("Tentativa de iniciar rota falhou.", { count: selectedOrders.length, hasCourierId: !!courierId });
-      toast({
-        title: "Erro",
-        description: "Sessão inválida ou nenhum pedido selecionado.",
-        variant: "destructive"
-      });
+      toast({ title: "Erro", description: "Sessão inválida ou nenhum pedido selecionado.", variant: "destructive" });
       return;
     }
 
     startTransition(async () => {
       try {
-        // CORREÇÃO: Passando como objeto único para evitar erro 400 de serialização
         const result = await startBatchDeliveriesAction({
           orderIds: selectedOrders,
-          courierId: String(courierId) // Garante que é string
+          courierId: String(courierId)
         });
         
         if (result.success) {
           toast({
             title: "Rota Iniciada!",
-            description: `${selectedOrders.length} pedidos foram movidos para sua lista.`,
+            description: `${selectedOrders.length} pedidos movidos para sua lista.`,
             className: "bg-blue-600 text-white border-none"
           });
           setSelectedOrders([]);
           handleRefresh();
         } else {
-          toast({
-            title: "Atenção",
-            description: result.message,
-            variant: "destructive"
-          });
+          toast({ title: "Atenção", description: result.message, variant: "destructive" });
           handleRefresh();
         }
       } catch (error) {
@@ -190,23 +193,30 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     });
   };
 
-  // 5. Ação: Finalizar Entrega Individual
-  const handleFinishDelivery = async (orderId: string) => {
-    const result = await updateDeliveryStatusAction(orderId, 'entregue');
-    if (result.success) {
-      toast({
-        title: "Entrega Concluída!",
-        description: "Pedido finalizado com sucesso.",
-        className: "bg-green-600 text-white border-none"
-      });
-      handleRefresh();
-    } else {
-      toast({
-        title: "Erro",
-        description: result.message,
-        variant: "destructive"
-      });
-    }
+  // Ação: Confirmar Entrega Individual (Dispara após o Modal)
+  const confirmFinishDelivery = async () => {
+    if (!orderToFinalize) return;
+
+    const orderId = orderToFinalize.id;
+    setOrderToFinalize(null); // Fecha modal
+
+    startTransition(async () => {
+      const result = await updateDeliveryStatusAction(orderId, 'entregue');
+      if (result.success) {
+        toast({
+          title: "Entrega Concluída!",
+          description: "Pedido marcado como entregue com sucesso.",
+          className: "bg-green-600 text-white border-none"
+        });
+        handleRefresh();
+      } else {
+        toast({
+          title: "Erro",
+          description: result.message,
+          variant: "destructive"
+        });
+      }
+    });
   };
 
   // Utilitários
@@ -219,6 +229,13 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     if (!address) return;
     const encoded = encodeURIComponent(address);
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
+  };
+
+  // Determina se precisa cobrar
+  const getPaymentStatus = (method: string) => {
+    const toCollect = ['money', 'credit_card', 'debit_card']; // Assumindo cartões na maquininha
+    if (toCollect.includes(method)) return 'collect';
+    return 'paid';
   };
 
   if (loading) {
@@ -275,12 +292,11 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </TabsTrigger>
           </TabsList>
 
-          {/* ABA: A RETIRAR (COLETIVO) */}
+          {/* ABA: A RETIRAR */}
           <TabsContent value="pickup" className="space-y-6">
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
-              {/* COLUNA 1: PRONTO PARA RETIRADA */}
+              {/* PRONTO PARA RETIRADA */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h2 className="font-bold text-lg flex items-center gap-2 text-green-700 dark:text-green-400">
@@ -358,7 +374,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                 )}
               </div>
 
-              {/* COLUNA 2: AGUARDANDO COZINHA */}
+              {/* AGUARDANDO COZINHA */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h2 className="font-bold text-lg flex items-center gap-2 text-orange-600 dark:text-orange-400">
@@ -402,14 +418,11 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                   ))
                 )}
               </div>
-
             </div>
-            
-            {/* Espaço extra para não cobrir com o botão flutuante */}
             <div className="h-20" />
           </TabsContent>
 
-          {/* ABA: MINHA ROTA (PRIVADO) */}
+          {/* ABA: MINHA ROTA */}
           <TabsContent value="active" className="space-y-4 max-w-md mx-auto">
             {activeOrders.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground">
@@ -433,7 +446,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                   </CardHeader>
                   
                   <CardContent className="pb-3 text-sm space-y-3">
-                    {/* Endereço com destaque */}
+                    {/* Endereço */}
                     <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg flex items-start gap-3 cursor-pointer active:scale-95 transition-transform" onClick={() => openMaps(order.address || "")}>
                       <MapPin className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
                       <div>
@@ -461,10 +474,16 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                          </div>
                       </div>
                     </div>
-                    {order.change_for && (
-                      <div className="bg-yellow-50 text-yellow-800 px-3 py-1 rounded text-xs font-medium border border-yellow-200">
-                        ⚠️ Troco para: {order.change_for}
-                      </div>
+
+                    {/* Alerta de Troco/Cobrança */}
+                    {order.payment_method === 'money' && (
+                        <div className="bg-yellow-50 text-yellow-800 px-3 py-2 rounded text-sm font-medium border border-yellow-200 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4" />
+                          <span>
+                            Cobrar no Dinheiro
+                            {order.change_for && ` (Troco para ${order.change_for})`}
+                          </span>
+                        </div>
                     )}
                     
                     {/* Lista rápida de itens */}
@@ -485,7 +504,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                     </Button>
                     <Button 
                       className="w-full bg-green-600 hover:bg-green-700 text-white font-bold"
-                      onClick={() => handleFinishDelivery(order.id)}
+                      onClick={() => setOrderToFinalize(order)}
                     >
                       <CheckCircle className="mr-2 w-5 h-5" />
                       ENTREGUE
@@ -498,7 +517,63 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         </Tabs>
       </main>
 
-      {/* Botão Flutuante para Ação em Lote */}
+      {/* MODAL DE CONFIRMAÇÃO DE ENTREGA */}
+      <Dialog open={!!orderToFinalize} onOpenChange={(open) => !open && setOrderToFinalize(null)}>
+        <DialogContent className="max-w-sm rounded-xl">
+          <DialogHeader>
+            <DialogTitle>Confirmar Entrega</DialogTitle>
+            <DialogDescription>
+              Você está finalizando a entrega para <strong>{orderToFinalize?.customer_name}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            {orderToFinalize && getPaymentStatus(orderToFinalize.payment_method) === 'collect' ? (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-red-700 font-bold text-lg">
+                  <AlertTriangle className="w-6 h-6" />
+                  COBRAR: R$ {Number(orderToFinalize.total_price).toFixed(2)}
+                </div>
+                <div className="text-sm text-red-600 flex items-center gap-2">
+                   {orderToFinalize.payment_method === 'money' ? (
+                     <>
+                        <Wallet className="w-4 h-4" />
+                        <span>Pagamento em Dinheiro</span>
+                     </>
+                   ) : (
+                     <>
+                        <CreditCard className="w-4 h-4" />
+                        <span>Levar Maquininha</span>
+                     </>
+                   )}
+                </div>
+                {orderToFinalize.change_for && (
+                  <div className="text-sm font-bold bg-white/50 p-2 rounded">
+                    ⚠️ Levar troco para: {orderToFinalize.change_for}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+                <div>
+                  <p className="font-bold text-green-700">Pagamento já realizado</p>
+                  <p className="text-xs text-green-600">Pode entregar o pedido.</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="grid grid-cols-2 gap-2">
+             <Button variant="outline" onClick={() => setOrderToFinalize(null)}>Cancelar</Button>
+             <Button className="bg-green-600 hover:bg-green-700 font-bold" onClick={confirmFinishDelivery}>
+               CONFIRMAR
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Botão Flutuante (Lote) */}
       {selectedOrders.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-lg z-50 animate-in slide-in-from-bottom-5">
           <div className="max-w-md mx-auto flex items-center gap-4">
