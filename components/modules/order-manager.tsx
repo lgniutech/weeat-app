@@ -19,10 +19,11 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 
-// DEFINIÇÃO DAS COLUNAS (Removida a coluna 'Pendente')
+// DEFINIÇÃO DAS COLUNAS ATUALIZADA COM 'A CAMINHO'
 const BASE_COLUMNS = [
   { id: 'preparando', label: 'Cozinha', color: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-400', icon: Package },
   { id: 'enviado', label: 'Pronto / Expedição', color: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-400', icon: BellRing },
+  { id: 'em_rota', label: 'A Caminho', color: 'bg-purple-600', text: 'text-purple-700 dark:text-purple-400', icon: Bike },
   { id: 'entregue', label: 'Concluído', color: 'bg-green-600', text: 'text-green-700 dark:text-green-400', icon: CheckCircle2 },
 ]
 
@@ -343,7 +344,6 @@ export function OrderManager({ store }: { store: any }) {
                                                 </div>
                                                 <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate" title={order.customer_name}>
                                                     {order.customer_name.split(' ')[0]}
-                                                    {/* Badge visual para saber se é NOVO (Aceito) */}
                                                     {order.status === 'aceito' && <span className="ml-2 text-[9px] bg-green-100 text-green-700 px-1 rounded border border-green-200">NOVO</span>}
                                                 </span>
                                             </div>
@@ -358,7 +358,7 @@ export function OrderManager({ store }: { store: any }) {
                                                     {timeInStage}
                                                 </div>
                                                 
-                                                {['preparando', 'aceito', 'enviado'].includes(order.status) && (
+                                                {['preparando', 'aceito', 'enviado', 'em_rota'].includes(order.status) && (
                                                     <button 
                                                         className="text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 transition-colors p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20" 
                                                         onClick={(e) => handleCancelClick(order.id, e)}
@@ -404,7 +404,7 @@ export function OrderManager({ store }: { store: any }) {
                                         </div>
                                     </div>
 
-                                    {/* Botões de Ação */}
+                                    {/* BOTÕES DE AÇÃO POR COLUNA */}
                                     {col.id === 'preparando' && (
                                         <div className="w-full h-6 mt-px">
                                              <button onClick={() => moveOrder(order.id, 'enviado')} className="w-full h-full bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-colors uppercase rounded-b">
@@ -415,8 +415,19 @@ export function OrderManager({ store }: { store: any }) {
                                     {col.id === 'enviado' && (
                                         <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
                                              <button onClick={() => moveOrder(order.id, 'preparando')} className="bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-[10px] border-t border-r border-slate-100 dark:border-zinc-700"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
-                                             <button onClick={() => moveOrder(order.id, 'entregue')} className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold transition-colors uppercase">
+                                             <button 
+                                                onClick={() => moveOrder(order.id, order.delivery_type === 'entrega' ? 'em_rota' : 'entregue')} 
+                                                className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold transition-colors uppercase"
+                                             >
                                                  {getReadyButtonText(order.delivery_type)}
+                                             </button>
+                                        </div>
+                                    )}
+                                    {col.id === 'em_rota' && (
+                                        <div className="grid grid-cols-[25%_1fr] h-6 mt-px">
+                                             <button onClick={() => moveOrder(order.id, 'enviado')} className="bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-[10px] border-t border-r border-slate-100 dark:border-zinc-700"><ArrowLeft className="w-3 h-3 mx-auto" /></button>
+                                             <button onClick={() => moveOrder(order.id, 'entregue')} className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold transition-colors uppercase">
+                                                 ENTREGUE
                                              </button>
                                         </div>
                                     )}
@@ -486,10 +497,8 @@ export function OrderManager({ store }: { store: any }) {
                          </Button>
                     </DialogHeader>
 
-                    {/* CONTEÚDO DO MODAL */}
                     <div className="grid md:grid-cols-2 gap-6 py-4">
                         <div className="space-y-6">
-                             {/* CLIENTE */}
                              <div className="space-y-2">
                                  <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Phone className="w-4 h-4" /> Cliente</h4>
                                  <div className="bg-slate-50 dark:bg-zinc-900 p-3 rounded-lg border dark:border-zinc-800">
@@ -503,7 +512,6 @@ export function OrderManager({ store }: { store: any }) {
                                  </div>
                              </div>
 
-                             {/* ENDEREÇO / MESA */}
                              <div className="space-y-2">
                                  <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                                      {viewOrder.delivery_type === 'entrega' ? <Bike className="w-4 h-4" /> : (viewOrder.delivery_type === 'mesa' ? <UtensilsIcon className="w-4 h-4" /> : <Store className="w-4 h-4" />)} 
@@ -524,7 +532,6 @@ export function OrderManager({ store }: { store: any }) {
                                  </div>
                              </div>
 
-                             {/* PAGAMENTO */}
                              <div className="space-y-2">
                                  <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><DollarSign className="w-4 h-4" /> Pagamento</h4>
                                  <div className="flex items-center justify-between p-3 rounded-lg border dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900">
@@ -540,7 +547,6 @@ export function OrderManager({ store }: { store: any }) {
                              </div>
                         </div>
 
-                        {/* ITENS */}
                         <div className="space-y-2">
                             <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Itens do Pedido</h4>
                             <div className="border dark:border-zinc-800 rounded-lg divide-y dark:divide-zinc-800 max-h-[400px] overflow-y-auto bg-white dark:bg-zinc-900">
