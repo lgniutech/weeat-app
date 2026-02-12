@@ -12,12 +12,13 @@ export type CashierOrder = {
   created_at: string;
   table_number: string | null;
   delivery_type: string;
+  payment_method: string | null; // Adicionado campo payment_method
   items: any[];
 };
 
 export type TableSummary = {
   table_number: string;
-  customer_name?: string; // <--- NOVO CAMPO: Nome do Cliente
+  customer_name?: string; 
   orders: CashierOrder[];
   total: number;
   status: 'livre' | 'ocupada';
@@ -73,7 +74,7 @@ export async function getCashierDataAction(storeId: string) {
       if (!tablesMap.has(tableNum)) {
         tablesMap.set(tableNum, {
           table_number: tableNum,
-          customer_name: order.customer_name, // Define o primeiro nome encontrado
+          customer_name: order.customer_name,
           orders: [],
           total: 0,
           status: 'ocupada',
@@ -103,6 +104,7 @@ export async function getCashierDataAction(storeId: string) {
     parseInt(a.table_number) - parseInt(b.table_number)
   );
 
+  // Filtra pickups e garante que tenham a estrutura correta
   const pickups = activeOrders?.filter((o: any) => !o.table_number && o.delivery_type === 'retirada') || [];
 
   return { tables, pickups };
