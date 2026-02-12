@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 /**
  * Busca pedidos que estão prontos para serem retirados (Status: 'enviado' pela cozinha).
  * Filtra apenas por delivery_type: 'entrega'.
+ * (Esta lista continua pública para todos os entregadores verem o que tem disponível)
  */
 export async function getAvailableDeliveriesAction(storeId: string) {
   const supabase = await createClient();
@@ -27,8 +28,8 @@ export async function getAvailableDeliveriesAction(storeId: string) {
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "entrega")
-    .eq("status", "enviado") // Status definido pela cozinha quando finaliza
-    .order("last_status_change", { ascending: true }); // Mais antigos primeiro
+    .eq("status", "enviado") // Status definido pela cozinha
+    .order("last_status_change", { ascending: true });
 
   if (error) {
     console.error("Erro ao buscar entregas disponíveis:", error);
@@ -40,9 +41,9 @@ export async function getAvailableDeliveriesAction(storeId: string) {
 
 /**
  * Busca pedidos que já saíram para entrega (Status: 'em_rota').
- * Mostra todos os pedidos em rota da loja (lista compartilhada).
+ * AGORA FILTRA PELO COURIER_ID para ser uma lista privada.
  */
-export async function getActiveDeliveriesAction(storeId: string) {
+export async function getActiveDeliveriesAction(storeId: string, courierId: string) {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -63,7 +64,8 @@ export async function getActiveDeliveriesAction(storeId: string) {
     .eq("store_id", storeId)
     .eq("delivery_type", "entrega")
     .eq("status", "em_rota")
-    .order("last_status_change", { ascending: false }); // Mais recentes primeiro
+    .eq("courier_id", courierId) // <--- Filtro de privacidade
+    .order("last_status_change", { ascending: false });
 
   if (error) {
     console.error("Erro ao buscar entregas em andamento:", error);
@@ -74,12 +76,49 @@ export async function getActiveDeliveriesAction(storeId: string) {
 }
 
 /**
- * Atualiza o status da entrega (Retirar ou Finalizar).
+ * Ação em LOTE: Assume vários pedidos de uma vez e atribui ao entregador.
  */
-export async function updateDeliveryStatusAction(orderId: string, newStatus: 'em_rota' | 'entregue') {
+export async function startBatchDeliveriesAction(orderIds: string[], courierId: string) {
   const supabase = await createClient();
 
-  // 1. Busca status atual para histórico
+  // Atualiza status e vincula o entregador
+  const { error } = await supabase
+    .from("orders")
+    .update({ 
+      status: 'em_rota',
+      courier_id: courierId, // Vincula ao entregador
+      last_status_change: new Date().toISOString()
+    })
+    .in('id', orderIds); // Atualiza todos os IDs da lista
+
+  if (error) {
+    console.error("Erro ao iniciar rota em lote:", error);
+    return { success: false, message: "Erro ao iniciar entregas." };
+  }
+
+  // Cria histórico para cada pedido (Opcional: pode ser feito em loop ou ignorado se performance for crítica)
+  // Para simplificar e performar, vamos assumir que o update é suficiente, 
+  // mas idealmente faríamos um insert múltiplo no order_history.
+  const historyEntries = orderIds.map(id => ({
+    order_id: id,
+    previous_status: 'enviado',
+    new_status: 'em_rota',
+    changed_at: new Date().toISOString()
+  }));
+
+  await supabase.from("order_history").insert(historyEntries);
+
+  revalidatePath("/");
+  return { success: true };
+}
+
+/**
+ * Atualiza o status da entrega individual (Apenas finalizar).
+ */
+export async function updateDeliveryStatusAction(orderId: string, newStatus: 'entregue') {
+  const supabase = await createClient();
+
+  // 1. Busca status atual
   const { data: currentOrder } = await supabase
     .from("orders")
     .select("status")
