@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils"
 
 // --- UTILS ---
 
-// Função auxiliar para evitar erros de JSON parse se o dado já vier como objeto
+// Função auxiliar para evitar erros de JSON parse e garantir array
 function safeParse(data: any) {
   if (!data) return [];
   if (Array.isArray(data)) return data;
@@ -40,7 +40,7 @@ function safeParse(data: any) {
       return [];
     }
   }
-  return []; // Retorna array vazio se formato desconhecido
+  return []; 
 }
 
 // --- TIMER ---
@@ -113,16 +113,21 @@ function OrderCard({ order, onAction, btnText, btnColor, icon, isCooking }: any)
                       </p>
 
                       {/* AREA DE DETALHES (Adicionais, Remoções, Obs) */}
-                      <div className="flex flex-col gap-1 mt-1.5">
+                      <div className="flex flex-col gap-1.5 mt-1.5">
                         
-                        {/* 1. ADICIONAIS */}
+                        {/* 1. ADICIONAIS (EM VERDE) */}
                         {addons.length > 0 && (
                           <div className="flex flex-wrap gap-1">
-                             {addons.map((addon: any, idx: number) => (
-                               <span key={idx} className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 px-1.5 rounded flex items-center">
-                                 <Plus className="w-3 h-3 mr-0.5" /> {addon.name}
-                               </span>
-                             ))}
+                             {addons.map((addon: any, idx: number) => {
+                               // Garante que pegamos o nome correto, seja objeto ou string
+                               const addonName = typeof addon === 'string' ? addon : addon.name;
+                               
+                               return (
+                                 <span key={idx} className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 px-1.5 rounded uppercase flex items-center">
+                                   <Plus className="w-2.5 h-2.5 mr-0.5" /> ADICIONAL DE {addonName}
+                                 </span>
+                               )
+                             })}
                           </div>
                         )}
 
@@ -130,7 +135,7 @@ function OrderCard({ order, onAction, btnText, btnColor, icon, isCooking }: any)
                         {removed.length > 0 && (
                            <div className="flex flex-wrap gap-1">
                              {removed.map((ing: string, idx: number) => (
-                               <span key={idx} className="text-[11px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900 px-1.5 rounded uppercase">
+                               <span key={idx} className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900 px-1.5 rounded uppercase">
                                  SEM {ing}
                                </span>
                              ))}
@@ -386,14 +391,18 @@ function KitchenContent({ params }: { params: { slug: string } }) {
                                      
                                      {/* Modificadores */}
                                      <div className="mt-3 space-y-2">
-                                        {/* Adicionais */}
+                                        
+                                        {/* ADICIONAIS (EM VERDE) */}
                                         {addons.length > 0 && (
                                             <div className="flex flex-wrap gap-1">
-                                                {addons.map((addon: any, i: number) => (
-                                                <span key={i} className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900 px-1.5 py-0.5 rounded flex items-center">
-                                                    <Plus className="w-2.5 h-2.5 mr-0.5"/> {addon.name}
-                                                </span>
-                                                ))}
+                                                {addons.map((addon: any, i: number) => {
+                                                    const addonName = typeof addon === 'string' ? addon : addon.name;
+                                                    return (
+                                                        <span key={i} className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 px-1.5 py-0.5 rounded uppercase flex items-center">
+                                                            <Plus className="w-2.5 h-2.5 mr-0.5"/> ADICIONAL DE {addonName}
+                                                        </span>
+                                                    )
+                                                })}
                                             </div>
                                         )}
 
@@ -401,7 +410,7 @@ function KitchenContent({ params }: { params: { slug: string } }) {
                                         {removed.length > 0 && (
                                             <div className="flex flex-wrap gap-1">
                                                 {removed.map((ing: string, i: number) => (
-                                                <span key={i} className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900 px-1.5 py-0.5 rounded uppercase">
+                                                <span key={i} className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900 px-1.5 py-0.5 rounded uppercase">
                                                     SEM {ing}
                                                 </span>
                                                 ))}
