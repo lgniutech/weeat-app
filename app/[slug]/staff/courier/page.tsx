@@ -28,8 +28,7 @@ import {
   Clock, 
   DollarSign,
   Package,
-  ChefHat,
-  ArrowRight
+  ChefHat
 } from "lucide-react";
 
 type OrderView = {
@@ -41,7 +40,7 @@ type OrderView = {
   total_price: number;
   change_for: string | null;
   created_at: string;
-  status: string; // Adicionado status para filtragem
+  status: string;
   items: { quantity: number; product_name: string }[];
   last_status_change: string | null;
 };
@@ -68,14 +67,19 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   // 1. Verificação de Sessão
   useEffect(() => {
     const checkSession = async () => {
-      const sess = await getStaffSession();
-      if (!sess || sess.role !== "courier" || sess.storeSlug !== params.slug) {
-        router.push(`/${params.slug}/staff`);
-        return;
+      try {
+        const sess = await getStaffSession();
+        if (!sess || sess.role !== "courier" || sess.storeSlug !== params.slug) {
+          router.push(`/${params.slug}/staff`);
+          return;
+        }
+        setSession(sess);
+        fetchOrders(sess.storeId, sess.id);
+      } catch (error) {
+        console.error("Erro ao verificar sessão:", error);
+      } finally {
+        setLoading(false);
       }
-      setSession(sess);
-      fetchOrders(sess.storeId, sess.id);
-      setLoading(false);
     };
     checkSession();
   }, [params.slug, router]);
@@ -83,21 +87,33 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   // 2. Busca de Pedidos
   const fetchOrders = async (storeId: string, courierId: string) => {
     startTransition(async () => {
-      const [available, active] = await Promise.all([
-        getAvailableDeliveriesAction(storeId),
-        getActiveDeliveriesAction(storeId, courierId)
-      ]);
-      setAvailableOrders(available);
-      setActiveOrders(active);
-      
-      // Limpa seleção se os pedidos não existirem mais na lista de prontos
-      setSelectedOrders(prev => prev.filter(id => available.some(o => o.id === id && o.status === 'enviado')));
+      try {
+        const [available, active] = await Promise.all([
+          getAvailableDeliveriesAction(storeId),
+          getActiveDeliveriesAction(storeId, courierId)
+        ]);
+        setAvailableOrders(available);
+        setActiveOrders(active);
+        
+        // Limpa seleção se os pedidos não existirem mais na lista de prontos
+        setSelectedOrders(prev => prev.filter(id => available.some(o => o.id === id && o.status === 'enviado')));
+      } catch (error) {
+        console.error("Erro ao buscar pedidos:", error);
+        toast({
+          title: "Erro de conexão",
+          description: "Não foi possível atualizar os pedidos.",
+          variant: "destructive"
+        });
+      }
     });
   };
 
   const handleRefresh = () => {
     if (session?.storeId && session?.id) {
       fetchOrders(session.storeId, session.id);
+    } else {
+      // Tenta recuperar sessão se perdida
+      window.location.reload();
     }
   };
 
@@ -105,7 +121,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     await logoutStaffAction(params.slug);
   };
 
-  // 3. Lógica de Seleção (Checkbox) - Apenas para Ready Orders
+  // 3. Lógica de Seleção (Checkbox)
   const toggleOrderSelection = (orderId: string) => {
     setSelectedOrders(prev => 
       prev.includes(orderId) 
@@ -124,26 +140,53 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
   // 4. Ação: Sair com itens coletados (LOTE)
   const handleBatchStart = async () => {
-    if (selectedOrders.length === 0 || !session?.id) return;
+    // Validação Explícita de Sessão
+    if (!session || !session.id) {
+      console.error("Tentativa de iniciar rota sem ID de sessão válido:", session);
+      toast({
+        title: "Erro de Sessão",
+        description: "Não foi possível identificar o entregador. Recarregue a página.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (selectedOrders.length === 0) {
+       toast({
+        title: "Seleção Vazia",
+        description: "Selecione ao menos um pedido para iniciar.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     startTransition(async () => {
-      const result = await startBatchDeliveriesAction(selectedOrders, session.id);
-      
-      if (result.success) {
+      try {
+        const result = await startBatchDeliveriesAction(selectedOrders, session.id);
+        
+        if (result.success) {
+          toast({
+            title: "Rota Iniciada!",
+            description: `${selectedOrders.length} pedidos movidos para sua lista.`,
+            className: "bg-blue-600 text-white border-none"
+          });
+          setSelectedOrders([]);
+          handleRefresh();
+        } else {
+          toast({
+            title: "Atenção",
+            description: result.message,
+            variant: "destructive"
+          });
+          handleRefresh(); // Atualiza para ver o estado real (alguém pode ter pego o pedido)
+        }
+      } catch (error) {
+        console.error("Erro ao iniciar rota:", error);
         toast({
-          title: "Rota Iniciada!",
-          description: `${selectedOrders.length} pedidos foram movidos para sua lista.`,
-          className: "bg-blue-600 text-white border-none"
-        });
-        setSelectedOrders([]);
-        handleRefresh();
-      } else {
-        toast({
-          title: "Atenção",
-          description: result.message, // Mensagem caso alguém já tenha pego
+          title: "Erro Inesperado",
+          description: "Ocorreu um erro ao processar sua solicitação.",
           variant: "destructive"
         });
-        handleRefresh(); // Atualiza para ver o estado real
       }
     });
   };
@@ -198,7 +241,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
           </div>
           <div>
             <h1 className="font-bold text-sm leading-tight">Painel de Entregas</h1>
-            <p className="text-xs text-muted-foreground">Olá, {session?.name}</p>
+            <p className="text-xs text-muted-foreground">Olá, {session?.name || "Entregador"}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -233,7 +276,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </TabsTrigger>
           </TabsList>
 
-          {/* ABA: A RETIRAR (COLETIVO) - Dividido em 2 Colunas */}
+          {/* ABA: A RETIRAR (COLETIVO) */}
           <TabsContent value="pickup" className="space-y-6">
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -364,7 +407,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </div>
             
             {/* Espaço extra para não cobrir com o botão flutuante */}
-            <div className="h-20" />
+            <div className="h-24" />
           </TabsContent>
 
           {/* ABA: MINHA ROTA (PRIVADO) */}
@@ -465,7 +508,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </div>
             <Button 
               size="lg" 
-              className="font-bold bg-primary text-primary-foreground shadow-xl w-2/3"
+              className="font-bold bg-primary text-primary-foreground shadow-xl w-2/3 cursor-pointer"
               onClick={handleBatchStart}
               disabled={isPending}
             >
