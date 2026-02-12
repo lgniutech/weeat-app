@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 
 /**
  * 1. Busca pedidos disponíveis para visualização do entregador (A Retirar).
- * Filtra por status 'enviado' (pronto p/ entrega) ou 'preparando' (para visualização).
  */
 export async function getAvailableDeliveriesAction(storeId: string) {
   const supabase = await createClient();
@@ -41,7 +40,6 @@ export async function getAvailableDeliveriesAction(storeId: string) {
 
 /**
  * 2. Busca pedidos que estão ATIVAMENTE com este entregador (Minha Rota).
- * Filtra apenas 'em_rota'. 
  */
 export async function getActiveDeliveriesAction(storeId: string, courierId: string) {
   const supabase = await createClient();
@@ -63,7 +61,7 @@ export async function getActiveDeliveriesAction(storeId: string, courierId: stri
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "entrega")
-    .eq("status", "em_rota") // Só mostra o que está pendente de entrega
+    .eq("status", "em_rota") 
     .eq("courier_id", courierId) 
     .order("last_status_change", { ascending: false });
 
@@ -77,7 +75,6 @@ export async function getActiveDeliveriesAction(storeId: string, courierId: stri
 
 /**
  * 3. Inicia a rota com vários pedidos de uma vez.
- * Move de 'enviado' -> 'em_rota' e vincula ao entregador.
  */
 interface StartBatchParams {
   orderIds: string[];
@@ -96,7 +93,6 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
     return { success: false, message: "Nenhum pedido selecionado." };
   }
 
-  // Verifica se os pedidos ainda estão disponíveis (status 'enviado')
   const { data: validOrders } = await supabase
     .from("orders")
     .select("id")
@@ -109,7 +105,6 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
 
   const validIds = validOrders.map(o => o.id);
 
-  // Atualiza status e vincula o entregador
   const { error } = await supabase
     .from("orders")
     .update({ 
@@ -129,9 +124,10 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
 }
 
 /**
- * 4. AÇÃO DE FINALIZAR: Marca como 'entregue'.
+ * 4. AÇÃO DE FINALIZAR: Marca como 'concluido'.
+ * Isso remove o pedido da lista do entregador e atualiza o dashboard global.
  */
-export async function updateDeliveryStatusAction(orderId: string, newStatus: 'entregue') {
+export async function updateDeliveryStatusAction(orderId: string, newStatus: 'concluido') {
   const supabase = await createClient();
 
   const { data: currentOrder } = await supabase
@@ -155,6 +151,7 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
     return { success: false, message: "Falha ao finalizar entrega." };
   }
 
+  // Registra no histórico para auditoria do dashboard
   try {
     await supabase.from("order_history").insert({
       order_id: orderId,
@@ -163,7 +160,7 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
       changed_at: new Date().toISOString()
     });
   } catch (err) {
-    console.error("Erro silencioso ao criar histórico:", err);
+    console.error("Erro ao criar histórico:", err);
   }
 
   revalidatePath("/");
