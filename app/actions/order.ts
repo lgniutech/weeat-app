@@ -30,10 +30,11 @@ interface OrderInput {
 export async function createOrderAction(order: OrderInput) {
   const supabase = await createClient();
 
-  // LÓGICA DE STATUS INICIAL:
-  // Mesa -> 'aceito' (Vai direto pra cozinha)
-  // Entrega/Retirada -> 'pendente' (Precisa que a loja aceite no painel/gestor)
-  const initialStatus = order.deliveryType === 'mesa' ? 'aceito' : 'pendente';
+  // CORREÇÃO: Para garantir que o pedido caia na cozinha imediatamente,
+  // definimos o status inicial como 'aceito' para todos os tipos.
+  // Se quiser voltar ao fluxo de aprovação (Delivery -> Pendente), mude a lógica aqui.
+  const initialStatus = 'aceito'; 
+  // const initialStatus = order.deliveryType === 'mesa' ? 'aceito' : 'pendente';
 
   const orderData = {
     store_id: order.storeId,
@@ -50,6 +51,7 @@ export async function createOrderAction(order: OrderInput) {
     cancellation_reason: order.notes 
   };
 
+  // 1. Cria o Pedido
   const { data: newOrder, error: orderError } = await supabase
     .from("orders")
     .insert(orderData)
@@ -61,6 +63,7 @@ export async function createOrderAction(order: OrderInput) {
     return { error: "Erro ao registrar pedido." };
   }
 
+  // 2. Prepara os Itens
   const itemsToInsert = order.items.map(item => ({
     order_id: newOrder.id,
     product_name: item.product_name,
@@ -70,17 +73,19 @@ export async function createOrderAction(order: OrderInput) {
     observation: item.observation,
     removed_ingredients: JSON.stringify(item.removed_ingredients),
     selected_addons: JSON.stringify(item.selected_addons),
-    status: 'pendente' // Item nasce pendente (para ser feito)
+    status: 'pendente' // Status do item individual na linha de produção
   }));
 
+  // 3. Insere os Itens
   const { error: itemsError } = await supabase.from("order_items").insert(itemsToInsert);
 
   if (itemsError) {
     console.error("Erro ao criar itens:", itemsError);
+    // Idealmente faria rollback, mas Supabase via client não tem transação simples.
     return { error: "Erro ao registrar itens do pedido." };
   }
 
-  // Log no histórico com o status correto
+  // 4. Log no histórico
   await supabase.from("order_history").insert({
       order_id: newOrder.id,
       previous_status: null,
