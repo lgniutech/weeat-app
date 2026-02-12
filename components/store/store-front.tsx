@@ -252,6 +252,15 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
 
+  // Formatação do endereço para exibição
+  const storeAddress = [
+    store.street,
+    store.number,
+    store.neighborhood ? `- ${store.neighborhood}` : null,
+    store.city ? `- ${store.city}` : null,
+    store.state
+  ].filter(Boolean).join(", ").replace(", -", " -");
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20 font-sans">
       
@@ -271,7 +280,16 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 )}
                 <div>
                     <h1 className="font-bold text-lg leading-tight">{store.name}</h1>
-                    <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-2">
+                    
+                    {/* Endereço da Loja */}
+                    {storeAddress && (
+                      <div className="flex items-start gap-1 text-xs text-muted-foreground mt-1 max-w-[200px] sm:max-w-md">
+                          <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
+                          <span className="leading-tight">{storeAddress}</span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-2 mt-1">
                         <div className="flex items-center gap-1"><Clock className="w-3 h-3" /> <span>Aberto</span></div>
                         
                         {minOrderValue > 0 && !tableNumber && (
