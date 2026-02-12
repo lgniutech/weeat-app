@@ -161,6 +161,10 @@ export async function getCustomerOrdersAction(phone: string) {
 export async function getTableOrdersAction(storeId: string, tableNumber: string) {
   const supabase = await createClient();
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayISO = today.toISOString();
+
   const { data: orders, error } = await supabase
     .from("orders")
     .select(`
@@ -181,6 +185,7 @@ export async function getTableOrdersAction(storeId: string, tableNumber: string)
     `)
     .eq("store_id", storeId)
     .eq("table_number", tableNumber)
+    .gte("created_at", todayISO) // Filtra apenas pedidos de hoje
     .neq("status", "concluido") 
     .neq("status", "cancelado")
     .order("created_at", { ascending: false });
