@@ -49,18 +49,13 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Dados Gerais
   const [availableOrders, setAvailableOrders] = useState<OrderView[]>([]);
   const [activeOrders, setActiveOrders] = useState<OrderView[]>([]);
   
-  // Listas derivadas
   const readyOrders = availableOrders.filter(o => o.status === 'enviado');
   const cookingOrders = availableOrders.filter(o => o.status === 'preparando');
 
-  // Controle de Seleção (Lote)
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  
-  // Controle de loading individual para botões
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
   
   const [isPending, startTransition] = useTransition();
@@ -72,7 +67,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     return sessData.id || sessData.staffId;
   }, []);
 
-  // Busca de Pedidos
   const fetchOrders = useCallback(async (storeId: string, courierId: string) => {
     if (!storeId || !courierId) return;
     
@@ -85,7 +79,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         setAvailableOrders(available || []);
         setActiveOrders(active || []);
         
-        // Limpa seleção se os pedidos não existirem mais na lista de prontos
         setSelectedOrders(prev => prev.filter(id => available?.some(o => o.id === id && o.status === 'enviado')));
       } catch (error) {
         console.error("Erro ao buscar pedidos:", error);
@@ -93,7 +86,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     });
   }, []);
 
-  // Verificação de Sessão
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -130,7 +122,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     await logoutStaffAction(params.slug);
   };
 
-  // Seleção (Lote)
   const toggleOrderSelection = (orderId: string) => {
     setSelectedOrders(prev => 
       prev.includes(orderId) 
@@ -147,7 +138,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     }
   };
 
-  // Ação: Sair com itens coletados (LOTE)
   const handleBatchStart = async () => {
     const courierId = getCourierId(session);
 
@@ -181,7 +171,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     });
   };
 
-  // Ação Rápida: Entregar
   const handleQuickFinish = async (orderId: string) => {
     setLoadingOrderId(orderId);
     
@@ -189,14 +178,11 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
       try {
         const result = await updateDeliveryStatusAction(orderId, 'entregue');
         if (result.success) {
-          // Removemos localmente para dar sensação instantânea
           setActiveOrders(prev => prev.filter(o => o.id !== orderId));
-          
           toast({
             title: "Entrega Finalizada!",
             className: "bg-green-600 text-white border-none duration-2000"
           });
-          
           handleRefresh();
         } else {
             toast({ title: "Erro", description: result.message, variant: "destructive" });
@@ -209,7 +195,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     });
   };
 
-  // Utilitários
   const openWhatsApp = (phone: string) => {
     const cleanPhone = phone.replace(/\D/g, "");
     window.open(`https://wa.me/55${cleanPhone}`, "_blank");
@@ -218,6 +203,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   const openMaps = (address: string) => {
     if (!address) return;
     const encoded = encodeURIComponent(address);
+    // Link corrigido para Google Maps
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
   };
 
@@ -231,8 +217,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-24">
-      
-      {/* Header Fixo */}
       <header className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <div className="bg-primary/10 p-2 rounded-full">
@@ -253,7 +237,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         </div>
       </header>
 
-      {/* Conteúdo */}
       <main className="p-4 max-w-5xl mx-auto">
         <Tabs defaultValue="active" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-6">
@@ -275,7 +258,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </TabsTrigger>
           </TabsList>
 
-          {/* ABA: MINHA ROTA */}
           <TabsContent value="active" className="space-y-4 max-w-md mx-auto">
             {activeOrders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
@@ -292,14 +274,11 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                         <CardTitle className="text-lg">#{order.id.slice(0, 5).toUpperCase()}</CardTitle>
                         <p className="text-sm font-bold">{order.customer_name}</p>
                       </div>
-                      <Badge className="bg-blue-600 hover:bg-blue-700">
-                        Em Rota
-                      </Badge>
+                      <Badge className="bg-blue-600 hover:bg-blue-700">Em Rota</Badge>
                     </div>
                   </CardHeader>
                   
                   <CardContent className="py-4 space-y-4 flex-1">
-                    {/* Endereço Clicável */}
                     <div 
                       className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3 rounded-lg flex items-start gap-3 cursor-pointer active:scale-95 transition-transform shadow-sm" 
                       onClick={() => openMaps(order.address || "")}
@@ -311,7 +290,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                       </div>
                     </div>
 
-                    {/* Resumo Financeiro */}
                     <div className="flex items-center justify-between text-sm px-1">
                       <div className="flex flex-col">
                         <span className="text-muted-foreground text-xs">Valor Total</span>
@@ -326,7 +304,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                       </div>
                     </div>
 
-                    {/* Aviso de Troco */}
                     {order.payment_method === 'money' && order.change_for && (
                       <div className="bg-yellow-50 text-yellow-800 px-3 py-2 rounded text-xs font-medium border border-yellow-200 flex items-center gap-2">
                         <AlertTriangle className="w-3 h-3" />
@@ -334,7 +311,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                       </div>
                     )}
 
-                    {/* Itens */}
                     <div className="text-xs text-muted-foreground bg-slate-50 dark:bg-slate-800/50 p-2 rounded">
                       <p className="font-medium mb-1">{order.items.length} itens:</p>
                       <p className="line-clamp-2 leading-relaxed">
@@ -343,7 +319,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                     </div>
                   </CardContent>
 
-                  {/* FOOTER COM BOTÕES DE AÇÃO - CORRIGIDO */}
                   <CardFooter className="flex gap-3 p-3 bg-slate-100 dark:bg-slate-800 border-t mt-auto">
                     <Button 
                       variant="outline" 
@@ -374,10 +349,8 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             )}
           </TabsContent>
 
-          {/* ABA: A RETIRAR */}
           <TabsContent value="pickup" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* PRONTO PARA RETIRADA */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h2 className="font-bold text-lg flex items-center gap-2 text-green-700 dark:text-green-400">
@@ -445,7 +418,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                 )}
               </div>
 
-              {/* AGUARDANDO COZINHA */}
               <div className="space-y-4 opacity-75">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h2 className="font-bold text-lg flex items-center gap-2 text-orange-600 dark:text-orange-400">
@@ -478,7 +450,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         </Tabs>
       </main>
 
-      {/* Botão Flutuante (apenas quando há seleção) */}
       {selectedOrders.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-lg z-50 animate-in slide-in-from-bottom-5">
           <div className="max-w-md mx-auto flex items-center gap-4">
