@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info } from "lucide-react"
+import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge" 
@@ -56,7 +56,20 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [paymentMethod, setPaymentMethod] = useState('pix')
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
-  const [customerAddress, setCustomerAddress] = useState({ street: "", number: "", complement: "", neighborhood: "", city: store.city || "" })
+  
+  // Endereço e Validação de CEP
+  const [customerAddress, setCustomerAddress] = useState({ 
+    zipCode: "",
+    street: "", 
+    number: "", 
+    complement: "", 
+    neighborhood: "", 
+    city: store.city || "",
+    state: store.state || ""
+  })
+  const [cepLoading, setCepLoading] = useState(false)
+  const [cepError, setCepError] = useState<string | null>(null)
+
   const [isOrderPlacing, setIsOrderPlacing] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState<{id: string, total: number} | null>(null)
 
@@ -108,8 +121,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   
   // --- LÓGICA DO PEDIDO MÍNIMO E CUPOM ---
-  
-  // 1. Remove cupom automaticamente se o subtotal cair abaixo do mínimo do cupom
   useEffect(() => {
     if (appliedCoupon && appliedCoupon.min_order_value > 0) {
         if (subtotal < appliedCoupon.min_order_value) {
@@ -124,13 +135,9 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     }
   }, [subtotal, appliedCoupon]);
 
-  // 2. Cálculo do desconto com proteção extra
   const discountAmount = useMemo(() => {
     if (!appliedCoupon) return 0;
-    
-    // Proteção extra: se por algum motivo o cupom estiver aplicado mas o valor for baixo, retorna 0
     if (appliedCoupon.min_order_value && subtotal < appliedCoupon.min_order_value) return 0;
-
     return appliedCoupon.type === 'percent' ? (subtotal * appliedCoupon.value) / 100 : appliedCoupon.value;
   }, [subtotal, appliedCoupon]);
 
@@ -145,6 +152,58 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     const matchesCategory = selectedCategory === "todos" || p.category_id === selectedCategory
     return matchesSearch && matchesCategory && p.is_available
   })
+
+  // --- FUNÇÃO DE NORMALIZAÇÃO DE STRING ---
+  const normalizeString = (str: string) => {
+    return str
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  }
+
+  // --- BUSCA DE CEP ---
+  const handleCheckCep = async () => {
+    const cep = customerAddress.zipCode.replace(/\D/g, "");
+    if (cep.length !== 8) return;
+
+    setCepLoading(true);
+    setCepError(null);
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        setCepError("CEP não encontrado.");
+        setCepLoading(false);
+        return;
+      }
+
+      // Validação de Cidade
+      const storeCityNormalized = normalizeString(store.city || "");
+      const cepCityNormalized = normalizeString(data.localidade || "");
+
+      if (storeCityNormalized !== cepCityNormalized) {
+        setCepError(`Desculpe, só entregamos em ${store.city}.`);
+        // Opcional: Limpar os campos para evitar envio
+        setCustomerAddress(prev => ({ ...prev, street: "", neighborhood: "", state: "", city: "" }));
+      } else {
+        // Cidade bate, preencher dados
+        setCustomerAddress(prev => ({
+          ...prev,
+          street: data.logradouro,
+          neighborhood: data.bairro,
+          city: data.localidade,
+          state: data.uf
+        }));
+        setCepError(null);
+      }
+    } catch (error) {
+      setCepError("Erro ao buscar CEP.");
+    } finally {
+      setCepLoading(false);
+    }
+  };
 
   // --- AÇÕES MESA ---
   const handleOpenBill = async () => {
@@ -165,23 +224,31 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const handleCheckout = async () => {
     if (cart.length === 0) return
     
+    // Bloqueios de validação
     if (isBelowMin) {
-        toast({ 
-            title: "Pedido Mínimo não atingido", 
-            description: `Faltam ${formatCurrency(remainingForMin)} para finalizar.`, 
-            variant: "destructive" 
-        });
+        toast({ title: "Pedido Mínimo", description: `Faltam ${formatCurrency(remainingForMin)} para finalizar.`, variant: "destructive" });
+        return;
+    }
+
+    if (deliveryMethod === 'entrega' && cepError) {
+        toast({ title: "Endereço Inválido", description: "Verifique o CEP antes de continuar.", variant: "destructive" });
         return;
     }
 
     if (!customerName) { toast({ title: "Faltou o nome", description: "Informe seu nome.", variant: "destructive" }); return; }
     if (deliveryMethod !== 'mesa' && !customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
-    if (deliveryMethod === 'entrega' && !customerAddress.street) { toast({ title: "Endereço incompleto", description: "Informe a rua.", variant: "destructive" }); return; }
+    
+    if (deliveryMethod === 'entrega') {
+        if (!customerAddress.street || !customerAddress.number || !customerAddress.zipCode) { 
+            toast({ title: "Endereço incompleto", description: "Preencha todos os campos do endereço.", variant: "destructive" }); 
+            return; 
+        }
+    }
 
     setIsOrderPlacing(true)
 
     const fullAddress = deliveryMethod === 'entrega' 
-        ? `${customerAddress.street}, ${customerAddress.number} - ${customerAddress.neighborhood} (${customerAddress.city}) ${customerAddress.complement ? ` - ${customerAddress.complement}` : ''}`
+        ? `${customerAddress.street}, ${customerAddress.number} - ${customerAddress.neighborhood} (${customerAddress.city}/${customerAddress.state}) CEP: ${customerAddress.zipCode} ${customerAddress.complement ? ` - ${customerAddress.complement}` : ''}`
         : deliveryMethod === 'mesa' ? `Mesa: ${tableNumber}` : 'Retirada no Balcão';
 
     const orderData = {
@@ -252,7 +319,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
 
-  // Formatação do endereço para exibição
   const storeAddress = [
     store.street,
     store.number,
@@ -281,7 +347,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 <div>
                     <h1 className="font-bold text-lg leading-tight">{store.name}</h1>
                     
-                    {/* Endereço da Loja */}
                     {storeAddress && (
                       <div className="flex items-start gap-1 text-xs text-muted-foreground mt-1 max-w-[200px] sm:max-w-md">
                           <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
@@ -383,7 +448,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         </DialogContent>
       </Dialog>
 
-      {/* CHECKOUT - SCROLL CORRIGIDO E VALIDAÇÃO CUPOM */}
+      {/* CHECKOUT */}
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
         <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-full max-h-[100dvh]" side="right">
             <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm flex-none">
@@ -465,7 +530,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                             />
                                             <Button variant="secondary" onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponCode}>{isValidatingCoupon ? "..." : "Aplicar"}</Button>
                                         </div>
-                                        {/* MENSAGEM DE ERRO DO CUPOM INLINE */}
                                         {couponError && (
                                             <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 animate-in slide-in-from-top-1">
                                                 <AlertCircle className="w-3 h-3" /> {couponError}
@@ -493,16 +557,74 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                             <RadioGroupItem value="retirada" id="retirada" className="sr-only" /><ShoppingBag className="mb-2 h-6 w-6" /><span className="text-xs font-medium">Retirar</span>
                                         </div>
                                     </RadioGroup>
+                                    
+                                    {/* FORMULÁRIO DE ENDEREÇO COM CEP */}
                                     {deliveryMethod === 'entrega' && (
-                                        <div className="space-y-2 animate-in slide-in-from-top-2">
-                                            <div className="grid grid-cols-4 gap-2">
-                                                <Input className="col-span-3" placeholder="Rua" value={customerAddress.street} onChange={e => setCustomerAddress({...customerAddress, street: e.target.value})} />
-                                                <Input className="col-span-1" placeholder="Nº" value={customerAddress.number} onChange={e => setCustomerAddress({...customerAddress, number: e.target.value})} />
+                                        <div className="space-y-2 animate-in slide-in-from-top-2 bg-slate-50 dark:bg-zinc-800/50 p-3 rounded-lg">
+                                            
+                                            {/* Campo de CEP */}
+                                            <div className="relative">
+                                                <Label className="text-xs mb-1 block">CEP (Apenas números)</Label>
+                                                <div className="flex gap-2">
+                                                    <Input 
+                                                        placeholder="00000000" 
+                                                        maxLength={8}
+                                                        value={customerAddress.zipCode} 
+                                                        onChange={e => setCustomerAddress({...customerAddress, zipCode: e.target.value})}
+                                                        onBlur={handleCheckCep}
+                                                        className={cepError ? "border-red-500 pr-10" : "pr-10"}
+                                                    />
+                                                    {cepLoading && (
+                                                        <div className="absolute right-3 top-8">
+                                                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {cepError && <p className="text-xs text-red-500 mt-1 font-medium">{cepError}</p>}
                                             </div>
-                                            <Input placeholder="Bairro" value={customerAddress.neighborhood} onChange={e => setCustomerAddress({...customerAddress, neighborhood: e.target.value})} />
-                                            <Input placeholder="Complemento" value={customerAddress.complement} onChange={e => setCustomerAddress({...customerAddress, complement: e.target.value})} />
+
+                                            <div className="grid grid-cols-4 gap-2">
+                                                <div className="col-span-3">
+                                                    <Label className="text-xs mb-1 block">Rua</Label>
+                                                    <Input 
+                                                        placeholder="Rua" 
+                                                        value={customerAddress.street} 
+                                                        onChange={e => setCustomerAddress({...customerAddress, street: e.target.value})} 
+                                                        disabled={!!cepError || cepLoading} // Trava se CEP errado
+                                                    />
+                                                </div>
+                                                <div className="col-span-1">
+                                                    <Label className="text-xs mb-1 block">Nº</Label>
+                                                    <Input 
+                                                        placeholder="123" 
+                                                        value={customerAddress.number} 
+                                                        onChange={e => setCustomerAddress({...customerAddress, number: e.target.value})} 
+                                                    />
+                                                </div>
+                                            </div>
+                                            
+                                            <div>
+                                                <Label className="text-xs mb-1 block">Bairro</Label>
+                                                <Input 
+                                                    placeholder="Bairro" 
+                                                    value={customerAddress.neighborhood} 
+                                                    onChange={e => setCustomerAddress({...customerAddress, neighborhood: e.target.value})} 
+                                                    disabled={!!cepError || cepLoading}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                 <Label className="text-xs mb-1 block">Complemento</Label>
+                                                 <Input placeholder="Apto, Bloco..." value={customerAddress.complement} onChange={e => setCustomerAddress({...customerAddress, complement: e.target.value})} />
+                                            </div>
+                                            
+                                            <div className="text-xs text-muted-foreground flex justify-between px-1">
+                                                <span>{customerAddress.city}</span>
+                                                <span>{customerAddress.state}</span>
+                                            </div>
                                         </div>
                                     )}
+
                                     <div className="space-y-3 pt-2">
                                         <h3 className="font-semibold text-sm">Pagamento</h3>
                                         <Select value={paymentMethod} onValueChange={setPaymentMethod}>
@@ -536,10 +658,10 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         size="lg" 
                         className="w-full font-bold text-base" 
                         onClick={handleCheckout} 
-                        disabled={isOrderPlacing || isBelowMin}
-                        variant={isBelowMin ? "outline" : "default"}
+                        disabled={isOrderPlacing || isBelowMin || (deliveryMethod === 'entrega' && !!cepError)}
+                        variant={(isBelowMin || (deliveryMethod === 'entrega' && !!cepError)) ? "outline" : "default"}
                     >
-                        {isOrderPlacing ? "Enviando..." : (isBelowMin ? "Valor Mínimo não atingido" : "ENVIAR PEDIDO")}
+                        {isOrderPlacing ? "Enviando..." : (isBelowMin ? "Valor Mínimo não atingido" : (cepError && deliveryMethod === 'entrega' ? "CEP Inválido/Não atendido" : "ENVIAR PEDIDO"))}
                     </Button>
                 </SheetFooter>
             )}
