@@ -285,8 +285,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
               </div>
             ) : (
               activeOrders.map((order) => (
-                // Removido overflow-hidden para evitar cortes no footer
-                <Card key={order.id} className="border-l-4 border-l-blue-500 shadow-md">
+                <Card key={order.id} className="border-l-4 border-l-blue-500 shadow-md flex flex-col">
                   <CardHeader className="pb-2 bg-slate-50/50 dark:bg-slate-900/50">
                     <div className="flex justify-between items-start">
                       <div>
@@ -299,7 +298,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                     </div>
                   </CardHeader>
                   
-                  <CardContent className="py-4 space-y-4">
+                  <CardContent className="py-4 space-y-4 flex-1">
                     {/* Endereço Clicável */}
                     <div 
                       className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3 rounded-lg flex items-start gap-3 cursor-pointer active:scale-95 transition-transform shadow-sm" 
@@ -344,8 +343,8 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                     </div>
                   </CardContent>
 
-                  {/* FOOTER COM BOTÃO ENTREGUE */}
-                  <CardFooter className="flex gap-3 p-3 bg-slate-100 dark:bg-slate-800 border-t">
+                  {/* FOOTER COM BOTÕES DE AÇÃO - CORRIGIDO */}
+                  <CardFooter className="flex gap-3 p-3 bg-slate-100 dark:bg-slate-800 border-t mt-auto">
                     <Button 
                       variant="outline" 
                       size="icon" 
@@ -375,7 +374,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             )}
           </TabsContent>
 
-          {/* ABA: A RETIRAR (Sem alterações de lógica, apenas layout) */}
+          {/* ABA: A RETIRAR */}
           <TabsContent value="pickup" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* PRONTO PARA RETIRADA */}
