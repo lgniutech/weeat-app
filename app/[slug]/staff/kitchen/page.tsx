@@ -115,11 +115,11 @@ function OrderCard({ order, onAction, btnText, btnColor, icon, isCooking }: any)
                       {/* AREA DE DETALHES (Adicionais, Remoções, Obs) */}
                       <div className="flex flex-col gap-1.5 mt-1.5">
                         
-                        {/* 1. ADICIONAIS (EM VERDE) */}
+                        {/* 1. ADICIONAIS (EM VERDE, SEM PREÇO) */}
                         {addons.length > 0 && (
                           <div className="flex flex-wrap gap-1">
                              {addons.map((addon: any, idx: number) => {
-                               // Garante que pegamos o nome correto, seja objeto ou string
+                               // Garante que pegamos apenas o nome, ignorando preço se existir
                                const addonName = typeof addon === 'string' ? addon : addon.name;
                                
                                return (
@@ -392,7 +392,7 @@ function KitchenContent({ params }: { params: { slug: string } }) {
                                      {/* Modificadores */}
                                      <div className="mt-3 space-y-2">
                                         
-                                        {/* ADICIONAIS (EM VERDE) */}
+                                        {/* ADICIONAIS (EM VERDE, SEM PREÇO) */}
                                         {addons.length > 0 && (
                                             <div className="flex flex-wrap gap-1">
                                                 {addons.map((addon: any, i: number) => {
