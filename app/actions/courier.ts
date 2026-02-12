@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 /**
- * Busca pedidos disponíveis para visualização do entregador (A Retirar).
+ * 1. Busca pedidos disponíveis para visualização do entregador (A Retirar).
+ * Filtra por status 'enviado' (pronto p/ entrega) ou 'preparando' (para visualização).
  */
 export async function getAvailableDeliveriesAction(storeId: string) {
   const supabase = await createClient();
@@ -39,7 +40,9 @@ export async function getAvailableDeliveriesAction(storeId: string) {
 }
 
 /**
- * Busca pedidos que já saíram para entrega (Minha Rota).
+ * 2. Busca pedidos que estão ATIVAMENTE com este entregador (Minha Rota).
+ * IMPORTANTE: Filtra apenas 'em_rota'. 
+ * Assim que o status muda para 'entregue', o pedido some da lista automaticamente.
  */
 export async function getActiveDeliveriesAction(storeId: string, courierId: string) {
   const supabase = await createClient();
@@ -61,7 +64,7 @@ export async function getActiveDeliveriesAction(storeId: string, courierId: stri
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "entrega")
-    .eq("status", "em_rota") // Só mostra o que está na rua
+    .eq("status", "em_rota") // Só mostra o que está pendente de entrega
     .eq("courier_id", courierId) 
     .order("last_status_change", { ascending: false });
 
@@ -74,7 +77,8 @@ export async function getActiveDeliveriesAction(storeId: string, courierId: stri
 }
 
 /**
- * Inicia a rota com vários pedidos de uma vez.
+ * 3. Inicia a rota com vários pedidos de uma vez.
+ * Move de 'enviado' -> 'em_rota' e vincula ao entregador.
  */
 interface StartBatchParams {
   orderIds: string[];
@@ -93,7 +97,7 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
     return { success: false, message: "Nenhum pedido selecionado." };
   }
 
-  // Verifica se os pedidos ainda estão disponíveis
+  // Verifica se os pedidos ainda estão disponíveis (status 'enviado')
   const { data: validOrders } = await supabase
     .from("orders")
     .select("id")
@@ -101,7 +105,7 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
     .eq("status", "enviado");
 
   if (!validOrders || validOrders.length === 0) {
-    return { success: false, message: "Nenhum dos pedidos selecionados está disponível." };
+    return { success: false, message: "Pedidos indisponíveis ou já coletados." };
   }
 
   const validIds = validOrders.map(o => o.id);
@@ -118,7 +122,7 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
 
   if (error) {
     console.error("Erro ao iniciar rota em lote:", error);
-    return { success: false, message: "Erro ao iniciar entregas no banco de dados." };
+    return { success: false, message: "Erro ao atualizar pedidos." };
   }
 
   revalidatePath("/");
@@ -126,12 +130,13 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
 }
 
 /**
- * Atualiza o status da entrega individual para ENTREGUE.
+ * 4. AÇÃO SIMPLIFICADA: Finalizar Entrega.
+ * Ao receber o status 'entregue', o sistema assume que o pedido foi finalizado e pago.
  */
 export async function updateDeliveryStatusAction(orderId: string, newStatus: 'entregue') {
   const supabase = await createClient();
 
-  // Verifica status atual
+  // 1. Busca o status atual para histórico
   const { data: currentOrder } = await supabase
     .from("orders")
     .select("status")
@@ -140,7 +145,7 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
 
   if (!currentOrder) return { success: false, message: "Pedido não encontrado." };
 
-  // Atualiza para 'entregue'
+  // 2. Atualiza o pedido para 'entregue'
   const { error: updateError } = await supabase
     .from("orders")
     .update({ 
@@ -151,17 +156,19 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
 
   if (updateError) {
     console.error("Erro ao atualizar status:", updateError);
-    return { success: false, message: "Falha ao atualizar status." };
+    return { success: false, message: "Falha ao finalizar entrega." };
   }
 
-  // Registrar histórico
+  // 3. Registra no histórico (opcional, mas recomendado para auditoria)
   await supabase.from("order_history").insert({
     order_id: orderId,
     previous_status: currentOrder.status,
     new_status: newStatus,
     changed_at: new Date().toISOString()
-  }).catch((err) => console.error("Erro ao criar histórico (não bloqueante):", err));
+  }).catch((err) => console.error("Erro silencioso ao criar histórico:", err));
 
+  // 4. Revalida o cache para atualizar a UI imediatamente
   revalidatePath("/");
+  
   return { success: true };
 }
