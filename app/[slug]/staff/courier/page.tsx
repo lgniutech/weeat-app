@@ -103,7 +103,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         }
 
         setSession(sess);
-        const courierId = sess.id || sess.staffId; // Garante que pega o ID correto
+        const courierId = sess.id || sess.staffId; 
         
         if (courierId) {
             fetchOrders(sess.storeId, courierId);
@@ -150,7 +150,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     const courierId = getCourierId(session);
 
     if (selectedOrders.length === 0 || !courierId) {
-      console.error("Tentativa de iniciar rota falhou. Orders:", selectedOrders.length, "ID:", courierId);
+      console.error("Tentativa de iniciar rota falhou.", { count: selectedOrders.length, hasCourierId: !!courierId });
       toast({
         title: "Erro",
         description: "Sessão inválida ou nenhum pedido selecionado.",
@@ -161,7 +161,11 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
     startTransition(async () => {
       try {
-        const result = await startBatchDeliveriesAction(selectedOrders, courierId);
+        // CORREÇÃO: Passando como objeto único para evitar erro 400 de serialização
+        const result = await startBatchDeliveriesAction({
+          orderIds: selectedOrders,
+          courierId: String(courierId) // Garante que é string
+        });
         
         if (result.success) {
           toast({
