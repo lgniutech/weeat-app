@@ -27,7 +27,6 @@ import {
   RefreshCw, 
   Clock, 
   DollarSign,
-  Package,
   ChefHat,
   AlertTriangle
 } from "lucide-react";
@@ -182,33 +181,28 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     });
   };
 
-  // Ação Rápida: Entregar e Remover da Lista
+  // Ação Rápida: Entregar
   const handleQuickFinish = async (orderId: string) => {
     setLoadingOrderId(orderId);
     
     startTransition(async () => {
       try {
-        // Chama a Server Action
         const result = await updateDeliveryStatusAction(orderId, 'entregue');
-        
         if (result.success) {
-          // ATUALIZAÇÃO OTIMISTA: Remove da lista local imediatamente
+          // Removemos localmente para dar sensação instantânea
           setActiveOrders(prev => prev.filter(o => o.id !== orderId));
           
           toast({
             title: "Entrega Finalizada!",
-            description: "Pedido marcado como entregue.",
-            className: "bg-green-600 text-white border-none"
+            className: "bg-green-600 text-white border-none duration-2000"
           });
           
-          // Sincroniza em background para garantir consistência
           handleRefresh();
         } else {
             toast({ title: "Erro", description: result.message, variant: "destructive" });
         }
       } catch (err) {
         console.error(err);
-        toast({ title: "Erro", description: "Falha ao processar entrega.", variant: "destructive" });
       } finally {
         setLoadingOrderId(null);
       }
@@ -223,7 +217,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
   const openMaps = (address: string) => {
     if (!address) return;
-    // Tenta abrir direto no app de mapas se for mobile, ou google maps web
     const encoded = encodeURIComponent(address);
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
   };
@@ -282,17 +275,18 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </TabsTrigger>
           </TabsList>
 
-          {/* ABA: MINHA ROTA (Com Botão de Entregar) */}
+          {/* ABA: MINHA ROTA */}
           <TabsContent value="active" className="space-y-4 max-w-md mx-auto">
             {activeOrders.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground animate-in fade-in">
+              <div className="text-center py-12 text-muted-foreground">
                 <Bike className="w-16 h-16 mx-auto mb-4 opacity-10" />
                 <p className="text-lg font-medium">Você está livre!</p>
                 <p className="text-sm">Vá em "A Retirar" para pegar novos pedidos.</p>
               </div>
             ) : (
               activeOrders.map((order) => (
-                <Card key={order.id} className="border-l-4 border-l-blue-500 shadow-md overflow-hidden animate-in slide-in-from-bottom-2">
+                // Removido overflow-hidden para evitar cortes no footer
+                <Card key={order.id} className="border-l-4 border-l-blue-500 shadow-md">
                   <CardHeader className="pb-2 bg-slate-50/50 dark:bg-slate-900/50">
                     <div className="flex justify-between items-start">
                       <div>
@@ -308,7 +302,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                   <CardContent className="py-4 space-y-4">
                     {/* Endereço Clicável */}
                     <div 
-                      className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3 rounded-lg flex items-start gap-3 cursor-pointer active:scale-95 transition-transform shadow-sm hover:border-blue-200" 
+                      className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3 rounded-lg flex items-start gap-3 cursor-pointer active:scale-95 transition-transform shadow-sm" 
                       onClick={() => openMaps(order.address || "")}
                     >
                       <MapPin className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
@@ -333,7 +327,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                       </div>
                     </div>
 
-                    {/* Aviso de Troco (Se houver) */}
+                    {/* Aviso de Troco */}
                     {order.payment_method === 'money' && order.change_for && (
                       <div className="bg-yellow-50 text-yellow-800 px-3 py-2 rounded text-xs font-medium border border-yellow-200 flex items-center gap-2">
                         <AlertTriangle className="w-3 h-3" />
@@ -350,15 +344,19 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                     </div>
                   </CardContent>
 
-                  <CardFooter className="grid grid-cols-[1fr_3fr] gap-2 p-3 bg-slate-50 dark:bg-slate-900 border-t">
-                    <Button variant="outline" size="lg" className="h-12" onClick={() => openWhatsApp(order.customer_phone)}>
+                  {/* FOOTER COM BOTÃO ENTREGUE */}
+                  <CardFooter className="flex gap-3 p-3 bg-slate-100 dark:bg-slate-800 border-t">
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      className="h-12 w-12 shrink-0 bg-white" 
+                      onClick={() => openWhatsApp(order.customer_phone)}
+                    >
                       <Phone className="w-5 h-5 text-green-600" />
                     </Button>
                     
-                    {/* BOTÃO PRINCIPAL: ENTREGUE */}
                     <Button 
-                      size="lg"
-                      className="h-12 w-full bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm active:scale-95 transition-all"
+                      className="flex-1 h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-base shadow-sm active:scale-95 transition-all"
                       onClick={() => handleQuickFinish(order.id)}
                       disabled={loadingOrderId === order.id}
                     >
@@ -377,10 +375,9 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             )}
           </TabsContent>
 
-          {/* ABA: A RETIRAR */}
+          {/* ABA: A RETIRAR (Sem alterações de lógica, apenas layout) */}
           <TabsContent value="pickup" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
               {/* PRONTO PARA RETIRADA */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b pb-2">
@@ -482,7 +479,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         </Tabs>
       </main>
 
-      {/* Botão Flutuante para Ação em Lote */}
+      {/* Botão Flutuante (apenas quando há seleção) */}
       {selectedOrders.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-lg z-50 animate-in slide-in-from-bottom-5">
           <div className="max-w-md mx-auto flex items-center gap-4">
