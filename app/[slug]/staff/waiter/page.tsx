@@ -459,6 +459,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             {cart.length > 0 && (
                 <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t p-3 shadow-lg z-20 space-y-3">
                     
+                    {validatedCouponData?.valid === false && validatedCouponData.message && (
+                        <p className="text-xs text-red-500 font-bold mb-1 ml-1">
+                            {validatedCouponData.message}
+                        </p>
+                    )}
                     <div className="flex gap-2">
                          <div className="relative flex-1">
                              <Tag className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
