@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { 
   getStaffSession, 
@@ -64,56 +64,63 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   const router = useRouter();
   const { toast } = useToast();
 
-  // 1. Verificação de Sessão
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const sess = await getStaffSession();
-        if (!sess || sess.role !== "courier" || sess.storeSlug !== params.slug) {
-          router.push(`/${params.slug}/staff`);
-          return;
-        }
-        setSession(sess);
-        fetchOrders(sess.storeId, sess.id);
-      } catch (error) {
-        console.error("Erro ao verificar sessão:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    checkSession();
-  }, [params.slug, router]);
+  // Helper para obter o ID do entregador de forma segura
+  const getCourierId = useCallback((sessData: any) => {
+    if (!sessData) return null;
+    return sessData.id || sessData.staffId;
+  }, []);
 
   // 2. Busca de Pedidos
-  const fetchOrders = async (storeId: string, courierId: string) => {
+  const fetchOrders = useCallback(async (storeId: string, courierId: string) => {
+    if (!storeId || !courierId) return;
+    
     startTransition(async () => {
       try {
         const [available, active] = await Promise.all([
           getAvailableDeliveriesAction(storeId),
           getActiveDeliveriesAction(storeId, courierId)
         ]);
-        setAvailableOrders(available);
-        setActiveOrders(active);
+        setAvailableOrders(available || []);
+        setActiveOrders(active || []);
         
         // Limpa seleção se os pedidos não existirem mais na lista de prontos
-        setSelectedOrders(prev => prev.filter(id => available.some(o => o.id === id && o.status === 'enviado')));
+        setSelectedOrders(prev => prev.filter(id => available?.some(o => o.id === id && o.status === 'enviado')));
       } catch (error) {
         console.error("Erro ao buscar pedidos:", error);
-        toast({
-          title: "Erro de conexão",
-          description: "Não foi possível atualizar os pedidos.",
-          variant: "destructive"
-        });
       }
     });
-  };
+  }, []);
+
+  // 1. Verificação de Sessão
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const sess = await getStaffSession();
+        
+        if (!sess || sess.role !== "courier" || sess.storeSlug !== params.slug) {
+          router.push(`/${params.slug}/staff`);
+          return;
+        }
+
+        setSession(sess);
+        const courierId = sess.id || sess.staffId; // Garante que pega o ID correto
+        
+        if (courierId) {
+            fetchOrders(sess.storeId, courierId);
+        }
+      } catch (error) {
+        console.error("Erro de sessão:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkSession();
+  }, [params.slug, router, fetchOrders]);
 
   const handleRefresh = () => {
-    if (session?.storeId && session?.id) {
-      fetchOrders(session.storeId, session.id);
-    } else {
-      // Tenta recuperar sessão se perdida
-      window.location.reload();
+    const courierId = getCourierId(session);
+    if (session?.storeId && courierId) {
+      fetchOrders(session.storeId, courierId);
     }
   };
 
@@ -140,21 +147,13 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
   // 4. Ação: Sair com itens coletados (LOTE)
   const handleBatchStart = async () => {
-    // Validação Explícita de Sessão
-    if (!session || !session.id) {
-      console.error("Tentativa de iniciar rota sem ID de sessão válido:", session);
-      toast({
-        title: "Erro de Sessão",
-        description: "Não foi possível identificar o entregador. Recarregue a página.",
-        variant: "destructive"
-      });
-      return;
-    }
+    const courierId = getCourierId(session);
 
-    if (selectedOrders.length === 0) {
-       toast({
-        title: "Seleção Vazia",
-        description: "Selecione ao menos um pedido para iniciar.",
+    if (selectedOrders.length === 0 || !courierId) {
+      console.error("Tentativa de iniciar rota falhou. Orders:", selectedOrders.length, "ID:", courierId);
+      toast({
+        title: "Erro",
+        description: "Sessão inválida ou nenhum pedido selecionado.",
         variant: "destructive"
       });
       return;
@@ -162,12 +161,12 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
     startTransition(async () => {
       try {
-        const result = await startBatchDeliveriesAction(selectedOrders, session.id);
+        const result = await startBatchDeliveriesAction(selectedOrders, courierId);
         
         if (result.success) {
           toast({
             title: "Rota Iniciada!",
-            description: `${selectedOrders.length} pedidos movidos para sua lista.`,
+            description: `${selectedOrders.length} pedidos foram movidos para sua lista.`,
             className: "bg-blue-600 text-white border-none"
           });
           setSelectedOrders([]);
@@ -178,15 +177,11 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             description: result.message,
             variant: "destructive"
           });
-          handleRefresh(); // Atualiza para ver o estado real (alguém pode ter pego o pedido)
+          handleRefresh();
         }
       } catch (error) {
-        console.error("Erro ao iniciar rota:", error);
-        toast({
-          title: "Erro Inesperado",
-          description: "Ocorreu um erro ao processar sua solicitação.",
-          variant: "destructive"
-        });
+        console.error("Erro na ação de lote:", error);
+        toast({ title: "Erro", description: "Falha ao processar solicitação.", variant: "destructive" });
       }
     });
   };
@@ -241,7 +236,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
           </div>
           <div>
             <h1 className="font-bold text-sm leading-tight">Painel de Entregas</h1>
-            <p className="text-xs text-muted-foreground">Olá, {session?.name || "Entregador"}</p>
+            <p className="text-xs text-muted-foreground">Olá, {session?.name}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -407,7 +402,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </div>
             
             {/* Espaço extra para não cobrir com o botão flutuante */}
-            <div className="h-24" />
+            <div className="h-20" />
           </TabsContent>
 
           {/* ABA: MINHA ROTA (PRIVADO) */}
@@ -508,7 +503,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </div>
             <Button 
               size="lg" 
-              className="font-bold bg-primary text-primary-foreground shadow-xl w-2/3 cursor-pointer"
+              className="font-bold bg-primary text-primary-foreground shadow-xl w-2/3"
               onClick={handleBatchStart}
               disabled={isPending}
             >
