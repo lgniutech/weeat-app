@@ -182,28 +182,33 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     });
   };
 
-  // Ação Rápida: Entregar
+  // Ação Rápida: Entregar e Remover da Lista
   const handleQuickFinish = async (orderId: string) => {
     setLoadingOrderId(orderId);
     
-    // Pequeno delay artificial para UX se quiser, ou chamada direta
     startTransition(async () => {
       try {
+        // Chama a Server Action
         const result = await updateDeliveryStatusAction(orderId, 'entregue');
+        
         if (result.success) {
-          // Removemos localmente para dar sensação instantânea
+          // ATUALIZAÇÃO OTIMISTA: Remove da lista local imediatamente
           setActiveOrders(prev => prev.filter(o => o.id !== orderId));
           
           toast({
             title: "Entrega Finalizada!",
-            className: "bg-green-600 text-white border-none duration-2000"
+            description: "Pedido marcado como entregue.",
+            className: "bg-green-600 text-white border-none"
           });
           
-          // Sincroniza em background
+          // Sincroniza em background para garantir consistência
           handleRefresh();
         } else {
             toast({ title: "Erro", description: result.message, variant: "destructive" });
         }
+      } catch (err) {
+        console.error(err);
+        toast({ title: "Erro", description: "Falha ao processar entrega.", variant: "destructive" });
       } finally {
         setLoadingOrderId(null);
       }
@@ -218,6 +223,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
   const openMaps = (address: string) => {
     if (!address) return;
+    // Tenta abrir direto no app de mapas se for mobile, ou google maps web
     const encoded = encodeURIComponent(address);
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
   };
@@ -276,17 +282,17 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             </TabsTrigger>
           </TabsList>
 
-          {/* ABA: MINHA ROTA (Botão Simplificado Aqui) */}
+          {/* ABA: MINHA ROTA (Com Botão de Entregar) */}
           <TabsContent value="active" className="space-y-4 max-w-md mx-auto">
             {activeOrders.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
+              <div className="text-center py-12 text-muted-foreground animate-in fade-in">
                 <Bike className="w-16 h-16 mx-auto mb-4 opacity-10" />
                 <p className="text-lg font-medium">Você está livre!</p>
                 <p className="text-sm">Vá em "A Retirar" para pegar novos pedidos.</p>
               </div>
             ) : (
               activeOrders.map((order) => (
-                <Card key={order.id} className="border-l-4 border-l-blue-500 shadow-md overflow-hidden">
+                <Card key={order.id} className="border-l-4 border-l-blue-500 shadow-md overflow-hidden animate-in slide-in-from-bottom-2">
                   <CardHeader className="pb-2 bg-slate-50/50 dark:bg-slate-900/50">
                     <div className="flex justify-between items-start">
                       <div>
@@ -302,7 +308,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                   <CardContent className="py-4 space-y-4">
                     {/* Endereço Clicável */}
                     <div 
-                      className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3 rounded-lg flex items-start gap-3 cursor-pointer active:scale-95 transition-transform shadow-sm" 
+                      className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3 rounded-lg flex items-start gap-3 cursor-pointer active:scale-95 transition-transform shadow-sm hover:border-blue-200" 
                       onClick={() => openMaps(order.address || "")}
                     >
                       <MapPin className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
@@ -335,7 +341,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                       </div>
                     )}
 
-                    {/* Itens Colapsados (Visual Clean) */}
+                    {/* Itens */}
                     <div className="text-xs text-muted-foreground bg-slate-50 dark:bg-slate-800/50 p-2 rounded">
                       <p className="font-medium mb-1">{order.items.length} itens:</p>
                       <p className="line-clamp-2 leading-relaxed">
@@ -349,7 +355,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                       <Phone className="w-5 h-5 text-green-600" />
                     </Button>
                     
-                    {/* BOTÃO ÚNICO DE AÇÃO */}
+                    {/* BOTÃO PRINCIPAL: ENTREGUE */}
                     <Button 
                       size="lg"
                       className="h-12 w-full bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm active:scale-95 transition-all"
