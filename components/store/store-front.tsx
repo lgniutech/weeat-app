@@ -5,7 +5,6 @@ import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Ute
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge" 
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import {
   Sheet,
@@ -21,7 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -471,14 +469,14 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 <Input placeholder="Buscar produtos..." className="pl-9 bg-slate-100 dark:bg-zinc-800 border-none" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
              </div>
              
-             <ScrollArea className="w-full whitespace-nowrap pb-2">
-                <div className="flex gap-2">
+             <div className="w-full overflow-x-auto pb-2 scrollbar-hide">
+                <div className="flex gap-2 min-w-max">
                     <Button variant={selectedCategory === "todos" ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory("todos")} className="rounded-full">Todos</Button>
                     {categories.map(cat => (
                         <Button key={cat.id} variant={selectedCategory === cat.id ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(cat.id)} className="rounded-full">{cat.name}</Button>
                     ))}
                 </div>
-             </ScrollArea>
+             </div>
           </div>
         </div>
       </div>
@@ -504,12 +502,13 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         </div>
       </div>
 
-      {/* MODAL PRODUTO (ATUALIZADO) */}
+      {/* MODAL PRODUTO (CORRIGIDO SCROLL) */}
       <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
-        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden flex flex-col h-[90vh] sm:h-auto">
+        <DialogContent className="sm:max-w-[500px] p-0 flex flex-col max-h-[90vh]">
             {selectedProduct && (
                 <>
-                   <ScrollArea className="flex-1 w-full max-h-[calc(90vh-80px)] sm:max-h-[60vh]">
+                   {/* ÁREA COM SCROLL NATIVO */}
+                   <div className="flex-1 overflow-y-auto">
                         {selectedProduct.image_url && (
                             <div className="w-full h-48 relative shrink-0">
                                 <Image src={selectedProduct.image_url} alt={selectedProduct.name} fill className="object-cover" />
@@ -521,14 +520,14 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                 <DialogDescription className="text-base mt-2">{selectedProduct.description || "Sem descrição."}</DialogDescription>
                             </DialogHeader>
 
-                            {/* INGREDIENTES (Remoção) */}
+                            {/* INGREDIENTES (3 COLUNAS) */}
                             {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && (
                                 <div className="space-y-3">
                                     <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Ingredientes</h4>
-                                    <p className="text-xs text-muted-foreground">Desmarque o que deseja remover.</p>
-                                    <div className="grid grid-cols-1 gap-3">
+                                    <p className="text-xs text-muted-foreground">Desmarque para remover.</p>
+                                    <div className="grid grid-cols-3 gap-2"> 
                                         {selectedProduct.ingredients.map((ing: any) => (
-                                            <div key={ing.id} className="flex items-center space-x-2 border rounded-md p-3">
+                                            <div key={ing.id} className="flex items-center space-x-2 border rounded-md p-2 bg-slate-50 dark:bg-zinc-800/50">
                                                 <Checkbox 
                                                     id={`ing-${ing.id}`} 
                                                     checked={!removedIngredients.includes(ing.id)}
@@ -540,7 +539,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                                         }
                                                     }}
                                                 />
-                                                <Label htmlFor={`ing-${ing.id}`} className="flex-1 cursor-pointer font-normal">
+                                                <Label htmlFor={`ing-${ing.id}`} className="cursor-pointer font-normal text-xs truncate" title={ing.name}>
                                                     {ing.name}
                                                 </Label>
                                             </div>
@@ -549,11 +548,11 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                 </div>
                             )}
 
-                            {/* ADICIONAIS (Seleção) */}
+                            {/* ADICIONAIS */}
                             {selectedProduct.addons && selectedProduct.addons.length > 0 && (
                                 <div className="space-y-3">
                                     <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Adicionais</h4>
-                                    <div className="grid grid-cols-1 gap-3">
+                                    <div className="grid grid-cols-1 gap-2">
                                         {selectedProduct.addons.map((addon: any) => (
                                             <div key={addon.id} className="flex items-center space-x-2 border rounded-md p-3 justify-between">
                                                 <div className="flex items-center gap-2">
@@ -590,7 +589,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                 />
                             </div>
                         </div>
-                    </ScrollArea>
+                    </div>
                     
                     {/* FOOTER FIXO */}
                     <div className="p-4 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-4 shrink-0 z-20 shadow-[0_-5px_10px_rgba(0,0,0,0.03)]">
