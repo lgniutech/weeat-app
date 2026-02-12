@@ -41,8 +41,7 @@ export async function getAvailableDeliveriesAction(storeId: string) {
 
 /**
  * 2. Busca pedidos que estão ATIVAMENTE com este entregador (Minha Rota).
- * IMPORTANTE: Filtra apenas 'em_rota'. 
- * Assim que o status muda para 'entregue', o pedido some da lista automaticamente.
+ * Filtra apenas 'em_rota'. 
  */
 export async function getActiveDeliveriesAction(storeId: string, courierId: string) {
   const supabase = await createClient();
@@ -130,13 +129,13 @@ export async function startBatchDeliveriesAction(params: StartBatchParams) {
 }
 
 /**
- * 4. AÇÃO SIMPLIFICADA: Finalizar Entrega.
- * Ao receber o status 'entregue', o sistema assume que o pedido foi finalizado e pago.
+ * 4. AÇÃO DE FINALIZAR: Marca como 'entregue'.
+ * Isso faz o pedido sair da lista de 'em_rota'.
  */
 export async function updateDeliveryStatusAction(orderId: string, newStatus: 'entregue') {
   const supabase = await createClient();
 
-  // 1. Busca o status atual para histórico
+  // 1. Busca o status atual para histórico (opcional, boa prática)
   const { data: currentOrder } = await supabase
     .from("orders")
     .select("status")
@@ -159,15 +158,19 @@ export async function updateDeliveryStatusAction(orderId: string, newStatus: 'en
     return { success: false, message: "Falha ao finalizar entrega." };
   }
 
-  // 3. Registra no histórico (opcional, mas recomendado para auditoria)
-  await supabase.from("order_history").insert({
-    order_id: orderId,
-    previous_status: currentOrder.status,
-    new_status: newStatus,
-    changed_at: new Date().toISOString()
-  }).catch((err) => console.error("Erro silencioso ao criar histórico:", err));
+  // 3. Registra no histórico (opcional - try/catch para não bloquear o fluxo se falhar)
+  try {
+    await supabase.from("order_history").insert({
+      order_id: orderId,
+      previous_status: currentOrder.status,
+      new_status: newStatus,
+      changed_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error("Erro silencioso ao criar histórico:", err);
+  }
 
-  // 4. Revalida o cache para atualizar a UI imediatamente
+  // 4. Revalida o cache
   revalidatePath("/");
   
   return { success: true };
