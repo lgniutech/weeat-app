@@ -161,6 +161,12 @@ export async function getCustomerOrdersAction(phone: string) {
 export async function getTableOrdersAction(storeId: string, tableNumber: string) {
   const supabase = await createClient();
 
+  // Filtra pedidos das últimas 24 horas para garantir que mesas antigas sejam limpas
+  // mas evita problemas de fuso horário estrito de "hoje"
+  const yesterday = new Date();
+  yesterday.setHours(yesterday.getHours() - 24);
+  const filterDate = yesterday.toISOString();
+
   const { data: orders, error } = await supabase
     .from("orders")
     .select(`
@@ -181,6 +187,7 @@ export async function getTableOrdersAction(storeId: string, tableNumber: string)
     `)
     .eq("store_id", storeId)
     .eq("table_number", tableNumber)
+    .gte("created_at", filterDate) 
     .neq("status", "concluido") 
     .neq("status", "cancelado")
     .order("created_at", { ascending: false });
