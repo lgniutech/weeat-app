@@ -62,7 +62,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     .from("orders")
     .select(`
       id, status, total_price, discount, coupon_code, address, customer_name, table_number,
-      order_items ( name:product_name, quantity, price:unit_price )
+      order_items ( name:product_name, quantity, price:unit_price, observation, removed_ingredients, selected_addons )
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "mesa")
