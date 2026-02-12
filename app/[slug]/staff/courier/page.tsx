@@ -19,14 +19,6 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { 
   Bike, 
   MapPin, 
   Phone, 
@@ -37,9 +29,7 @@ import {
   DollarSign,
   Package,
   ChefHat,
-  AlertTriangle,
-  CreditCard,
-  Wallet
+  AlertTriangle
 } from "lucide-react";
 
 type OrderView = {
@@ -64,15 +54,15 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   const [availableOrders, setAvailableOrders] = useState<OrderView[]>([]);
   const [activeOrders, setActiveOrders] = useState<OrderView[]>([]);
   
-  // Controle de Confirmação (Modal)
-  const [orderToFinalize, setOrderToFinalize] = useState<OrderView | null>(null);
-
   // Listas derivadas
   const readyOrders = availableOrders.filter(o => o.status === 'enviado');
   const cookingOrders = availableOrders.filter(o => o.status === 'preparando');
 
   // Controle de Seleção (Lote)
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  
+  // Controle de loading individual para botões
+  const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
   
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -163,7 +153,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     const courierId = getCourierId(session);
 
     if (selectedOrders.length === 0 || !courierId) {
-      toast({ title: "Erro", description: "Sessão inválida ou nenhum pedido selecionado.", variant: "destructive" });
+      toast({ title: "Erro", description: "Selecione pedidos para sair.", variant: "destructive" });
       return;
     }
 
@@ -177,7 +167,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         if (result.success) {
           toast({
             title: "Rota Iniciada!",
-            description: `${selectedOrders.length} pedidos movidos para sua lista.`,
+            description: "Boa entrega!",
             className: "bg-blue-600 text-white border-none"
           });
           setSelectedOrders([]);
@@ -188,33 +178,34 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
         }
       } catch (error) {
         console.error("Erro na ação de lote:", error);
-        toast({ title: "Erro", description: "Falha ao processar solicitação.", variant: "destructive" });
       }
     });
   };
 
-  // Ação: Confirmar Entrega Individual (Dispara após o Modal)
-  const confirmFinishDelivery = async () => {
-    if (!orderToFinalize) return;
-
-    const orderId = orderToFinalize.id;
-    setOrderToFinalize(null); // Fecha modal
-
+  // Ação Rápida: Entregar
+  const handleQuickFinish = async (orderId: string) => {
+    setLoadingOrderId(orderId);
+    
+    // Pequeno delay artificial para UX se quiser, ou chamada direta
     startTransition(async () => {
-      const result = await updateDeliveryStatusAction(orderId, 'entregue');
-      if (result.success) {
-        toast({
-          title: "Entrega Concluída!",
-          description: "Pedido marcado como entregue com sucesso.",
-          className: "bg-green-600 text-white border-none"
-        });
-        handleRefresh();
-      } else {
-        toast({
-          title: "Erro",
-          description: result.message,
-          variant: "destructive"
-        });
+      try {
+        const result = await updateDeliveryStatusAction(orderId, 'entregue');
+        if (result.success) {
+          // Removemos localmente para dar sensação instantânea
+          setActiveOrders(prev => prev.filter(o => o.id !== orderId));
+          
+          toast({
+            title: "Entrega Finalizada!",
+            className: "bg-green-600 text-white border-none duration-2000"
+          });
+          
+          // Sincroniza em background
+          handleRefresh();
+        } else {
+            toast({ title: "Erro", description: result.message, variant: "destructive" });
+        }
+      } finally {
+        setLoadingOrderId(null);
       }
     });
   };
@@ -229,13 +220,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
     if (!address) return;
     const encoded = encodeURIComponent(address);
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
-  };
-
-  // Determina se precisa cobrar
-  const getPaymentStatus = (method: string) => {
-    const toCollect = ['money', 'credit_card', 'debit_card']; // Assumindo cartões na maquininha
-    if (toCollect.includes(method)) return 'collect';
-    return 'paid';
   };
 
   if (loading) {
@@ -256,8 +240,8 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
             <Bike className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="font-bold text-sm leading-tight">Painel de Entregas</h1>
-            <p className="text-xs text-muted-foreground">Olá, {session?.name}</p>
+            <h1 className="font-bold text-sm leading-tight">Entregas</h1>
+            <p className="text-xs text-muted-foreground">{session?.name}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -272,16 +256,8 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
       {/* Conteúdo */}
       <main className="p-4 max-w-5xl mx-auto">
-        <Tabs defaultValue="pickup" className="w-full">
+        <Tabs defaultValue="active" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="pickup" className="relative">
-              A Retirar
-              {readyOrders.length > 0 && (
-                <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]">
-                  {readyOrders.length}
-                </Badge>
-              )}
-            </TabsTrigger>
             <TabsTrigger value="active">
               Minha Rota
               {activeOrders.length > 0 && (
@@ -290,7 +266,110 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="pickup" className="relative">
+              A Retirar
+              {readyOrders.length > 0 && (
+                <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]">
+                  {readyOrders.length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
+
+          {/* ABA: MINHA ROTA (Botão Simplificado Aqui) */}
+          <TabsContent value="active" className="space-y-4 max-w-md mx-auto">
+            {activeOrders.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Bike className="w-16 h-16 mx-auto mb-4 opacity-10" />
+                <p className="text-lg font-medium">Você está livre!</p>
+                <p className="text-sm">Vá em "A Retirar" para pegar novos pedidos.</p>
+              </div>
+            ) : (
+              activeOrders.map((order) => (
+                <Card key={order.id} className="border-l-4 border-l-blue-500 shadow-md overflow-hidden">
+                  <CardHeader className="pb-2 bg-slate-50/50 dark:bg-slate-900/50">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg">#{order.id.slice(0, 5).toUpperCase()}</CardTitle>
+                        <p className="text-sm font-bold">{order.customer_name}</p>
+                      </div>
+                      <Badge className="bg-blue-600 hover:bg-blue-700">
+                        Em Rota
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="py-4 space-y-4">
+                    {/* Endereço Clicável */}
+                    <div 
+                      className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3 rounded-lg flex items-start gap-3 cursor-pointer active:scale-95 transition-transform shadow-sm" 
+                      onClick={() => openMaps(order.address || "")}
+                    >
+                      <MapPin className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-medium leading-tight text-sm">{order.address || "Sem endereço"}</p>
+                        <p className="text-[10px] text-blue-600 mt-1 font-bold uppercase tracking-wide">Abrir no GPS</p>
+                      </div>
+                    </div>
+
+                    {/* Resumo Financeiro */}
+                    <div className="flex items-center justify-between text-sm px-1">
+                      <div className="flex flex-col">
+                        <span className="text-muted-foreground text-xs">Valor Total</span>
+                        <span className="font-bold text-base">R$ {Number(order.total_price).toFixed(2)}</span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-muted-foreground text-xs">Pagamento</span>
+                        <div className="flex items-center gap-1 font-medium">
+                          {order.payment_method === 'money' && <DollarSign className="w-3 h-3 text-green-600" />}
+                          {formatPaymentMethod(order.payment_method)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Aviso de Troco (Se houver) */}
+                    {order.payment_method === 'money' && order.change_for && (
+                      <div className="bg-yellow-50 text-yellow-800 px-3 py-2 rounded text-xs font-medium border border-yellow-200 flex items-center gap-2">
+                        <AlertTriangle className="w-3 h-3" />
+                        <span>Troco para: {order.change_for}</span>
+                      </div>
+                    )}
+
+                    {/* Itens Colapsados (Visual Clean) */}
+                    <div className="text-xs text-muted-foreground bg-slate-50 dark:bg-slate-800/50 p-2 rounded">
+                      <p className="font-medium mb-1">{order.items.length} itens:</p>
+                      <p className="line-clamp-2 leading-relaxed">
+                        {order.items.map(i => `${i.quantity}x ${i.product_name}`).join(', ')}
+                      </p>
+                    </div>
+                  </CardContent>
+
+                  <CardFooter className="grid grid-cols-[1fr_3fr] gap-2 p-3 bg-slate-50 dark:bg-slate-900 border-t">
+                    <Button variant="outline" size="lg" className="h-12" onClick={() => openWhatsApp(order.customer_phone)}>
+                      <Phone className="w-5 h-5 text-green-600" />
+                    </Button>
+                    
+                    {/* BOTÃO ÚNICO DE AÇÃO */}
+                    <Button 
+                      size="lg"
+                      className="h-12 w-full bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm active:scale-95 transition-all"
+                      onClick={() => handleQuickFinish(order.id)}
+                      disabled={loadingOrderId === order.id}
+                    >
+                      {loadingOrderId === order.id ? (
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle className="mr-2 w-5 h-5" />
+                          ENTREGUE
+                        </>
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))
+            )}
+          </TabsContent>
 
           {/* ABA: A RETIRAR */}
           <TabsContent value="pickup" className="space-y-6">
@@ -301,7 +380,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                 <div className="flex items-center justify-between border-b pb-2">
                   <h2 className="font-bold text-lg flex items-center gap-2 text-green-700 dark:text-green-400">
                     <CheckCircle className="w-5 h-5" />
-                    Pronto para Retirada
+                    Pronto
                     <Badge variant="outline" className="ml-2 bg-green-100 text-green-700 border-green-200">
                       {readyOrders.length}
                     </Badge>
@@ -323,7 +402,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
                 {readyOrders.length === 0 ? (
                   <div className="text-center py-8 bg-white dark:bg-slate-900 rounded-lg border border-dashed">
-                    <p className="text-sm text-muted-foreground">Nenhum pedido pronto.</p>
+                    <p className="text-sm text-muted-foreground">Nada pronto.</p>
                   </div>
                 ) : (
                   readyOrders.map((order) => {
@@ -345,26 +424,16 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                                   <CardTitle className="text-base">#{order.id.slice(0, 5).toUpperCase()}</CardTitle>
                                   <p className="text-sm font-semibold">{order.customer_name}</p>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-xs font-bold text-green-600">PRONTO</p>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    {calculateTimeElapsed(order.last_status_change)}
-                                  </span>
-                                </div>
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  {calculateTimeElapsed(order.last_status_change)}
+                                </span>
                               </div>
                             </div>
                           </CardHeader>
                           <CardContent className="pb-3 pl-11 text-xs space-y-1 p-4 pt-0">
                             <div className="flex items-start gap-2 text-muted-foreground">
                               <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                              <span className="line-clamp-2">{order.address || "Endereço não informado"}</span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Badge variant="secondary" className="text-[10px] h-5">
-                                {order.items.length} itens
-                              </Badge>
-                              <span className="text-muted-foreground">•</span>
-                              <span className="font-medium">R$ {Number(order.total_price).toFixed(2)}</span>
+                              <span className="line-clamp-1">{order.address || "Local não informado"}</span>
                             </div>
                           </CardContent>
                         </Card>
@@ -375,210 +444,44 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
               </div>
 
               {/* AGUARDANDO COZINHA */}
-              <div className="space-y-4">
+              <div className="space-y-4 opacity-75">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h2 className="font-bold text-lg flex items-center gap-2 text-orange-600 dark:text-orange-400">
                     <ChefHat className="w-5 h-5" />
-                    Aguardando Cozinha
+                    Cozinha
                     <Badge variant="outline" className="ml-2 bg-orange-100 text-orange-700 border-orange-200">
                       {cookingOrders.length}
                     </Badge>
                   </h2>
                 </div>
-
-                {cookingOrders.length === 0 ? (
-                  <div className="text-center py-8 bg-white dark:bg-slate-900 rounded-lg border border-dashed">
-                    <p className="text-sm text-muted-foreground">A cozinha está vazia.</p>
-                  </div>
-                ) : (
-                  cookingOrders.map((order) => (
-                    <Card key={order.id} className="border-l-4 border-l-orange-300 opacity-80 bg-slate-50 dark:bg-slate-900/50">
-                      <CardHeader className="pb-2 p-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-base text-muted-foreground">#{order.id.slice(0, 5).toUpperCase()}</CardTitle>
-                            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{order.customer_name}</p>
-                          </div>
-                          <Badge variant="outline" className="bg-orange-50 text-orange-500 border-orange-200 text-[10px]">
-                            PREPARANDO
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pb-3 text-xs p-4 pt-0 space-y-1">
-                        <div className="flex items-start gap-2 text-muted-foreground">
-                          <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                          <span className="line-clamp-1">{order.address || "Local não informado"}</span>
-                        </div>
-                        <div className="flex items-center gap-1 mt-2 text-orange-600/70 text-[10px]">
-                          <Clock className="w-3 h-3" />
-                          <span>Na cozinha há: {calculateTimeElapsed(order.last_status_change)}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
+                {cookingOrders.map((order) => (
+                  <Card key={order.id} className="border-l-4 border-l-orange-300 bg-slate-50 dark:bg-slate-900/50">
+                    <CardHeader className="p-3 pb-0">
+                      <div className="flex justify-between">
+                        <span className="font-bold text-sm">#{order.id.slice(0, 5).toUpperCase()}</span>
+                        <Badge variant="secondary" className="text-[10px]">PREPARANDO</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{order.customer_name}</p>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-1 text-[10px] text-muted-foreground">
+                       <Clock className="w-3 h-3 inline mr-1" />
+                       {calculateTimeElapsed(order.last_status_change)}
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </div>
             <div className="h-20" />
           </TabsContent>
-
-          {/* ABA: MINHA ROTA */}
-          <TabsContent value="active" className="space-y-4 max-w-md mx-auto">
-            {activeOrders.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground">
-                <Bike className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                <p>Você não tem entregas em andamento.</p>
-                <p className="text-xs mt-2">Vá na aba "A Retirar" para pegar pedidos prontos.</p>
-              </div>
-            ) : (
-              activeOrders.map((order) => (
-                <Card key={order.id} className="border-l-4 border-l-blue-500 shadow-md">
-                  <CardHeader className="pb-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">#{order.id.slice(0, 5).toUpperCase()}</CardTitle>
-                        <p className="text-sm font-bold">{order.customer_name}</p>
-                      </div>
-                      <Badge className="bg-blue-600 hover:bg-blue-700">
-                        Sua Rota
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  
-                  <CardContent className="pb-3 text-sm space-y-3">
-                    {/* Endereço */}
-                    <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg flex items-start gap-3 cursor-pointer active:scale-95 transition-transform" onClick={() => openMaps(order.address || "")}>
-                      <MapPin className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="font-medium leading-tight">{order.address || "Sem endereço"}</p>
-                        <p className="text-xs text-blue-600 mt-1 font-bold">Toque para abrir no mapa</p>
-                      </div>
-                    </div>
-
-                    {/* Dados Financeiros */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
-                         <DollarSign className="w-4 h-4 text-green-600" />
-                         <div>
-                           <p className="text-xs text-muted-foreground">Total</p>
-                           <p className="font-bold">R$ {Number(order.total_price).toFixed(2)}</p>
-                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
-                         <Package className="w-4 h-4 text-purple-600" />
-                         <div>
-                           <p className="text-xs text-muted-foreground">Pagamento</p>
-                           <p className="font-bold text-xs truncate max-w-[100px]" title={order.payment_method}>
-                             {formatPaymentMethod(order.payment_method)}
-                           </p>
-                         </div>
-                      </div>
-                    </div>
-
-                    {/* Alerta de Troco/Cobrança */}
-                    {order.payment_method === 'money' && (
-                        <div className="bg-yellow-50 text-yellow-800 px-3 py-2 rounded text-sm font-medium border border-yellow-200 flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4" />
-                          <span>
-                            Cobrar no Dinheiro
-                            {order.change_for && ` (Troco para ${order.change_for})`}
-                          </span>
-                        </div>
-                    )}
-                    
-                    {/* Lista rápida de itens */}
-                    <div className="text-xs text-muted-foreground border-t pt-2 mt-1">
-                      <p className="mb-1 font-medium">Itens:</p>
-                      <ul className="list-disc pl-4 space-y-0.5">
-                        {order.items.map((item, idx) => (
-                           <li key={idx}>{item.quantity}x {item.product_name}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                  </CardContent>
-
-                  <CardFooter className="grid grid-cols-[1fr_3fr] gap-2">
-                    <Button variant="outline" size="icon" className="w-full" onClick={() => openWhatsApp(order.customer_phone)}>
-                      <Phone className="w-5 h-5 text-green-600" />
-                    </Button>
-                    <Button 
-                      className="w-full bg-green-600 hover:bg-green-700 text-white font-bold"
-                      onClick={() => setOrderToFinalize(order)}
-                    >
-                      <CheckCircle className="mr-2 w-5 h-5" />
-                      ENTREGUE
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))
-            )}
-          </TabsContent>
         </Tabs>
       </main>
 
-      {/* MODAL DE CONFIRMAÇÃO DE ENTREGA */}
-      <Dialog open={!!orderToFinalize} onOpenChange={(open) => !open && setOrderToFinalize(null)}>
-        <DialogContent className="max-w-sm rounded-xl">
-          <DialogHeader>
-            <DialogTitle>Confirmar Entrega</DialogTitle>
-            <DialogDescription>
-              Você está finalizando a entrega para <strong>{orderToFinalize?.customer_name}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4 space-y-4">
-            {orderToFinalize && getPaymentStatus(orderToFinalize.payment_method) === 'collect' ? (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-red-700 font-bold text-lg">
-                  <AlertTriangle className="w-6 h-6" />
-                  COBRAR: R$ {Number(orderToFinalize.total_price).toFixed(2)}
-                </div>
-                <div className="text-sm text-red-600 flex items-center gap-2">
-                   {orderToFinalize.payment_method === 'money' ? (
-                     <>
-                        <Wallet className="w-4 h-4" />
-                        <span>Pagamento em Dinheiro</span>
-                     </>
-                   ) : (
-                     <>
-                        <CreditCard className="w-4 h-4" />
-                        <span>Levar Maquininha</span>
-                     </>
-                   )}
-                </div>
-                {orderToFinalize.change_for && (
-                  <div className="text-sm font-bold bg-white/50 p-2 rounded">
-                    ⚠️ Levar troco para: {orderToFinalize.change_for}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-                <CheckCircle className="w-8 h-8 text-green-600" />
-                <div>
-                  <p className="font-bold text-green-700">Pagamento já realizado</p>
-                  <p className="text-xs text-green-600">Pode entregar o pedido.</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="grid grid-cols-2 gap-2">
-             <Button variant="outline" onClick={() => setOrderToFinalize(null)}>Cancelar</Button>
-             <Button className="bg-green-600 hover:bg-green-700 font-bold" onClick={confirmFinishDelivery}>
-               CONFIRMAR
-             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Botão Flutuante (Lote) */}
+      {/* Botão Flutuante para Ação em Lote */}
       {selectedOrders.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-lg z-50 animate-in slide-in-from-bottom-5">
           <div className="max-w-md mx-auto flex items-center gap-4">
             <div className="flex-1 text-sm">
-              <span className="font-bold">{selectedOrders.length}</span> para retirada
+              <span className="font-bold">{selectedOrders.length}</span> selecionados
             </div>
             <Button 
               size="lg" 
@@ -591,7 +494,7 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
               ) : (
                 <Bike className="w-5 h-5 mr-2" />
               )}
-              SAIR COM ITENS
+              INICIAR ROTA
             </Button>
           </div>
         </div>
@@ -600,13 +503,11 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
   );
 }
 
-// Helpers
 function calculateTimeElapsed(dateString: string | null) {
   if (!dateString) return "0 min";
   const start = new Date(dateString).getTime();
   const now = new Date().getTime();
   const diff = Math.floor((now - start) / 60000);
-  
   if (diff < 60) return `${diff} min`;
   const hours = Math.floor(diff / 60);
   return `${hours}h ${diff % 60}m`;
