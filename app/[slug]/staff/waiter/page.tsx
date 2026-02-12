@@ -412,7 +412,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                                     )}
                                                     {addons.length > 0 && (
                                                         <div className="text-green-600/80">
-                                                            Add: {addons.map((a: any) => a.name).join(", ")}
+                                                            Add: {addons.map((a: any) => `${a.name} (+R$ ${Number(a.price).toFixed(2)})`).join(", ")}
                                                         </div>
                                                     )}
                                                     {item.observation && (
