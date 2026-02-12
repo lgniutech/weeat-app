@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useTransition, useMemo } from "react"
+import { useState, useEffect, useTransition, useMemo, use } from "react"
 import { useRouter } from "next/navigation"
 import { ThemeProvider, useTheme } from "next-themes" 
 import { getStaffSession, logoutStaffAction } from "@/app/actions/staff"
@@ -78,8 +78,12 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   useEffect(() => {
     async function init() {
       const session = await getStaffSession()
+      // Garante que slug e session existam antes de validar
       if (!session || session.storeSlug !== slug || session.role !== 'waiter') {
-        router.push(`/${slug}/staff`)
+        // Se o slug ainda não estiver carregado ou a sessão for inválida
+        if (slug) {
+            router.push(`/${slug}/staff`)
+        }
         return
       }
       setStoreId(session.storeId)
@@ -487,11 +491,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 }
 
 // --- WRAPPER FINAL COM TEMA ISOLADO ---
-export default function WaiterPage({ params }: { params: { slug: string } }) {
+// Correção Next.js 15: params é uma Promise
+export default function WaiterPage({ params }: { params: Promise<{ slug: string }> }) {
+    const unwrappedParams = use(params);
+
     return (
         // storageKey="waiter-theme" isola o tema do garçom
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="waiter-theme" disableTransitionOnChange>
-            <WaiterContent params={params} />
+            <WaiterContent params={unwrappedParams} />
         </ThemeProvider>
     )
 }
