@@ -3,174 +3,67 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-/**
- * 1. Busca pedidos disponíveis para visualização do entregador (A Retirar).
- */
-export async function getAvailableDeliveriesAction(storeId: string) {
+export async function getCourierOrdersAction(storeId: string) {
   const supabase = await createClient();
 
+  // Busca pedidos prontos para entrega ou em rota
   const { data, error } = await supabase
     .from("orders")
     .select(`
       id,
       customer_name,
       customer_phone,
-      address,
-      payment_method,
-      total_price,
-      change_for,
       created_at,
       status,
       delivery_type,
-      last_status_change,
-      items:order_items(quantity, product_name)
-    `)
-    .eq("store_id", storeId)
-    .eq("delivery_type", "entrega")
-    .in("status", ["enviado", "preparando"]) 
-    .order("last_status_change", { ascending: true });
-
-  if (error) {
-    console.error("Erro ao buscar entregas disponíveis:", error);
-    return [];
-  }
-
-  return data || [];
-}
-
-/**
- * 2. Busca pedidos que estão ATIVAMENTE com este entregador (Minha Rota).
- */
-export async function getActiveDeliveriesAction(storeId: string, courierId: string) {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select(`
-      id,
-      customer_name,
-      customer_phone,
       address,
-      payment_method,
       total_price,
-      change_for,
-      created_at,
-      status,
+      payment_method,
       last_status_change,
-      items:order_items(quantity, product_name)
+      order_items (
+        id,
+        quantity,
+        product_name,
+        observation
+      )
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "entrega")
-    .eq("status", "em_rota") 
-    .eq("courier_id", courierId) 
-    .order("last_status_change", { ascending: false });
+    .in("status", ["enviado", "em_rota"])
+    .order("created_at", { ascending: true });
 
   if (error) {
-    console.error("Erro ao buscar entregas em andamento:", error);
+    console.error("Erro ao buscar pedidos para entrega:", error);
     return [];
   }
 
   return data || [];
 }
 
-/**
- * 3. Inicia a rota com vários pedidos de uma vez.
- */
-interface StartBatchParams {
-  orderIds: string[];
-  courierId: string;
-}
-
-export async function startBatchDeliveriesAction(params: StartBatchParams) {
-  const { orderIds, courierId } = params;
+export async function updateCourierStatusAction(orderIds: string[], newStatus: "em_rota" | "concluido") {
   const supabase = await createClient();
-
-  if (!courierId || typeof courierId !== 'string') {
-    return { success: false, message: "ID do entregador inválido." };
-  }
-
-  if (!orderIds || orderIds.length === 0) {
-    return { success: false, message: "Nenhum pedido selecionado." };
-  }
-
-  const { data: validOrders } = await supabase
-    .from("orders")
-    .select("id")
-    .in("id", orderIds)
-    .eq("status", "enviado");
-
-  if (!validOrders || validOrders.length === 0) {
-    return { success: false, message: "Pedidos indisponíveis ou já coletados." };
-  }
-
-  const validIds = validOrders.map(o => o.id);
+  const now = new Date().toISOString();
 
   const { error } = await supabase
     .from("orders")
     .update({ 
-      status: 'em_rota',
-      courier_id: courierId, 
-      last_status_change: new Date().toISOString()
+      status: newStatus, 
+      last_status_change: now 
     })
-    .in('id', validIds); 
+    .in("id", orderIds);
 
   if (error) {
-    console.error("Erro ao iniciar rota em lote:", error);
-    return { success: false, message: "Erro ao atualizar pedidos." };
+    console.error(`Erro ao atualizar pedidos para ${newStatus}:`, error);
+    return { success: false, message: "Erro ao atualizar status." };
   }
 
-  revalidatePath("/");
-  return { success: true };
-}
-
-/**
- * 4. AÇÃO DE FINALIZAR: Marca como 'concluido'.
- * Isso remove o pedido da lista do entregador e atualiza o dashboard global.
- */
-export async function updateDeliveryStatusAction(orderId: string, newStatus: 'concluido') {
-  const supabase = await createClient();
-
-  const { data: currentOrder } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
-
-  if (!currentOrder) return { success: false, message: "Pedido não encontrado." };
-
-  const { error: updateError } = await supabase
-    .from("orders")
-    .update({ 
-      status: newStatus,
-      last_status_change: new Date().toISOString()
-    })
-    .eq("id", orderId);
-
-  if (updateError) {
-    console.error("Erro ao atualizar status:", updateError);
-    return { success: false, message: "Falha ao finalizar entrega." };
-  }
-
-  // CORREÇÃO: Marca também os itens do pedido como concluídos para sumir da Cozinha/Garçom
-  try {
-    await supabase
-      .from("order_items")
-      .update({ status: 'concluido' })
-      .eq("order_id", orderId);
-  } catch (err) {
-    console.error("Erro ao atualizar itens do pedido:", err);
-  }
-
-  // Registra no histórico para auditoria do dashboard
-  try {
+  // Registrar no histórico
+  for (const id of orderIds) {
     await supabase.from("order_history").insert({
-      order_id: orderId,
-      previous_status: currentOrder.status,
+      order_id: id,
       new_status: newStatus,
-      changed_at: new Date().toISOString()
+      changed_at: now
     });
-  } catch (err) {
-    console.error("Erro ao criar histórico:", err);
   }
 
   revalidatePath("/");
