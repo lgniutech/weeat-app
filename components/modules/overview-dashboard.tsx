@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useTransition } from "react"
+import { useState, useEffect, useTransition, useCallback } from "react"
 import { getDashboardOverviewAction, type DashboardData } from "@/app/actions/dashboard"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { toast } from "sonner" // Assegure-se de ter o sonner ou use-toast importado corretamente
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { 
   ShoppingBag, 
@@ -15,43 +16,65 @@ import {
   AlertCircle, 
   XCircle,
   PauseCircle,
-  MapPin,
-  ChefHat,
-  Cloud,
-  Sun,
   CloudRain,
-  Wind,
+  Sun,
+  Cloud,
+  CloudLightning,
   Snowflake,
-  CloudLightning
+  Wind,
+  MapPin,
+  ChefHat
 } from "lucide-react"
 
 export function OverviewDashboard({ store }: { store: any }) {
-  const [data, setData] = useState<DashboardData | null>(null)
+  // Inicializa com estrutura zerada para evitar tela em branco/quebra se data for null
+  const defaultData: DashboardData = {
+    metrics: { revenue: 0, ordersCount: 0, avgTicket: 0, cancelledCount: 0 },
+    statusCounts: { pending: 0, preparing: 0, expedition: 0 },
+    salesMix: [],
+    recentOrders: [],
+    unavailableProducts: []
+  };
+
+  const [data, setData] = useState<DashboardData>(defaultData)
   const [weather, setWeather] = useState<{ temp: number; code: number; city: string } | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
+  const [hasError, setHasError] = useState(false)
 
-  const loadData = () => {
+  // --- 1. Busca de Dados do Dashboard (Polling) ---
+  const loadData = useCallback(() => {
+    if (!store?.id) return;
+
     startTransition(async () => {
-      const result = await getDashboardOverviewAction(store.id)
-      if ('error' in result) {
-        setError(result.error)
-      } else {
-        setData(result)
-        setError(null)
+      try {
+        const result = await getDashboardOverviewAction(store.id)
+        if ('error' in result) {
+          console.error("Dashboard Error:", result.error)
+          if (!hasError) {
+             toast.error("Erro ao atualizar dashboard", { description: result.error })
+             setHasError(true)
+          }
+        } else {
+          setData(result)
+          setHasError(false)
+        }
+      } catch (e) {
+        console.error("Erro inesperado:", e)
       }
     })
-  }
+  }, [store.id, hasError])
 
   useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 30000)
+    const interval = setInterval(loadData, 30000) // Atualiza a cada 30s
     return () => clearInterval(interval)
-  }, [store.id])
+  }, [loadData])
 
+  // --- 2. Busca de Clima (Prioridade: Lat/Lng Salvo > Cidade Cadastrada) ---
   useEffect(() => {
     async function fetchStoreWeather() {
         if (!store.city && !store.settings?.location?.lat) return;
+
         try {
             let latitude = store.settings?.location?.lat;
             let longitude = store.settings?.location?.lng;
@@ -63,6 +86,7 @@ export function OverviewDashboard({ store }: { store: any }) {
                     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=pt&format=json`
                 );
                 const geoData = await geoRes.json();
+
                 if (geoData.results && geoData.results.length > 0) {
                     latitude = geoData.results[0].latitude;
                     longitude = geoData.results[0].longitude;
@@ -74,19 +98,23 @@ export function OverviewDashboard({ store }: { store: any }) {
                     `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
                 );
                 const weatherData = await weatherRes.json();
+
                 setWeather({
                     temp: weatherData.current.temperature_2m,
                     code: weatherData.current.weather_code,
                     city: cityName
                 });
             }
+
         } catch (error) {
             console.error("Erro ao carregar clima:", error);
         }
     }
+
     fetchStoreWeather();
   }, [store.city, store.state, store.settings]);
 
+  // Helpers de Formatação
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
 
@@ -95,14 +123,15 @@ export function OverviewDashboard({ store }: { store: any }) {
     return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   }
 
+  // Ícones de Clima (WMO Codes)
   const getWeatherIcon = (code: number) => {
-    if (code === 0 || code === 1) return <Sun className="w-8 h-8 text-amber-500" />
+    if (code === 0 || code === 1) return <Sun className="w-8 h-8 text-amber-500 animate-pulse-slow" />
     if (code <= 3) return <Cloud className="w-8 h-8 text-slate-400" />
     if (code <= 48) return <Wind className="w-8 h-8 text-slate-400" />
     if (code <= 67) return <CloudRain className="w-8 h-8 text-blue-400" />
     if (code <= 77) return <Snowflake className="w-8 h-8 text-cyan-300" />
     if (code <= 82) return <CloudRain className="w-8 h-8 text-blue-600" />
-    if (code <= 99) return <CloudLightning className="w-8 h-8 text-purple-500" />
+    if (code <= 99) return <CloudLightning className="w-8 h-8 text-purple-500 animate-pulse" />
     return <Sun className="w-8 h-8 text-amber-500" />
   }
 
@@ -114,31 +143,30 @@ export function OverviewDashboard({ store }: { store: any }) {
     return "Normal"
   }
 
-  if (error) {
-    return <div className="flex h-96 items-center justify-center text-red-500 font-medium">{error}</div>
+  // Se estiver carregando pela primeira vez e não tiver dados, mostra esqueleto
+  if (isPending && !data.metrics.ordersCount && !data.recentOrders.length && !hasError) {
+    // Pode-se manter o return null ou um skeleton melhorado
+    // return <div className="flex h-96 items-center justify-center text-muted-foreground animate-pulse">Carregando cockpit...</div>
   }
 
-  if (!data && isPending) {
-    return <div className="flex h-96 items-center justify-center text-muted-foreground animate-pulse">Carregando cockpit...</div>
-  }
+  const { metrics, statusCounts, salesMix, recentOrders, unavailableProducts } = data;
 
-  // Garantia de valores padrão para evitar erros de undefined
-  const metrics = data?.metrics || { revenue: 0, ordersCount: 0, avgTicket: 0, cancelledCount: 0 }
-  const statusCounts = data?.statusCounts || { pending: 0, preparing: 0, expedition: 0 }
-  const salesMix = data?.salesMix || []
-  const recentOrders = data?.recentOrders || []
-  const unavailableProducts = data?.unavailableProducts || []
-
+  // --- CÁLCULO OPERACIONAL ---
   const totalActiveOrders = statusCounts.pending + statusCounts.preparing + statusCounts.expedition;
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
+      {/* --- LINHA 1: MONITOR VITAL (4 Colunas) --- */}
       <div className="grid gap-4 md:grid-cols-4">
+        
+        {/* KPI 1: MOVIMENTO ATUAL (OPERACIONAL) - COR DO TEMA */}
         <Card className="md:col-span-2 bg-primary text-primary-foreground border-primary/20 shadow-lg relative overflow-hidden">
+          {/* Fundo Decorativo com a cor do tema */}
           <div className="absolute top-0 right-0 p-8 opacity-20">
             <ChefHat className="w-32 h-32 text-primary-foreground" />
           </div>
+          
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-primary-foreground/80 flex items-center gap-2">
               <Activity className="w-4 h-4" />
@@ -146,9 +174,12 @@ export function OverviewDashboard({ store }: { store: any }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Número Gigante de Pedidos Ativos */}
             <div className="text-5xl font-bold tracking-tight text-primary-foreground mb-2">
               {totalActiveOrders}
             </div>
+            
+            {/* Detalhamento Rápido */}
             <div className="flex items-center gap-4 text-sm font-medium text-primary-foreground/90">
               <span className="flex items-center gap-1">
                 <AlertCircle className="w-4 h-4 opacity-70" /> {statusCounts.pending} Fila
@@ -161,6 +192,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
+        {/* KPI 2: CANCELAMENTOS (ALERTA) */}
         <Card className={`${metrics.cancelledCount > 0 ? 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900' : 'dark:bg-zinc-900 dark:border-zinc-800'}`}>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados</CardTitle>
@@ -174,6 +206,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
+        {/* KPI 3: CLIMA LOCAL */}
         <Card className="dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden">
           <CardHeader className="pb-2 pt-4 px-4">
              <div className="flex justify-between items-center">
@@ -198,13 +231,16 @@ export function OverviewDashboard({ store }: { store: any }) {
                     <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
                     {store.city ? "Buscando..." : "Sem endereço"}
                   </div>
+                  {!store.city && <span className="text-[10px] text-red-400">Configure o endereço</span>}
                </div>
              )}
           </CardContent>
         </Card>
       </div>
 
+      {/* --- LINHA 2: GARGALOS OPERACIONAIS --- */}
       <div className="grid gap-4 md:grid-cols-3">
+        {/* Card A: FILA */}
         <Card className={`border-l-4 ${statusCounts.pending > 0 ? 'border-l-amber-500 shadow-amber-100 dark:shadow-none' : 'border-l-slate-200'} dark:bg-zinc-900`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -218,6 +254,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
+        {/* Card B: COZINHA */}
         <Card className="border-l-4 border-l-blue-500 dark:bg-zinc-900">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -231,6 +268,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
+        {/* Card C: EXPEDIÇÃO */}
         <Card className="border-l-4 border-l-purple-500 dark:bg-zinc-900">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -246,6 +284,8 @@ export function OverviewDashboard({ store }: { store: any }) {
       </div>
 
       <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-7">
+        
+        {/* --- LINHA 3: PULSO DA LOJA (FEED) --- */}
         <Card className="md:col-span-2 lg:col-span-4 dark:bg-zinc-900 dark:border-zinc-800 h-[400px] flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -260,7 +300,7 @@ export function OverviewDashboard({ store }: { store: any }) {
                   {recentOrders.length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground">Nenhuma atividade hoje ainda.</div>
                   ) : (
-                    recentOrders.map((order: any) => (
+                    recentOrders.map((order) => (
                       <div key={order.id} className="flex items-start justify-between group">
                         <div className="flex gap-3">
                           <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center border ${
@@ -299,7 +339,10 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
+        {/* --- LINHA 3: MIX DE VENDAS & ESTOQUE --- */}
         <div className="md:col-span-1 lg:col-span-3 space-y-6">
+            
+            {/* Gráfico Mix */}
             <Card className="dark:bg-zinc-900 dark:border-zinc-800">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Mix de Vendas</CardTitle>
@@ -317,7 +360,7 @@ export function OverviewDashboard({ store }: { store: any }) {
                                     paddingAngle={5}
                                     dataKey="value"
                                 >
-                                    {salesMix.map((entry: any, index: number) => (
+                                    {salesMix.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.fill} strokeWidth={0} />
                                     ))}
                                 </Pie>
@@ -333,6 +376,7 @@ export function OverviewDashboard({ store }: { store: any }) {
                 </CardContent>
             </Card>
 
+            {/* Produtos Indisponíveis (Alerta de Estoque) */}
             <Card className="dark:bg-zinc-900 dark:border-zinc-800 border-l-4 border-l-red-400">
                 <CardHeader className="pb-2 pt-4">
                     <CardTitle className="text-sm flex items-center gap-2 text-red-600 dark:text-red-400">
@@ -354,6 +398,7 @@ export function OverviewDashboard({ store }: { store: any }) {
                     )}
                 </CardContent>
             </Card>
+
         </div>
       </div>
     </div>
