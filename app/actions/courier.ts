@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 export async function getCourierOrdersAction(storeId: string) {
   const supabase = await createClient();
 
-  // Busca pedidos prontos para entrega ou em rota
+  // Busca pedidos da cozinha (visualização) E prontos para entrega
   const { data, error } = await supabase
     .from("orders")
     .select(`
@@ -19,6 +19,7 @@ export async function getCourierOrdersAction(storeId: string) {
       address,
       total_price,
       payment_method,
+      change_for, 
       last_status_change,
       order_items (
         id,
@@ -29,7 +30,7 @@ export async function getCourierOrdersAction(storeId: string) {
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "entrega")
-    .in("status", ["enviado", "em_rota"])
+    .in("status", ["aceito", "preparando", "enviado", "em_rota"]) // Incluído status de cozinha
     .order("created_at", { ascending: true });
 
   if (error) {
