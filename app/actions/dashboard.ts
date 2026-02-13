@@ -28,12 +28,10 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
   const supabase = await createClient();
   const now = new Date();
   
-  // Define o intervalo "HOJE" (00:00 até 23:59)
   const startDate = startOfDay(now).toISOString();
   const endDate = endOfDay(now).toISOString();
 
   try {
-    // 1. Busca Pedidos do Dia + Itens
     const { data: orders, error: ordersError } = await supabase
       .from("orders")
       .select(`
@@ -55,7 +53,6 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
 
     if (ordersError) throw new Error(ordersError.message);
 
-    // 2. Busca Produtos Indisponíveis (Alerta de Estoque)
     const { data: unavailable, error: stockError } = await supabase
       .from("products")
       .select("id, name")
@@ -65,18 +62,13 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
 
     if (stockError) console.error("Erro ao buscar estoque:", stockError);
 
-    // --- Processamento em Memória ---
-    
-    // Separa válidos de cancelados
     const validOrders = orders?.filter(o => o.status !== 'cancelado') || [];
     const cancelledOrders = orders?.filter(o => o.status === 'cancelado') || [];
 
-    // Métricas Financeiras
     const revenue = validOrders.reduce((acc, o) => acc + (o.total_price || 0), 0);
     const ordersCount = validOrders.length;
     const avgTicket = ordersCount > 0 ? revenue / ordersCount : 0;
 
-    // Contagem por Status (Funil Operacional)
     const pendingCount = validOrders.filter(o => o.status === 'pendente').length;
     
     const preparingCount = validOrders.filter(o => 
@@ -87,15 +79,14 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
       ['enviado', 'saiu_para_entrega', 'pronto'].includes(o.status)
     ).length;
 
-    // Mix de Vendas (Gráfico)
     const deliveryCount = validOrders.filter(o => o.delivery_type === 'delivery').length;
     const retiradaCount = validOrders.filter(o => o.delivery_type === 'retirada').length;
     const mesaCount = validOrders.filter(o => o.delivery_type === 'mesa').length;
 
     const salesMix = [
-      { name: 'Delivery', value: deliveryCount, fill: '#3b82f6' }, // blue-500
-      { name: 'Retirada', value: retiradaCount, fill: '#f59e0b' }, // amber-500
-      { name: 'Mesa', value: mesaCount, fill: '#10b981' },     // emerald-500
+      { name: 'Delivery', value: deliveryCount, fill: '#3b82f6' },
+      { name: 'Retirada', value: retiradaCount, fill: '#f59e0b' },
+      { name: 'Mesa', value: mesaCount, fill: '#10b981' },
     ].filter(i => i.value > 0);
 
     return {
@@ -111,7 +102,7 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
         expedition: expeditionCount
       },
       salesMix,
-      recentOrders: orders?.slice(0, 10) || [], // Top 10 recentes
+      recentOrders: orders?.slice(0, 10) || [],
       unavailableProducts: unavailable || []
     };
 
