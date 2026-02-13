@@ -24,6 +24,8 @@ import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, R
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+// IMPORTAÇÃO DAS FUNÇÕES DE FORMATAÇÃO
+import { formatPhone, formatOnlyLetters } from "@/lib/utils"
 
 type Product = {
     id: string;
@@ -397,14 +399,29 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                 <Label htmlFor="client-name" className="text-xs font-semibold text-muted-foreground uppercase">Nome do Cliente (Opcional)</Label>
                                 <div className="relative">
                                     <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input id="client-name" placeholder="Ex: João Silva" className="pl-9 bg-white dark:bg-slate-900" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+                                    {/* INPUT DO NOME COM FILTRO DE LETRAS */}
+                                    <Input 
+                                        id="client-name" 
+                                        placeholder="Ex: João Silva" 
+                                        className="pl-9 bg-white dark:bg-slate-900" 
+                                        value={clientName} 
+                                        onChange={(e) => setClientName(formatOnlyLetters(e.target.value))} 
+                                    />
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <Label htmlFor="client-phone" className="text-xs font-semibold text-muted-foreground uppercase">Telefone / WhatsApp</Label>
                                 <div className="relative">
                                     <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input id="client-phone" placeholder="Ex: 11999999999" className="pl-9 bg-white dark:bg-slate-900" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} />
+                                    {/* INPUT DO TELEFONE COM MÁSCARA */}
+                                    <Input 
+                                        id="client-phone" 
+                                        placeholder="Ex: 11999999999" 
+                                        className="pl-9 bg-white dark:bg-slate-900" 
+                                        value={clientPhone} 
+                                        onChange={(e) => setClientPhone(formatPhone(e.target.value))} 
+                                        maxLength={15}
+                                    />
                                 </div>
                             </div>
                         </div>
