@@ -300,7 +300,9 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     }
 
     if (!customerName) { toast({ title: "Faltou o nome", description: "Informe seu nome.", variant: "destructive" }); return; }
-    if (deliveryMethod !== 'mesa' && !customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
+    
+    // CORREÇÃO: Validação de telefone agora é obrigatória também para Mesa
+    if (!customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
     
     // Validação de Troco
     if (deliveryMethod === 'entrega' && paymentMethod === 'money' && !changeFor) {
@@ -324,20 +326,22 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     const orderData = {
       storeId: store.id,
       customerName: customerName,
-      customerPhone: customerPhone || "Cliente na Mesa", 
+      customerPhone: customerPhone, // Agora obrigatório
       deliveryType: deliveryMethod, 
       address: fullAddress,
       tableNumber: tableNumber || undefined,
       paymentMethod: paymentMethod,
-      changeFor: paymentMethod === 'money' ? changeFor : undefined, // NOVO: Envia o troco
+      changeFor: paymentMethod === 'money' ? changeFor : undefined, 
       totalPrice: total,
       items: cart.map(item => ({
         product_name: item.name,
         quantity: item.quantity,
         unit_price: item.price,
         removed_ingredients: item.removedIngredients,
-        selected_addons: item.selectedAddonsDetails.map(a => `${a.name} (+${formatCurrency(a.price)})`),
-        notes: item.note
+        // CORREÇÃO: Enviar array de objetos conforme a interface do Server Action espera
+        selected_addons: item.selectedAddonsDetails.map(a => ({ name: a.name, price: Number(a.price) })),
+        // CORREÇÃO: Mapear 'note' do carrinho para 'observation' do Server Action
+        observation: item.note
       })),
       notes: appliedCoupon ? `Cupom: ${appliedCoupon.code}` : undefined
     }
@@ -351,7 +355,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
           setAppliedCoupon(null)
           setIsCartOpen(false)
           setOrderSuccess({ id: result.orderId, total: savedTotal }) 
-          setChangeFor("") // Limpa o troco
+          setChangeFor("") 
         } else {
           toast({ title: "Erro", description: result.error, variant: "destructive" })
         }
@@ -734,9 +738,11 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                             <h3 className="font-semibold text-sm">Seus Dados</h3>
                             <Input placeholder="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} />
                             
+                            {/* CORREÇÃO: Telefone agora visível para todos (inclusive mesa) */}
+                            <Input placeholder="WhatsApp" type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+
                             {!tableNumber && (
                                 <>
-                                    <Input placeholder="WhatsApp" type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
                                     <RadioGroup value={deliveryMethod} onValueChange={(v: any) => setDeliveryMethod(v)} className="grid grid-cols-2 gap-4">
                                         <div className={`flex flex-col items-center justify-between rounded-md border-2 p-4 cursor-pointer hover:bg-slate-50 ${deliveryMethod === 'entrega' ? 'border-primary bg-primary/5' : 'border-muted'}`} onClick={() => setDeliveryMethod('entrega')}>
                                             <RadioGroupItem value="entrega" id="entrega" className="sr-only" /><MapPin className="mb-2 h-6 w-6" /><span className="text-xs font-medium">Entrega</span>
