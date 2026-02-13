@@ -44,6 +44,25 @@ export async function updateCourierStatusAction(orderIds: string[], newStatus: "
   const supabase = await createClient();
   const now = new Date().toISOString();
 
+  // VERIFICAÇÃO DE SEGURANÇA (Conflito de Entregadores)
+  if (newStatus === "em_rota") {
+    // Verifica se os pedidos selecionados AINDA estão disponíveis (status 'enviado')
+    const { data: availableOrders, error: checkError } = await supabase
+      .from("orders")
+      .select("id")
+      .in("id", orderIds)
+      .eq("status", "enviado");
+
+    // Se houver erro, ou se a quantidade encontrada for menor que a solicitada,
+    // significa que algum pedido já mudou de status (foi pego).
+    if (checkError || !availableOrders || availableOrders.length !== orderIds.length) {
+      return { 
+        success: false, 
+        message: "Ops! Um ou mais pedidos selecionados já foram pegos por outro entregador. A lista será atualizada." 
+      };
+    }
+  }
+
   const { error } = await supabase
     .from("orders")
     .update({ 
