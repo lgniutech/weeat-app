@@ -74,10 +74,20 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
     startTransition(async () => {
       const res = await updateCourierStatusAction(selectedOrders, "em_rota")
+      
       if (res.success) {
         toast({ title: "Remessa Iniciada!", description: "Boa entrega!", className: "bg-blue-600 text-white" })
         setSelectedOrders([])
         fetchOrders()
+      } else {
+        // NOTIFICAÇÃO DE CONFLITO/ERRO
+        toast({ 
+          title: "Atenção!", 
+          description: res.message || "Erro ao coletar pedidos.", 
+          variant: "destructive" 
+        })
+        setSelectedOrders([]) // Limpa a seleção pois é inválida
+        fetchOrders() // Atualiza a lista para ver o estado real
       }
     })
   }
