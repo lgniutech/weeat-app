@@ -79,7 +79,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [tableNumber, setTableNumber] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState('pix')
   const [changeFor, setChangeFor] = useState("") // Estado para o valor do troco
-  const [noChangeNeeded, setNoChangeNeeded] = useState(false) // NOVO: Estado para "Não preciso de troco"
+  const [noChangeNeeded, setNoChangeNeeded] = useState(false) // Estado para "Não preciso de troco"
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
   
@@ -893,8 +893,14 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                                             type="number"
                                                         />
                                                         <p className="text-[10px] text-muted-foreground mt-1">
-                                                            Total: {formatCurrency(total)}. O valor deve ser maior que o total.
+                                                            Total: {formatCurrency(total)}
                                                         </p>
+                                                        {/* LÓGICA DE AVISO EM VERMELHO */}
+                                                        {changeFor && Number(changeFor.replace(',', '.')) <= total && (
+                                                             <p className="text-[10px] font-bold text-red-600 dark:text-red-400 mt-1 animate-in slide-in-from-top-1">
+                                                                O valor deve ser maior que o total.
+                                                             </p>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
