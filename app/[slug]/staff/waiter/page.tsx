@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { ThemeProvider, useTheme } from "next-themes" 
-import { getStaffSession, logoutStaffAction } from "@/app/actions/staff"
+import { getStaffSession, logoutStaffAction, validateStaffPin } from "@/app/actions/staff"
 import { 
     getTablesStatusAction, 
     getWaiterMenuAction,
@@ -16,11 +16,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag, AlertTriangle, Lock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -57,6 +57,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [productToCustomize, setProductToCustomize] = useState<Product | null>(null)
   
+  // Estado para PIN Modal
+  const [isPinDialogOpen, setIsPinDialogOpen] = useState(false)
+  const [pinCode, setPinCode] = useState("")
+  const [pinError, setPinError] = useState(false)
+
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
@@ -161,7 +166,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     }
     setCart(prev => [...prev, newItem])
     setProductToCustomize(null)
-    // Se adicionar item, o cupom validado anteriormente pode mudar (ex: % sobre total maior), invalida visual
     if (validatedCouponData) setValidatedCouponData(null) 
     toast({ title: "Adicionado ao carrinho" })
   }
@@ -171,7 +175,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       setValidatedCouponData(null)
   }
 
-  // Valida cupom visualmente antes de enviar
   const handleValidateCartCoupon = async () => {
       if(!cartCoupon.trim()) return;
       const total = cart.reduce((acc, item) => acc + item.totalPrice, 0);
@@ -191,7 +194,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     startTransition(async () => {
       try {
           let res;
-          // Envia o cupom junto (se validado ou apenas digitado, a action revalida de qualquer forma por segurança)
           const codeToSend = cartCoupon.trim().toUpperCase();
 
           if (selectedTable.status === 'free') {
@@ -210,8 +212,38 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     })
   }
 
-  const handleCloseTable = async () => {
-    if(!confirm("Encerrar mesa? Certifique-se que o pagamento foi recebido.")) return;
+  const handleCloseTableAttempt = async () => {
+      if(!confirm("Deseja realmente solicitar o encerramento da mesa?")) return;
+
+      // Verifica se há itens na cozinha ou prontos mas não entregues
+      // isPreparing = aceito, preparando
+      // hasReadyItems = pronto/enviado (ainda não entregue)
+      if (selectedTable.isPreparing || selectedTable.hasReadyItems) {
+          setPinCode("");
+          setPinError(false);
+          setIsPinDialogOpen(true);
+      } else {
+          await executeCloseTable();
+      }
+  }
+
+  const handlePinConfirm = async () => {
+      if (!pinCode || pinCode.length < 4) {
+          setPinError(true);
+          return;
+      }
+
+      const isValid = await validateStaffPin(storeId!, pinCode);
+      if (isValid) {
+          setIsPinDialogOpen(false);
+          await executeCloseTable();
+      } else {
+          setPinError(true);
+          toast({ title: "PIN Inválido", variant: "destructive" });
+      }
+  }
+
+  const executeCloseTable = async () => {
     startTransition(async () => {
         const res = await closeTableAction(selectedTable.id, storeId!)
         if (res?.success) {
@@ -319,6 +351,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         })}
       </main>
 
+      {/* Modal Principal da Mesa */}
       <Dialog open={isManagementOpen} onOpenChange={setIsManagementOpen}>
         <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900">
             <DialogHeader>
@@ -439,7 +472,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                              
                              <Button 
                                 className="h-12 col-span-2 font-bold shadow-sm bg-red-500 hover:bg-red-600 text-white"
-                                onClick={handleCloseTable} 
+                                onClick={handleCloseTableAttempt} 
                                 disabled={isPending} 
                              >
                                 <CreditCard className="mr-2 h-4 w-4"/> Encerrar / Receber
@@ -449,6 +482,38 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 )}
             </div>
         </DialogContent>
+      </Dialog>
+      
+      {/* Modal de Confirmação PIN */}
+      <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
+          <DialogContent className="sm:max-w-xs">
+              <DialogHeader>
+                  <div className="flex items-center gap-2 text-amber-600">
+                     <AlertTriangle className="w-6 h-6" />
+                     <DialogTitle>Mesa em Preparo!</DialogTitle>
+                  </div>
+                  <DialogDescription className="pt-2">
+                      Existem pedidos na cozinha ou não servidos.
+                      <br/>
+                      Insira seu PIN para forçar o fechamento.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="py-2">
+                  <Input 
+                    type="password" 
+                    placeholder="PIN" 
+                    maxLength={4} 
+                    className="text-center text-2xl tracking-[0.5em] font-bold"
+                    value={pinCode}
+                    onChange={(e) => { setPinCode(e.target.value); setPinError(false); }}
+                  />
+                  {pinError && <p className="text-xs text-red-500 mt-2 font-bold text-center">PIN incorreto.</p>}
+              </div>
+              <DialogFooter>
+                  <Button variant="ghost" onClick={() => setIsPinDialogOpen(false)}>Cancelar</Button>
+                  <Button variant="destructive" onClick={handlePinConfirm} disabled={isPending}>Confirmar</Button>
+              </DialogFooter>
+          </DialogContent>
       </Dialog>
       
        <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>
