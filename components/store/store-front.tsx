@@ -78,7 +78,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [deliveryMethod, setDeliveryMethod] = useState<'entrega' | 'retirada' | 'mesa'>('entrega')
   const [tableNumber, setTableNumber] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState('pix')
-  const [changeFor, setChangeFor] = useState("") // NOVO: Estado para o troco
+  const [changeFor, setChangeFor] = useState("") // Estado para o valor do troco
+  const [noChangeNeeded, setNoChangeNeeded] = useState(false) // NOVO: Estado para "Não preciso de troco"
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
   
@@ -307,9 +308,23 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     if (!customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
     
     // Validação de Troco
-    if (deliveryMethod === 'entrega' && paymentMethod === 'money' && !changeFor) {
-        toast({ title: "Troco necessário", description: "Informe para quanto precisa de troco.", variant: "destructive" });
-        return;
+    if (deliveryMethod === 'entrega' && paymentMethod === 'money') {
+        // Se NÃO estiver marcado que "não precisa de troco", então validamos o valor
+        if (!noChangeNeeded) {
+            if (!changeFor) {
+                toast({ title: "Troco necessário", description: "Informe para quanto precisa de troco ou marque que tem o valor exato.", variant: "destructive" });
+                return;
+            }
+
+            // Tenta converter o input para número (aceita 50.00 ou 50,00)
+            const changeValue = Number(changeFor.replace(',', '.'));
+            
+            // Verifica se é um número válido e se é MAIOR que o total
+            if (isNaN(changeValue) || changeValue <= total) {
+                toast({ title: "Valor de troco inválido", description: `O valor para troco deve ser maior que o total (${formatCurrency(total)}).`, variant: "destructive" });
+                return;
+            }
+        }
     }
 
     if (deliveryMethod === 'entrega') {
@@ -333,7 +348,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
       address: fullAddress,
       tableNumber: tableNumber || undefined,
       paymentMethod: paymentMethod,
-      changeFor: paymentMethod === 'money' ? changeFor : undefined, 
+      // Envia o troco apenas se for dinheiro E o usuário não marcou "não preciso de troco"
+      changeFor: (paymentMethod === 'money' && !noChangeNeeded) ? changeFor : undefined, 
       totalPrice: total,
       items: cart.map(item => ({
         product_name: item.name,
@@ -358,6 +374,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
           setIsCartOpen(false)
           setOrderSuccess({ id: result.orderId, total: savedTotal }) 
           setChangeFor("") 
+          setNoChangeNeeded(false) // Resetar o checkbox
         } else {
           toast({ title: "Erro", description: result.error, variant: "destructive" })
         }
@@ -847,19 +864,39 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
                                         {/* NOVO: Campo de Troco */}
                                         {deliveryMethod === 'entrega' && paymentMethod === 'money' && (
-                                            <div className="animate-in fade-in slide-in-from-top-1 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded-lg">
-                                                <Label className="text-xs mb-1 block font-bold text-yellow-800 dark:text-yellow-200 flex items-center gap-1">
-                                                    <Banknote className="w-3 h-3" /> Troco para quanto?
-                                                </Label>
-                                                <Input 
-                                                    placeholder="Ex: 50,00" 
-                                                    value={changeFor} 
-                                                    onChange={e => setChangeFor(e.target.value)} 
-                                                    className="bg-white dark:bg-black"
-                                                />
-                                                <p className="text-[10px] text-muted-foreground mt-1">
-                                                    Total: {formatCurrency(total)}. O entregador levará troco.
-                                                </p>
+                                            <div className="space-y-3 pt-1 animate-in fade-in slide-in-from-top-1">
+                                                
+                                                <div className="flex items-center space-x-2">
+                                                    <Checkbox 
+                                                        id="no-change" 
+                                                        checked={noChangeNeeded} 
+                                                        onCheckedChange={(checked) => {
+                                                            setNoChangeNeeded(!!checked);
+                                                            if(checked) setChangeFor("");
+                                                        }} 
+                                                    />
+                                                    <Label htmlFor="no-change" className="text-sm cursor-pointer font-medium text-slate-700 dark:text-slate-300">
+                                                        Não preciso de troco, tenho o valor exato.
+                                                    </Label>
+                                                </div>
+
+                                                {!noChangeNeeded && (
+                                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded-lg">
+                                                        <Label className="text-xs mb-1 block font-bold text-yellow-800 dark:text-yellow-200 flex items-center gap-1">
+                                                            <Banknote className="w-3 h-3" /> Troco para quanto?
+                                                        </Label>
+                                                        <Input 
+                                                            placeholder="Ex: 50,00" 
+                                                            value={changeFor} 
+                                                            onChange={e => setChangeFor(e.target.value)} 
+                                                            className="bg-white dark:bg-black"
+                                                            type="number"
+                                                        />
+                                                        <p className="text-[10px] text-muted-foreground mt-1">
+                                                            Total: {formatCurrency(total)}. O valor deve ser maior que o total.
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
