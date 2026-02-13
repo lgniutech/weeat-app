@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+// Adicionado 'Legend' aos imports do recharts
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { 
   Activity, 
   Bike, 
@@ -22,8 +23,7 @@ import {
   MapPin,
   ChefHat,
   CheckCircle2,
-  Clock,
-  ArrowRight
+  Clock
 } from "lucide-react"
 
 export function OverviewDashboard({ store }: { store: any }) {
@@ -55,7 +55,6 @@ export function OverviewDashboard({ store }: { store: any }) {
   useEffect(() => {
     loadData()
     
-    // Configura Realtime
     const supabase = createClient()
     const channel = supabase
       .channel('dashboard_updates')
@@ -120,7 +119,7 @@ export function OverviewDashboard({ store }: { store: any }) {
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* LINHA 1: VITAL (4 Colunas) */}
+      {/* LINHA 1: VITAL */}
       <div className="grid gap-4 md:grid-cols-4">
         
         {/* KPI: PEDIDOS ATIVOS */}
@@ -141,7 +140,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* KPI: CANCELAMENTOS (Operacional) */}
+        {/* KPI: CANCELAMENTOS */}
         <Card className={`${metrics.cancelledCount > 0 ? 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900' : 'dark:bg-zinc-900 dark:border-zinc-800'}`}>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados</CardTitle>
@@ -175,10 +174,10 @@ export function OverviewDashboard({ store }: { store: any }) {
         </Card>
       </div>
 
-      {/* LINHA 2: FLUXO DE PEDIDOS (Funil) */}
+      {/* LINHA 2: FLUXO DE PEDIDOS */}
       <div className="grid gap-4 md:grid-cols-3">
         
-        {/* 1. FILA (ACEITO) */}
+        {/* 1. FILA */}
         <Card className={`border-l-4 ${statusCounts.queue > 0 ? 'border-l-blue-500 shadow-sm' : 'border-l-slate-200'} dark:bg-zinc-900`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-slate-600 dark:text-slate-400">
@@ -192,7 +191,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* 2. PREPARANDO (COZINHA) */}
+        {/* 2. PREPARANDO */}
         <Card className={`border-l-4 ${statusCounts.preparing > 0 ? 'border-l-orange-500 shadow-sm' : 'border-l-slate-200'} dark:bg-zinc-900`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-slate-600 dark:text-slate-400">
@@ -206,7 +205,7 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* 3. EXPEDIÇÃO (PRONTO) */}
+        {/* 3. EXPEDIÇÃO */}
         <Card className={`border-l-4 ${statusCounts.ready > 0 ? 'border-l-green-500 shadow-sm' : 'border-l-slate-200'} dark:bg-zinc-900`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-slate-600 dark:text-slate-400">
@@ -224,7 +223,7 @@ export function OverviewDashboard({ store }: { store: any }) {
       {/* LINHA 3: DETALHES OPERACIONAIS */}
       <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-7">
         
-        {/* LISTA DE PEDIDOS (Sem Valores) */}
+        {/* LISTA DE PEDIDOS */}
         <Card className="md:col-span-2 lg:col-span-4 dark:bg-zinc-900 dark:border-zinc-800 h-[400px] flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -259,7 +258,6 @@ export function OverviewDashboard({ store }: { store: any }) {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                           {/* Status simplificado */}
                            <Badge variant="outline" className={`text-[10px] h-5 px-2 uppercase tracking-wide border-0 ${
                              order.status === 'cancelado' ? 'bg-red-100 text-red-700' :
                              order.status === 'enviado' ? 'bg-green-100 text-green-700' :
@@ -280,14 +278,29 @@ export function OverviewDashboard({ store }: { store: any }) {
         <div className="md:col-span-1 lg:col-span-3 space-y-6">
             <Card className="dark:bg-zinc-900 dark:border-zinc-800">
                 <CardHeader className="pb-2"><CardTitle className="text-sm">Volume por Canal</CardTitle></CardHeader>
-                <CardContent className="h-[180px]">
+                <CardContent className="h-[220px]"> {/* Aumentei levemente a altura para caber a legenda */}
                     {salesMix.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie data={salesMix} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
+                                <Pie 
+                                    data={salesMix} 
+                                    cx="50%" 
+                                    cy="45%" // Subi um pouco o gráfico para dar espaço à legenda
+                                    innerRadius={50} 
+                                    outerRadius={70} 
+                                    paddingAngle={5} 
+                                    dataKey="value"
+                                >
                                     {salesMix.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} strokeWidth={0} />)}
                                 </Pie>
                                 <Tooltip formatter={(value: number) => [`${value} pedidos`, '']} contentStyle={{ borderRadius: '8px' }} />
+                                {/* Legenda Adicionada */}
+                                <Legend 
+                                    verticalAlign="bottom" 
+                                    height={36} 
+                                    iconType="circle"
+                                    formatter={(value) => <span className="text-xs text-slate-600 dark:text-slate-400 font-medium ml-1">{value}</span>}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     ) : <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Sem dados</div>}
