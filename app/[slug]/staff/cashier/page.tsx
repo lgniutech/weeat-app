@@ -238,11 +238,19 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                                             <p className="text-xs text-muted-foreground mt-0.5">
                                                 {order.order_items.map((i:any) => `${i.quantity}x ${i.product_name}`).join(", ")}
                                             </p>
-                                            <div className="flex items-center gap-2 mt-2">
+                                            <div className="flex flex-wrap items-center gap-2 mt-2">
                                                 <Badge variant={order.status === 'pronto' ? 'default' : 'secondary'} className={order.status === 'pronto' ? 'bg-green-500' : ''}>
                                                     {order.status.toUpperCase()}
                                                 </Badge>
                                                 <span className="text-xs font-mono font-bold">{formatCurrency(order.total_price)}</span>
+                                                
+                                                {/* Exibição da Forma de Pagamento */}
+                                                {order.payment_method && (
+                                                    <div className="flex items-center gap-1 text-xs text-muted-foreground bg-slate-100 dark:bg-zinc-800 border px-2 py-0.5 rounded-md ml-1">
+                                                        {getPaymentIcon(order.payment_method)}
+                                                        <span className="font-medium">{getPaymentLabel(order.payment_method)}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

@@ -12,6 +12,7 @@ export type CashierOrder = {
   created_at: string;
   table_number: string | null;
   delivery_type: string;
+  payment_method: string | null; // Adicionado campo payment_method
   items: any[];
 };
 
