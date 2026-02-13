@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info, Loader2 } from "lucide-react"
+import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info, Loader2, Banknote } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge" 
@@ -37,6 +37,8 @@ import { createOrderAction, getTableOrdersAction } from "@/app/actions/order"
 import { validateCouponAction, incrementCouponUsageAction } from "@/app/actions/coupons"
 import { useTheme } from "next-themes"
 import Image from "next/image"
+// IMPORTAÇÃO DAS NOVAS FUNÇÕES DE FORMATAÇÃO
+import { formatPhone, formatCep, formatOnlyLetters } from "@/lib/utils"
 
 interface StoreFrontProps {
   store: any
@@ -76,6 +78,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [deliveryMethod, setDeliveryMethod] = useState<'entrega' | 'retirada' | 'mesa'>('entrega')
   const [tableNumber, setTableNumber] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState('pix')
+  const [changeFor, setChangeFor] = useState("") // Estado para o valor do troco
+  const [noChangeNeeded, setNoChangeNeeded] = useState(false) // Estado para "Não preciso de troco"
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
   
@@ -299,8 +303,30 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     }
 
     if (!customerName) { toast({ title: "Faltou o nome", description: "Informe seu nome.", variant: "destructive" }); return; }
-    if (deliveryMethod !== 'mesa' && !customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
     
+    // CORREÇÃO: Validação de telefone agora é obrigatória também para Mesa
+    if (!customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
+    
+    // Validação de Troco
+    if (deliveryMethod === 'entrega' && paymentMethod === 'money') {
+        // Se NÃO estiver marcado que "não precisa de troco", então validamos o valor
+        if (!noChangeNeeded) {
+            if (!changeFor) {
+                toast({ title: "Troco necessário", description: "Informe para quanto precisa de troco ou marque que tem o valor exato.", variant: "destructive" });
+                return;
+            }
+
+            // Tenta converter o input para número (aceita 50.00 ou 50,00)
+            const changeValue = Number(changeFor.replace(',', '.'));
+            
+            // Verifica se é um número válido e se é MAIOR que o total
+            if (isNaN(changeValue) || changeValue <= total) {
+                toast({ title: "Valor de troco inválido", description: `O valor para troco deve ser maior que o total (${formatCurrency(total)}).`, variant: "destructive" });
+                return;
+            }
+        }
+    }
+
     if (deliveryMethod === 'entrega') {
         if (!customerAddress.street || !customerAddress.number || !customerAddress.zipCode) { 
             toast({ title: "Endereço incompleto", description: "Preencha todos os campos do endereço.", variant: "destructive" }); 
@@ -317,19 +343,23 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     const orderData = {
       storeId: store.id,
       customerName: customerName,
-      customerPhone: customerPhone || "Cliente na Mesa", 
+      customerPhone: customerPhone, // Agora obrigatório
       deliveryType: deliveryMethod, 
       address: fullAddress,
       tableNumber: tableNumber || undefined,
       paymentMethod: paymentMethod,
+      // Envia o troco apenas se for dinheiro E o usuário não marcou "não preciso de troco"
+      changeFor: (paymentMethod === 'money' && !noChangeNeeded) ? changeFor : undefined, 
       totalPrice: total,
       items: cart.map(item => ({
         product_name: item.name,
         quantity: item.quantity,
         unit_price: item.price,
         removed_ingredients: item.removedIngredients,
-        selected_addons: item.selectedAddonsDetails.map(a => `${a.name} (+${formatCurrency(a.price)})`),
-        notes: item.note
+        // CORREÇÃO: Enviar array de objetos conforme a interface do Server Action espera
+        selected_addons: item.selectedAddonsDetails.map(a => ({ name: a.name, price: Number(a.price) })),
+        // CORREÇÃO: Mapear 'note' do carrinho para 'observation' do Server Action
+        observation: item.note
       })),
       notes: appliedCoupon ? `Cupom: ${appliedCoupon.code}` : undefined
     }
@@ -343,6 +373,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
           setAppliedCoupon(null)
           setIsCartOpen(false)
           setOrderSuccess({ id: result.orderId, total: savedTotal }) 
+          setChangeFor("") 
+          setNoChangeNeeded(false) // Resetar o checkbox
         } else {
           toast({ title: "Erro", description: result.error, variant: "destructive" })
         }
@@ -723,11 +755,24 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
                         <div className="space-y-4">
                             <h3 className="font-semibold text-sm">Seus Dados</h3>
-                            <Input placeholder="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                            {/* NOME COM FILTRO DE LETRAS */}
+                            <Input 
+                                placeholder="Seu Nome" 
+                                value={customerName} 
+                                onChange={e => setCustomerName(formatOnlyLetters(e.target.value))} 
+                            />
                             
+                            {/* TELEFONE COM MÁSCARA */}
+                            <Input 
+                                placeholder="WhatsApp" 
+                                type="tel" 
+                                value={customerPhone} 
+                                onChange={e => setCustomerPhone(formatPhone(e.target.value))} 
+                                maxLength={15}
+                            />
+
                             {!tableNumber && (
                                 <>
-                                    <Input placeholder="WhatsApp" type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
                                     <RadioGroup value={deliveryMethod} onValueChange={(v: any) => setDeliveryMethod(v)} className="grid grid-cols-2 gap-4">
                                         <div className={`flex flex-col items-center justify-between rounded-md border-2 p-4 cursor-pointer hover:bg-slate-50 ${deliveryMethod === 'entrega' ? 'border-primary bg-primary/5' : 'border-muted'}`} onClick={() => setDeliveryMethod('entrega')}>
                                             <RadioGroupItem value="entrega" id="entrega" className="sr-only" /><MapPin className="mb-2 h-6 w-6" /><span className="text-xs font-medium">Entrega</span>
@@ -746,10 +791,11 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                                 <Label className="text-xs mb-1 block">CEP (Apenas números)</Label>
                                                 <div className="flex gap-2">
                                                     <Input 
-                                                        placeholder="00000000" 
-                                                        maxLength={8}
+                                                        placeholder="00000-000" 
+                                                        maxLength={9}
                                                         value={customerAddress.zipCode} 
-                                                        onChange={e => setCustomerAddress({...customerAddress, zipCode: e.target.value})}
+                                                        // APLICAÇÃO DA MÁSCARA DE CEP
+                                                        onChange={e => setCustomerAddress({...customerAddress, zipCode: formatCep(e.target.value)})}
                                                         onBlur={handleCheckCep}
                                                         className={cepError ? "border-red-500 pr-10" : "pr-10"}
                                                     />
@@ -815,6 +861,50 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                                 <SelectItem value="money">Dinheiro</SelectItem>
                                             </SelectContent>
                                         </Select>
+
+                                        {/* NOVO: Campo de Troco */}
+                                        {deliveryMethod === 'entrega' && paymentMethod === 'money' && (
+                                            <div className="space-y-3 pt-1 animate-in fade-in slide-in-from-top-1">
+                                                
+                                                <div className="flex items-center space-x-2">
+                                                    <Checkbox 
+                                                        id="no-change" 
+                                                        checked={noChangeNeeded} 
+                                                        onCheckedChange={(checked) => {
+                                                            setNoChangeNeeded(!!checked);
+                                                            if(checked) setChangeFor("");
+                                                        }} 
+                                                    />
+                                                    <Label htmlFor="no-change" className="text-sm cursor-pointer font-medium text-slate-700 dark:text-slate-300">
+                                                        Não preciso de troco, tenho o valor exato.
+                                                    </Label>
+                                                </div>
+
+                                                {!noChangeNeeded && (
+                                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded-lg">
+                                                        <Label className="text-xs mb-1 block font-bold text-yellow-800 dark:text-yellow-200 flex items-center gap-1">
+                                                            <Banknote className="w-3 h-3" /> Troco para quanto?
+                                                        </Label>
+                                                        <Input 
+                                                            placeholder="Ex: 50,00" 
+                                                            value={changeFor} 
+                                                            onChange={e => setChangeFor(e.target.value)} 
+                                                            className="bg-white dark:bg-black"
+                                                            type="number"
+                                                        />
+                                                        <p className="text-[10px] text-muted-foreground mt-1">
+                                                            Total: {formatCurrency(total)}
+                                                        </p>
+                                                        {/* LÓGICA DE AVISO EM VERMELHO */}
+                                                        {changeFor && Number(changeFor.replace(',', '.')) <= total && (
+                                                             <p className="text-[10px] font-bold text-red-600 dark:text-red-400 mt-1 animate-in slide-in-from-top-1">
+                                                                O valor deve ser maior que o total.
+                                                             </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </>
                             )}

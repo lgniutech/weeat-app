@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { ThemeProvider, useTheme } from "next-themes" 
-import { getStaffSession, logoutStaffAction } from "@/app/actions/staff"
+import { getStaffSession, logoutStaffAction, validateStaffPin } from "@/app/actions/staff"
 import { 
     getTablesStatusAction, 
     getWaiterMenuAction,
@@ -16,14 +16,16 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag, AlertTriangle, Lock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+// IMPORTAÇÃO DAS FUNÇÕES DE FORMATAÇÃO
+import { formatPhone, formatOnlyLetters } from "@/lib/utils"
 
 type Product = {
     id: string;
@@ -57,6 +59,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [productToCustomize, setProductToCustomize] = useState<Product | null>(null)
   
+  // Estado para PIN Modal
+  const [isPinDialogOpen, setIsPinDialogOpen] = useState(false)
+  const [pinCode, setPinCode] = useState("")
+  const [pinError, setPinError] = useState(false)
+
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
@@ -161,7 +168,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     }
     setCart(prev => [...prev, newItem])
     setProductToCustomize(null)
-    // Se adicionar item, o cupom validado anteriormente pode mudar (ex: % sobre total maior), invalida visual
     if (validatedCouponData) setValidatedCouponData(null) 
     toast({ title: "Adicionado ao carrinho" })
   }
@@ -171,7 +177,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       setValidatedCouponData(null)
   }
 
-  // Valida cupom visualmente antes de enviar
   const handleValidateCartCoupon = async () => {
       if(!cartCoupon.trim()) return;
       const total = cart.reduce((acc, item) => acc + item.totalPrice, 0);
@@ -191,7 +196,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     startTransition(async () => {
       try {
           let res;
-          // Envia o cupom junto (se validado ou apenas digitado, a action revalida de qualquer forma por segurança)
           const codeToSend = cartCoupon.trim().toUpperCase();
 
           if (selectedTable.status === 'free') {
@@ -210,13 +214,48 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     })
   }
 
-  const handleCloseTable = async () => {
-    if(!confirm("Encerrar mesa? Certifique-se que o pagamento foi recebido.")) return;
+  const handleCloseTableAttempt = async () => {
+      if(!confirm("Deseja realmente solicitar o encerramento da mesa?")) return;
+
+      // Verifica se há itens na cozinha ou prontos mas não entregues
+      // isPreparing = aceito, preparando
+      // hasReadyItems = pronto/enviado (ainda não entregue)
+      if (selectedTable.isPreparing || selectedTable.hasReadyItems) {
+          setPinCode("");
+          setPinError(false);
+          setIsPinDialogOpen(true);
+      } else {
+          await executeCloseTable(false); // False = Normal close
+      }
+  }
+
+  const handlePinConfirm = async () => {
+      if (!pinCode || pinCode.length < 4) {
+          setPinError(true);
+          return;
+      }
+
+      const isValid = await validateStaffPin(storeId!, pinCode);
+      if (isValid) {
+          setIsPinDialogOpen(false);
+          await executeCloseTable(true); // True = Forced (Desistance)
+      } else {
+          setPinError(true);
+          toast({ title: "PIN Inválido", variant: "destructive" });
+      }
+  }
+
+  // MODIFICADO: Adicionado parâmetro isForced
+  const executeCloseTable = async (isForced: boolean) => {
     startTransition(async () => {
-        const res = await closeTableAction(selectedTable.id, storeId!)
+        const res = await closeTableAction(selectedTable.id, storeId!, isForced)
         if (res?.success) {
             setIsManagementOpen(false)
-            toast({ title: "Mesa Encerrada!", className: "bg-green-600 text-white" })
+            if (isForced) {
+                toast({ title: "Mesa Encerrada (Desistência)", description: "Itens cancelados.", className: "bg-red-600 text-white" })
+            } else {
+                toast({ title: "Mesa Encerrada!", className: "bg-green-600 text-white" })
+            }
             fetchTables()
         } else {
             toast({ title: "Erro", description: res?.error, variant: "destructive" })
@@ -319,6 +358,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         })}
       </main>
 
+      {/* Modal Principal da Mesa */}
       <Dialog open={isManagementOpen} onOpenChange={setIsManagementOpen}>
         <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900">
             <DialogHeader>
@@ -359,14 +399,29 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                 <Label htmlFor="client-name" className="text-xs font-semibold text-muted-foreground uppercase">Nome do Cliente (Opcional)</Label>
                                 <div className="relative">
                                     <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input id="client-name" placeholder="Ex: João Silva" className="pl-9 bg-white dark:bg-slate-900" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+                                    {/* INPUT DO NOME COM FILTRO DE LETRAS */}
+                                    <Input 
+                                        id="client-name" 
+                                        placeholder="Ex: João Silva" 
+                                        className="pl-9 bg-white dark:bg-slate-900" 
+                                        value={clientName} 
+                                        onChange={(e) => setClientName(formatOnlyLetters(e.target.value))} 
+                                    />
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <Label htmlFor="client-phone" className="text-xs font-semibold text-muted-foreground uppercase">Telefone / WhatsApp</Label>
                                 <div className="relative">
                                     <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input id="client-phone" placeholder="Ex: 11999999999" className="pl-9 bg-white dark:bg-slate-900" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} />
+                                    {/* INPUT DO TELEFONE COM MÁSCARA */}
+                                    <Input 
+                                        id="client-phone" 
+                                        placeholder="Ex: 11999999999" 
+                                        className="pl-9 bg-white dark:bg-slate-900" 
+                                        value={clientPhone} 
+                                        onChange={(e) => setClientPhone(formatPhone(e.target.value))} 
+                                        maxLength={15}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -439,7 +494,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                              
                              <Button 
                                 className="h-12 col-span-2 font-bold shadow-sm bg-red-500 hover:bg-red-600 text-white"
-                                onClick={handleCloseTable} 
+                                onClick={handleCloseTableAttempt} 
                                 disabled={isPending} 
                              >
                                 <CreditCard className="mr-2 h-4 w-4"/> Encerrar / Receber
@@ -449,6 +504,38 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 )}
             </div>
         </DialogContent>
+      </Dialog>
+      
+      {/* Modal de Confirmação PIN */}
+      <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
+          <DialogContent className="sm:max-w-xs">
+              <DialogHeader>
+                  <div className="flex items-center gap-2 text-amber-600">
+                     <AlertTriangle className="w-6 h-6" />
+                     <DialogTitle>Mesa em Preparo!</DialogTitle>
+                  </div>
+                  <DialogDescription className="pt-2">
+                      Existem pedidos na cozinha ou não servidos.
+                      <br/>
+                      Insira seu PIN para reportar <strong>Desistência</strong> e cancelar.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="py-2">
+                  <Input 
+                    type="password" 
+                    placeholder="PIN" 
+                    maxLength={4} 
+                    className="text-center text-2xl tracking-[0.5em] font-bold"
+                    value={pinCode}
+                    onChange={(e) => { setPinCode(e.target.value); setPinError(false); }}
+                  />
+                  {pinError && <p className="text-xs text-red-500 mt-2 font-bold text-center">PIN incorreto.</p>}
+              </div>
+              <DialogFooter>
+                  <Button variant="ghost" onClick={() => setIsPinDialogOpen(false)}>Cancelar</Button>
+                  <Button variant="destructive" onClick={handlePinConfirm} disabled={isPending}>Confirmar Cancelamento</Button>
+              </DialogFooter>
+          </DialogContent>
       </Dialog>
       
        <Dialog open={isMenuOpen} onOpenChange={(open) => { if(!open) setIsManagementOpen(true); setIsMenuOpen(open) }}>

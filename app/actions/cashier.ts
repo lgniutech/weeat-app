@@ -110,7 +110,8 @@ export async function getCashierDataAction(storeId: string) {
 }
 
 // --- FECHAR MESA ---
-export async function closeTableAction(storeId: string, tableNumber: string, paymentMethod: string) {
+// MODIFICADO: Adicionado parâmetro isForced
+export async function closeTableAction(storeId: string, tableNumber: string, paymentMethod: string, isForced: boolean = false) {
   const supabase = await createClient();
 
   const { data: ordersToClose } = await supabase
@@ -125,16 +126,22 @@ export async function closeTableAction(storeId: string, tableNumber: string, pay
 
   const ids = ordersToClose.map(o => o.id);
 
+  // Se forçado (PIN), marca como cancelado. Se não, concluído.
+  const newStatus = isForced ? "cancelado" : "concluido";
+  const finalPaymentMethod = isForced ? "nao_pago" : paymentMethod;
+  const cancelReason = isForced ? "Desistência (Fechamento forçado via PIN)" : null;
+
   const { error } = await supabase
     .from("orders")
     .update({ 
-      status: 'concluido', 
-      payment_method: paymentMethod,
+      status: newStatus, 
+      payment_method: finalPaymentMethod,
+      cancellation_reason: cancelReason,
       last_status_change: new Date().toISOString()
     })
     .in("id", ids);
     
-  await supabase.from("order_items").update({ status: 'concluido' }).in("order_id", ids);
+  await supabase.from("order_items").update({ status: newStatus }).in("order_id", ids);
 
   if (error) return { error: "Erro ao fechar mesa." };
 

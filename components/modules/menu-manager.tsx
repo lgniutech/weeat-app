@@ -13,7 +13,8 @@ import {
     createIngredientAction,
     getStoreAddonsAction,
     createAddonAction,
-    updateCategoryOrderAction
+    updateCategoryOrderAction,
+    getCategoryAddonHistoryAction // Importamos a nova função
 } from "@/app/actions/menu"
 import { compressImage } from "@/lib/client-image-compression" 
 import { Button } from "@/components/ui/button"
@@ -105,12 +106,23 @@ function IngredientSelector({ storeId, value = [], onChange }: { storeId: string
     )
 }
 
-function AddonSelector({ storeId, value = [], onChange }: { storeId: string, value: {id: string, price: number}[], onChange: (addons: any[]) => void }) {
+function AddonSelector({ storeId, value = [], onChange, categoryId }: { storeId: string, value: {id: string, price: number}[], onChange: (addons: any[]) => void, categoryId: string }) {
     const [nameInput, setNameInput] = useState("")
     const [allAddons, setAllAddons] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
+    const [categoryDefaults, setCategoryDefaults] = useState<Record<string, number>>({})
 
+    // Busca todos os addons da loja
     useEffect(() => { getStoreAddonsAction(storeId).then(setAllAddons) }, [storeId])
+
+    // Busca histórico de preços desta categoria sempre que ela muda
+    useEffect(() => {
+        if (categoryId) {
+            getCategoryAddonHistoryAction(storeId, categoryId).then(setCategoryDefaults)
+        } else {
+            setCategoryDefaults({})
+        }
+    }, [storeId, categoryId])
 
     const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 
@@ -136,7 +148,12 @@ function AddonSelector({ storeId, value = [], onChange }: { storeId: string, val
 
     const addAddonToProduct = (id: string) => {
         if (value.find(s => s.id === id)) return
-        onChange([...value, { id, price: 0 }])
+        
+        // A MÁGICA ACONTECE AQUI:
+        // Verifica se existe um preço padrão para esta categoria, senão usa 0
+        const defaultPrice = categoryDefaults[id] !== undefined ? categoryDefaults[id] : 0
+        
+        onChange([...value, { id, price: defaultPrice }])
     }
 
     const removeAddon = (id: string) => {
@@ -153,7 +170,10 @@ function AddonSelector({ storeId, value = [], onChange }: { storeId: string, val
 
     return (
         <div className="space-y-4">
-            <Label className="text-sm font-semibold dark:text-slate-300">Adicionais (Opcionais Pagos)</Label>
+            <Label className="text-sm font-semibold dark:text-slate-300">
+                Adicionais (Opcionais Pagos)
+                {categoryId && <span className="ml-2 text-xs font-normal text-muted-foreground opacity-70">(Preços sugeridos por categoria ativos)</span>}
+            </Label>
             <div className="flex gap-2 w-full">
                 <Input 
                     placeholder="Nome do adicional (Ex: Bacon)" 
@@ -199,7 +219,14 @@ function AddonSelector({ storeId, value = [], onChange }: { storeId: string, val
                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
                         {filteredLibrary.map(addon => (
                             <Badge key={addon.id} variant="outline" className="cursor-pointer hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-700 transition-all dark:border-zinc-700 dark:text-slate-400 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-200" onClick={() => addAddonToProduct(addon.id)}>
-                                <Plus className="h-3 w-3 mr-1 opacity-50" />{addon.name}
+                                <Plus className="h-3 w-3 mr-1 opacity-50" />
+                                {addon.name}
+                                {/* Exibe o preço sugerido no badge se existir */}
+                                {categoryDefaults[addon.id] !== undefined && categoryDefaults[addon.id] > 0 && (
+                                    <span className="ml-1 text-[10px] opacity-60">
+                                        (R$ {categoryDefaults[addon.id]})
+                                    </span>
+                                )}
                             </Badge>
                         ))}
                     </div>
@@ -239,8 +266,21 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
     const [isCompressing, setIsCompressing] = useState(false)
     const [selectedIngredients, setSelectedIngredients] = useState<string[]>([])
     const [selectedAddons, setSelectedAddons] = useState<any[]>([])
+    
+    // Novo estado para controlar a categoria selecionada
+    // Se for edição, usa a do produto. Se for novo, usa a primeira disponível.
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
+        product?.category_id || (categories.length > 0 ? categories[0].id : "")
+    )
 
     useEffect(() => { if (state?.success) setIsOpen(false) }, [state])
+
+    // Atualiza o estado da categoria se as props mudarem
+    useEffect(() => {
+        if (!isOpen && !isEdit && categories.length > 0) {
+            setSelectedCategoryId(categories[0].id)
+        }
+    }, [categories, isEdit, isOpen])
 
     const handleOpenChange = (open: boolean) => {
         setIsOpen(open)
@@ -248,9 +288,11 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
             if (product) {
                 setSelectedIngredients(product.ingredients?.map((i: any) => i.id) || [])
                 setSelectedAddons(product.addons?.map((a: any) => ({ id: a.id, price: a.price })) || [])
+                setSelectedCategoryId(product.category_id)
             } else {
                 setSelectedIngredients([])
                 setSelectedAddons([])
+                if (categories.length > 0) setSelectedCategoryId(categories[0].id)
             }
         }
     }
@@ -296,7 +338,13 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
                     <div className="grid grid-cols-2 gap-4">
                          <div className="space-y-2">
                             <Label className="dark:text-slate-300">Categoria</Label>
-                            <select name="categoryId" defaultValue={product?.category_id} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700 dark:text-slate-200" required>
+                            <select 
+                                name="categoryId" 
+                                value={selectedCategoryId} 
+                                onChange={(e) => setSelectedCategoryId(e.target.value)}
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700 dark:text-slate-200" 
+                                required
+                            >
                                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                          </div>
@@ -321,7 +369,8 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
                             <IngredientSelector storeId={storeId} value={selectedIngredients} onChange={setSelectedIngredients} />
                         </div>
                         <div className="p-4 bg-yellow-50/30 dark:bg-yellow-900/10 rounded-lg border border-yellow-100/50 dark:border-yellow-900/30">
-                            <AddonSelector storeId={storeId} value={selectedAddons} onChange={setSelectedAddons} />
+                            {/* Passamos o categoryId para o seletor de addons */}
+                            <AddonSelector storeId={storeId} value={selectedAddons} onChange={setSelectedAddons} categoryId={selectedCategoryId} />
                         </div>
                     </div>
 

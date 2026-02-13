@@ -180,3 +180,39 @@ export async function toggleProductAvailabilityAction(productId: string, isAvail
   await supabase.from("products").update({ is_available: isAvailable }).eq("id", productId);
   revalidatePath("/");
 }
+
+// --- INTEGRAÇÃO INTELIGENTE DE PREÇOS ---
+
+export async function getCategoryAddonHistoryAction(storeId: string, categoryId: string) {
+    const supabase = await createClient();
+    
+    // Busca produtos desta categoria e seus relacionamentos de addons para descobrir os preços praticados
+    const { data, error } = await supabase
+        .from('products')
+        .select(`
+            id,
+            product_addons (
+                addon_id,
+                price
+            )
+        `)
+        .eq('store_id', storeId)
+        .eq('category_id', categoryId);
+
+    if (error || !data) return {};
+
+    // Mapeia o histórico para encontrar o preço mais recente/comum para cada addon nesta categoria
+    const priceMap: Record<string, number> = {};
+    
+    data.forEach((product: any) => {
+        if (product.product_addons) {
+            product.product_addons.forEach((pa: any) => {
+                // Atualiza o mapa. Como percorremos a lista, o último valor ou o predominante tende a ficar.
+                // Esta lógica simples garante que se você usou Bacon a R$5 nesta categoria, ele lembrará dos R$5.
+                priceMap[pa.addon_id] = pa.price;
+            });
+        }
+    });
+
+    return priceMap;
+}

@@ -1,13 +1,14 @@
 "use client"
 
-import { useState, useEffect, useTransition } from "react"
+import { useState, useEffect, useTransition, useCallback } from "react"
 import { getDashboardOverviewAction, type DashboardData } from "@/app/actions/dashboard"
+import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+// Adicionado 'Legend' aos imports do recharts
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { 
-  ShoppingBag, 
   Activity, 
   Bike, 
   Utensils, 
@@ -19,41 +20,58 @@ import {
   Sun,
   Cloud,
   CloudLightning,
-  Snowflake,
-  Wind,
   MapPin,
   ChefHat,
-  Timer
+  CheckCircle2,
+  Clock
 } from "lucide-react"
 
 export function OverviewDashboard({ store }: { store: any }) {
-  const [data, setData] = useState<DashboardData | null>(null)
+  const defaultData: DashboardData = {
+    metrics: { ordersCount: 0, cancelledCount: 0 },
+    statusCounts: { queue: 0, preparing: 0, ready: 0 },
+    salesMix: [],
+    recentOrders: [],
+    unavailableProducts: []
+  };
+
+  const [data, setData] = useState<DashboardData>(defaultData)
   const [weather, setWeather] = useState<{ temp: number; code: number; city: string } | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // --- 1. Busca de Dados do Dashboard (Polling) ---
-  const loadData = () => {
+  // --- 1. Busca de Dados e Realtime ---
+  const loadData = useCallback(() => {
+    if (!store?.id) return;
     startTransition(async () => {
       const result = await getDashboardOverviewAction(store.id)
       if ('error' in result) {
-        console.error(result.error)
+         console.error(result.error)
       } else {
         setData(result)
       }
     })
-  }
+  }, [store.id])
 
   useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 30000) // Atualiza a cada 30s
-    return () => clearInterval(interval)
-  }, [store.id])
+    
+    const supabase = createClient()
+    const channel = supabase
+      .channel('dashboard_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
+        () => loadData()
+      )
+      .subscribe()
 
-  // --- 2. Busca de Clima (Prioridade: Lat/Lng Salvo > Cidade Cadastrada) ---
+    return () => { supabase.removeChannel(channel) }
+  }, [loadData, store.id])
+
+  // --- 2. Busca de Clima ---
   useEffect(() => {
     async function fetchStoreWeather() {
         if (!store.city && !store.settings?.location?.lat) return;
-
         try {
             let latitude = store.settings?.location?.lat;
             let longitude = store.settings?.location?.lng;
@@ -61,123 +79,68 @@ export function OverviewDashboard({ store }: { store: any }) {
 
             if (!latitude || !longitude) {
                 const query = `${store.city}, ${store.state || ''}, Brazil`;
-                const geoRes = await fetch(
-                    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=pt&format=json`
-                );
+                const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=pt&format=json`);
                 const geoData = await geoRes.json();
-
-                if (geoData.results && geoData.results.length > 0) {
+                if (geoData.results?.[0]) {
                     latitude = geoData.results[0].latitude;
                     longitude = geoData.results[0].longitude;
                 }
             }
 
             if (latitude && longitude) {
-                const weatherRes = await fetch(
-                    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
-                );
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`);
                 const weatherData = await weatherRes.json();
-
                 setWeather({
                     temp: weatherData.current.temperature_2m,
                     code: weatherData.current.weather_code,
                     city: cityName
                 });
             }
-
-        } catch (error) {
-            console.error("Erro ao carregar clima:", error);
-        }
+        } catch (error) { console.error("Erro clima:", error); }
     }
-
     fetchStoreWeather();
   }, [store.city, store.state, store.settings]);
 
-  // Helpers de Formatação
-  const formatCurrency = (val: number) => 
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
+  // Helpers
+  const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  }
-
-  // Ícones de Clima (WMO Codes)
+  // Ícones de Clima
   const getWeatherIcon = (code: number) => {
-    if (code === 0 || code === 1) return <Sun className="w-8 h-8 text-amber-500 animate-pulse-slow" />
+    if (code <= 1) return <Sun className="w-8 h-8 text-amber-500" />
     if (code <= 3) return <Cloud className="w-8 h-8 text-slate-400" />
-    if (code <= 48) return <Wind className="w-8 h-8 text-slate-400" />
     if (code <= 67) return <CloudRain className="w-8 h-8 text-blue-400" />
-    if (code <= 77) return <Snowflake className="w-8 h-8 text-cyan-300" />
-    if (code <= 82) return <CloudRain className="w-8 h-8 text-blue-600" />
-    if (code <= 99) return <CloudLightning className="w-8 h-8 text-purple-500 animate-pulse" />
+    if (code <= 99) return <CloudLightning className="w-8 h-8 text-purple-500" />
     return <Sun className="w-8 h-8 text-amber-500" />
   }
 
-  const getWeatherLabel = (code: number) => {
-    if (code === 0) return "Céu Limpo"
-    if (code <= 3) return "Nublado"
-    if (code <= 67) return "Chuvoso"
-    if (code <= 99) return "Tempestade"
-    return "Normal"
-  }
-
-  // Skeleton de Carregamento
-  if (!data && isPending) {
-    return <div className="flex h-96 items-center justify-center text-muted-foreground animate-pulse">Carregando cockpit...</div>
-  }
-
-  const { metrics, statusCounts, salesMix, recentOrders, unavailableProducts } = data || {
-    metrics: { revenue: 0, ordersCount: 0, avgTicket: 0, cancelledCount: 0 },
-    statusCounts: { pending: 0, preparing: 0, expedition: 0 },
-    salesMix: [],
-    recentOrders: [],
-    unavailableProducts: []
-  }
-
-  // --- CÁLCULO OPERACIONAL ---
-  // Soma total de pedidos que precisam de atenção agora
-  const totalActiveOrders = statusCounts.pending + statusCounts.preparing + statusCounts.expedition;
+  const { metrics, statusCounts, salesMix, recentOrders, unavailableProducts } = data;
+  const totalActiveOrders = statusCounts.queue + statusCounts.preparing + statusCounts.ready;
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* --- LINHA 1: MONITOR VITAL (4 Colunas) --- */}
+      {/* LINHA 1: VITAL */}
       <div className="grid gap-4 md:grid-cols-4">
         
-        {/* KPI 1: MOVIMENTO ATUAL (OPERACIONAL) - COR DO TEMA */}
-        <Card className="md:col-span-2 bg-primary text-primary-foreground border-primary/20 shadow-lg relative overflow-hidden">
-          {/* Fundo Decorativo com a cor do tema */}
-          <div className="absolute top-0 right-0 p-8 opacity-20">
-            <ChefHat className="w-32 h-32 text-primary-foreground" />
-          </div>
-          
+        {/* KPI: PEDIDOS ATIVOS */}
+        <Card className="md:col-span-2 bg-slate-900 text-white dark:bg-slate-800 border-slate-800 shadow-lg relative overflow-hidden">
+          <div className="absolute right-0 top-0 p-8 opacity-10"><Activity className="w-32 h-32" /></div>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-primary-foreground/80 flex items-center gap-2">
-              <Activity className="w-4 h-4" />
-              Movimento Agora
+            <CardTitle className="text-sm font-medium text-slate-300 flex items-center gap-2">
+              <Activity className="w-4 h-4" /> Operação em Tempo Real
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* Número Gigante de Pedidos Ativos */}
-            <div className="text-5xl font-bold tracking-tight text-primary-foreground mb-2">
-              {totalActiveOrders}
-            </div>
-            
-            {/* Detalhamento Rápido */}
-            <div className="flex items-center gap-4 text-sm font-medium text-primary-foreground/90">
-              <span className="flex items-center gap-1">
-                <AlertCircle className="w-4 h-4 opacity-70" /> {statusCounts.pending} Fila
-              </span>
-              <span className="w-px h-4 bg-primary-foreground/30"></span>
-              <span className="flex items-center gap-1">
-                <Utensils className="w-4 h-4 opacity-70" /> {statusCounts.preparing} Cozinha
-              </span>
+            <div className="text-5xl font-bold tracking-tight mb-2">{totalActiveOrders}</div>
+            <div className="flex items-center gap-4 text-sm font-medium text-slate-300">
+              <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-blue-400" /> {statusCounts.queue} na Fila</span>
+              <span className="w-px h-4 bg-slate-700"></span>
+              <span className="flex items-center gap-1"><ChefHat className="w-4 h-4 text-orange-400" /> {statusCounts.preparing} no Fogo</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* KPI 2: CANCELAMENTOS (ALERTA) */}
+        {/* KPI: CANCELAMENTOS */}
         <Card className={`${metrics.cancelledCount > 0 ? 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900' : 'dark:bg-zinc-900 dark:border-zinc-800'}`}>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados</CardTitle>
@@ -187,134 +150,121 @@ export function OverviewDashboard({ store }: { store: any }) {
             <div className={`text-2xl font-bold ${metrics.cancelledCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100'}`}>
               {metrics.cancelledCount}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">hoje</p>
+            <p className="text-xs text-muted-foreground mt-1">pedidos hoje</p>
           </CardContent>
         </Card>
 
-        {/* KPI 3: CLIMA LOCAL */}
-        <Card className="dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden">
-          <CardHeader className="pb-2 pt-4 px-4">
-             <div className="flex justify-between items-center">
-                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clima</CardTitle>
-                {weather?.city && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><MapPin className="w-3 h-3"/> {weather.city}</span>}
-             </div>
-          </CardHeader>
-          <CardContent className="flex items-center justify-between pt-0 pb-4 px-4">
+        {/* KPI: CLIMA */}
+        <Card className="dark:bg-zinc-900 dark:border-zinc-800">
+          <CardContent className="flex items-center justify-between p-6">
              {weather ? (
                <>
-                 <div className="flex flex-col">
-                   <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{weather.temp.toFixed(0)}°C</span>
-                   <span className="text-xs text-muted-foreground">{getWeatherLabel(weather.code)}</span>
+                 <div>
+                   <span className="text-2xl font-bold block">{weather.temp.toFixed(0)}°C</span>
+                   <span className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3"/> {weather.city}</span>
                  </div>
-                 <div className="scale-110 transform origin-center">
-                    {getWeatherIcon(weather.code)}
-                 </div>
+                 <div>{getWeatherIcon(weather.code)}</div>
                </>
              ) : (
-               <div className="flex flex-col justify-center h-full w-full py-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
-                    {store.city ? "Buscando..." : "Sem endereço"}
-                  </div>
-                  {!store.city && <span className="text-[10px] text-red-400">Configure o endereço</span>}
+               <div className="text-xs text-muted-foreground flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full border-2 border-slate-300 border-t-slate-600 animate-spin"/> Buscando clima...
                </div>
              )}
           </CardContent>
         </Card>
       </div>
 
-      {/* --- LINHA 2: GARGALOS OPERACIONAIS --- */}
+      {/* LINHA 2: FLUXO DE PEDIDOS */}
       <div className="grid gap-4 md:grid-cols-3">
-        {/* Card A: FILA */}
-        <Card className={`border-l-4 ${statusCounts.pending > 0 ? 'border-l-amber-500 shadow-amber-100 dark:shadow-none' : 'border-l-slate-200'} dark:bg-zinc-900`}>
+        
+        {/* 1. FILA */}
+        <Card className={`border-l-4 ${statusCounts.queue > 0 ? 'border-l-blue-500 shadow-sm' : 'border-l-slate-200'} dark:bg-zinc-900`}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <AlertCircle className={`w-4 h-4 ${statusCounts.pending > 0 ? 'text-amber-500 animate-pulse' : 'text-slate-400'}`} />
-              Fila de Aceite
+            <CardTitle className="text-sm flex items-center gap-2 text-slate-600 dark:text-slate-400">
+              <AlertCircle className={`w-4 h-4 ${statusCounts.queue > 0 ? 'text-blue-500 animate-pulse' : 'text-slate-300'}`} />
+              Fila (A Fazer)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{statusCounts.pending}</div>
-            <p className="text-xs text-muted-foreground">aguardando confirmação</p>
+            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{statusCounts.queue}</div>
+            <p className="text-xs text-muted-foreground">aguardando cozinha</p>
           </CardContent>
         </Card>
 
-        {/* Card B: COZINHA */}
-        <Card className="border-l-4 border-l-blue-500 dark:bg-zinc-900">
+        {/* 2. PREPARANDO */}
+        <Card className={`border-l-4 ${statusCounts.preparing > 0 ? 'border-l-orange-500 shadow-sm' : 'border-l-slate-200'} dark:bg-zinc-900`}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Utensils className="w-4 h-4 text-blue-500" />
-              Na Cozinha
+            <CardTitle className="text-sm flex items-center gap-2 text-slate-600 dark:text-slate-400">
+              <Utensils className={`w-4 h-4 ${statusCounts.preparing > 0 ? 'text-orange-500' : 'text-slate-300'}`} />
+              Em Preparo
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{statusCounts.preparing}</div>
-            <p className="text-xs text-muted-foreground">sendo preparados agora</p>
+            <p className="text-xs text-muted-foreground">sendo produzidos</p>
           </CardContent>
         </Card>
 
-        {/* Card C: EXPEDIÇÃO */}
-        <Card className="border-l-4 border-l-purple-500 dark:bg-zinc-900">
+        {/* 3. EXPEDIÇÃO */}
+        <Card className={`border-l-4 ${statusCounts.ready > 0 ? 'border-l-green-500 shadow-sm' : 'border-l-slate-200'} dark:bg-zinc-900`}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Bike className="w-4 h-4 text-purple-500" />
-              Em Rota / Mesa
+            <CardTitle className="text-sm flex items-center gap-2 text-slate-600 dark:text-slate-400">
+              <CheckCircle2 className={`w-4 h-4 ${statusCounts.ready > 0 ? 'text-green-500' : 'text-slate-300'}`} />
+              Pronto / Expedição
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{statusCounts.expedition}</div>
-            <p className="text-xs text-muted-foreground">entregando ou servindo</p>
+            <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{statusCounts.ready}</div>
+            <p className="text-xs text-muted-foreground">entregando ou mesa</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* LINHA 3: DETALHES OPERACIONAIS */}
       <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-7">
         
-        {/* --- LINHA 3: PULSO DA LOJA (FEED) --- */}
+        {/* LISTA DE PEDIDOS */}
         <Card className="md:col-span-2 lg:col-span-4 dark:bg-zinc-900 dark:border-zinc-800 h-[400px] flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-primary" />
-              Pulsar da Loja
+              <Store className="w-5 h-5 text-primary" /> Entrada de Pedidos
             </CardTitle>
-            <CardDescription>Últimas atividades em tempo real</CardDescription>
+            <CardDescription>Monitoramento em tempo real</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 p-0 overflow-hidden">
              <ScrollArea className="h-[300px] px-6">
-                <div className="space-y-6">
+                <div className="space-y-4 pt-2">
                   {recentOrders.length === 0 ? (
-                    <div className="text-center py-10 text-muted-foreground">Nenhuma atividade hoje ainda.</div>
+                    <div className="text-center py-10 text-muted-foreground">Nenhuma atividade recente.</div>
                   ) : (
                     recentOrders.map((order) => (
-                      <div key={order.id} className="flex items-start justify-between group">
-                        <div className="flex gap-3">
-                          <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center border ${
-                            order.delivery_type === 'delivery' ? 'bg-blue-50 border-blue-100 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' :
-                            order.delivery_type === 'mesa' ? 'bg-emerald-50 border-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:border-emerald-800' :
-                            'bg-amber-50 border-amber-100 text-amber-600 dark:bg-amber-900/20 dark:border-amber-800'
+                      <div key={order.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <div className="flex gap-3 items-center">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${
+                            order.delivery_type === 'delivery' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                            order.delivery_type === 'mesa' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                            'bg-amber-50 text-amber-600 border-amber-100'
                           }`}>
-                             {order.delivery_type === 'delivery' ? <Bike className="w-4 h-4"/> : 
-                              order.delivery_type === 'mesa' ? <Utensils className="w-4 h-4"/> : <Store className="w-4 h-4"/>}
+                             {order.delivery_type === 'delivery' ? <Bike className="w-5 h-5"/> : 
+                              order.delivery_type === 'mesa' ? <Utensils className="w-5 h-5"/> : <Store className="w-5 h-5"/>}
                           </div>
                           <div>
-                            <p className="text-sm font-medium leading-none text-slate-900 dark:text-slate-100">
-                              {order.customer_name || `Cliente #${order.id.slice(0,4)}`}
+                            <p className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-none">
+                              {order.customer_name || (order.table_number ? `Mesa ${order.table_number}` : 'Cliente')}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                              {order.order_items?.map((i: any) => `${i.quantity}x ${i.name}`).join(', ')}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {order.order_items?.length || 0} itens • {formatTime(order.created_at)}
                             </p>
-                            <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-normal border-slate-200 dark:border-slate-700 text-slate-500">
-                                  {order.status}
-                                </Badge>
-                                <span className="text-[10px] text-slate-400">{formatTime(order.created_at)}</span>
-                            </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                           <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                             {formatCurrency(order.total_price)}
-                           </span>
+                        <div className="flex items-center gap-2">
+                           <Badge variant="outline" className={`text-[10px] h-5 px-2 uppercase tracking-wide border-0 ${
+                             order.status === 'cancelado' ? 'bg-red-100 text-red-700' :
+                             order.status === 'enviado' ? 'bg-green-100 text-green-700' :
+                             'bg-slate-100 text-slate-600'
+                           }`}>
+                              {order.status}
+                           </Badge>
                         </div>
                       </div>
                     ))
@@ -324,66 +274,53 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* --- LINHA 3: MIX DE VENDAS & ESTOQUE --- */}
+        {/* COLUNA LATERAL: MIX E ESTOQUE */}
         <div className="md:col-span-1 lg:col-span-3 space-y-6">
-            
-            {/* Gráfico Mix */}
             <Card className="dark:bg-zinc-900 dark:border-zinc-800">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Mix de Vendas</CardTitle>
-                </CardHeader>
-                <CardContent className="h-[180px]">
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Volume por Canal</CardTitle></CardHeader>
+                <CardContent className="h-[220px]"> {/* Aumentei levemente a altura para caber a legenda */}
                     {salesMix.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie
-                                    data={salesMix}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={50}
-                                    outerRadius={70}
-                                    paddingAngle={5}
+                                <Pie 
+                                    data={salesMix} 
+                                    cx="50%" 
+                                    cy="45%" // Subi um pouco o gráfico para dar espaço à legenda
+                                    innerRadius={50} 
+                                    outerRadius={70} 
+                                    paddingAngle={5} 
                                     dataKey="value"
                                 >
-                                    {salesMix.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.fill} strokeWidth={0} />
-                                    ))}
+                                    {salesMix.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} strokeWidth={0} />)}
                                 </Pie>
-                                <Tooltip 
-                                    formatter={(value: number) => [`${value} pedidos`, '']}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                <Tooltip formatter={(value: number) => [`${value} pedidos`, '']} contentStyle={{ borderRadius: '8px' }} />
+                                {/* Legenda Adicionada */}
+                                <Legend 
+                                    verticalAlign="bottom" 
+                                    height={36} 
+                                    iconType="circle"
+                                    formatter={(value) => <span className="text-xs text-slate-600 dark:text-slate-400 font-medium ml-1">{value}</span>}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
-                    ) : (
-                        <div className="h-full flex items-center justify-center text-muted-foreground text-xs">Sem dados suficientes</div>
-                    )}
+                    ) : <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Sem dados</div>}
                 </CardContent>
             </Card>
 
-            {/* Produtos Indisponíveis (Alerta de Estoque) */}
             <Card className="dark:bg-zinc-900 dark:border-zinc-800 border-l-4 border-l-red-400">
                 <CardHeader className="pb-2 pt-4">
-                    <CardTitle className="text-sm flex items-center gap-2 text-red-600 dark:text-red-400">
-                        <PauseCircle className="w-4 h-4" />
-                        Pausados / Indisponíveis
-                    </CardTitle>
+                    <CardTitle className="text-sm flex items-center gap-2 text-red-600 dark:text-red-400"><PauseCircle className="w-4 h-4" /> Itens Pausados</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {unavailableProducts.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic">Todo o cardápio está ativo.</p>
-                    ) : (
+                    {unavailableProducts.length === 0 ? <p className="text-xs text-muted-foreground italic">Cardápio 100% ativo.</p> : (
                         <div className="flex flex-wrap gap-2">
-                            {unavailableProducts.map(prod => (
-                                <Badge key={prod.id} variant="secondary" className="text-[10px] bg-red-50 text-red-700 hover:bg-red-100 border-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/50">
-                                    {prod.name}
-                                </Badge>
+                            {unavailableProducts.map((prod: any) => (
+                                <Badge key={prod.id} variant="secondary" className="text-[10px] bg-red-50 text-red-700 border-red-100">{prod.name}</Badge>
                             ))}
                         </div>
                     )}
                 </CardContent>
             </Card>
-
         </div>
       </div>
     </div>

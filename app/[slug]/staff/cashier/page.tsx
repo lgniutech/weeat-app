@@ -8,10 +8,12 @@ import {
   cancelOrderAction,
   getStoreIdBySlug
 } from "@/app/actions/cashier"
+import { validateStaffPin } from "@/app/actions/staff"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input" 
 import { useToast } from "@/hooks/use-toast"
 import { 
   Sheet, 
@@ -31,7 +33,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   Loader2, RefreshCw, ShoppingBag, Utensils, 
-  Trash2, DollarSign, CreditCard, Banknote, Smartphone, User
+  Trash2, DollarSign, CreditCard, Banknote, Smartphone, User, AlertTriangle, Lock
 } from "lucide-react"
 
 export default function CashierPage({ params }: { params: { slug: string } }) {
@@ -42,9 +44,16 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
   // UI States
   const [activeTab, setActiveTab] = useState("tables")
   const [selectedTable, setSelectedTable] = useState<any | null>(null)
+  
+  // Modais de Pagamento e PIN
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState("debit_card")
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // Estado para Confirmação com PIN
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false)
+  const [pinCode, setPinCode] = useState("")
+  const [pinError, setPinError] = useState(false)
 
   const { toast } = useToast()
 
@@ -81,17 +90,77 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
       setSelectedTable(table)
   }
 
-  const handleCloseTable = async () => {
-      if (!storeId || !selectedTable) return
-      setIsProcessing(true)
+  // Função para abrir o modal de pagamento (verifica pendências antes)
+  const requestPayment = () => {
+      if (!selectedTable) return;
       
-      const result = await closeTableAction(storeId, selectedTable.table_number, paymentMethod)
+      // Verifica se existem pedidos que NÃO estão entregues (pendente, aceito, preparando, pronto)
+      const hasPendingOrders = selectedTable.orders.some((o: any) => 
+        ['aceito', 'preparando', 'pronto', 'enviado'].includes(o.status)
+      );
+
+      // Se tiver pendência, abre o modal de PIN primeiro
+      // Se não, abre direto o de pagamento
+      // *NOTA: O modal de pagamento chamará handleCloseTable, que chamará o PIN se necessário.
+      // Aqui simplificamos: o usuário clica em "Receber", abre modal de pgto.
+      // Ao confirmar pgto no modal, verificamos pendências.
+      setIsPaymentModalOpen(true);
+  }
+
+  const handleCloseTableAttempt = async () => {
+      if (!storeId || !selectedTable) return
+
+      // Verifica pendências
+      const hasPendingOrders = selectedTable.orders.some((o: any) => 
+        ['aceito', 'preparando', 'pronto', 'enviado'].includes(o.status)
+      );
+
+      if (hasPendingOrders) {
+          // Fecha modal de pagamento e abre o de PIN
+          setIsPaymentModalOpen(false)
+          setPinCode("")
+          setPinError(false)
+          setIsPinModalOpen(true)
+      } else {
+          // Sem pendências, prossegue direto
+          await executeCloseTable(false) // False = Normal close
+      }
+  }
+
+  const handlePinConfirm = async () => {
+      if (!pinCode || pinCode.length < 4) {
+          setPinError(true)
+          return
+      }
+
+      setIsProcessing(true)
+      const isValid = await validateStaffPin(storeId!, pinCode)
+      
+      if (isValid) {
+          await executeCloseTable(true) // True = Forced (Desistance)
+          setIsPinModalOpen(false)
+      } else {
+          setPinError(true)
+          toast({ title: "Erro", description: "PIN inválido.", variant: "destructive" })
+      }
+      setIsProcessing(false)
+  }
+
+  // MODIFICADO: Adicionado parâmetro isForced
+  const executeCloseTable = async (isForced: boolean) => {
+      setIsProcessing(true)
+      const result = await closeTableAction(storeId!, selectedTable.table_number, paymentMethod, isForced)
       
       if (result.success) {
-          toast({ title: "Mesa Fechada", description: `Mesa ${selectedTable.table_number} liberada.` })
+          if(isForced) {
+            toast({ title: "Cancelado", description: "Mesa encerrada como desistência.", className: "bg-red-600 text-white" })
+          } else {
+            toast({ title: "Mesa Fechada", description: `Mesa ${selectedTable.table_number} liberada.` })
+          }
+          
           setIsPaymentModalOpen(false)
           setSelectedTable(null)
-          const res = await getCashierDataAction(storeId)
+          const res = await getCashierDataAction(storeId!)
           setData(res)
       } else {
           toast({ title: "Erro", description: result.error, variant: "destructive" })
@@ -133,11 +202,25 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
 
-  // Helper para verificar se o nome é "real" ou genérico
   const getCustomerName = (table: any) => {
       if (!table.customer_name) return null;
       if (table.customer_name.toLowerCase().includes("mesa")) return null;
       return table.customer_name;
+  }
+
+  const getPaymentIcon = (method: string) => {
+      switch(method) {
+          case 'pix': return <Smartphone className="w-3 h-3" />;
+          case 'money': return <Banknote className="w-3 h-3" />;
+          default: return <CreditCard className="w-3 h-3" />;
+      }
+  }
+
+  const getPaymentLabel = (method: string) => {
+      const labels: Record<string, string> = {
+          'credit_card': 'Crédito', 'debit_card': 'Débito', 'pix': 'Pix', 'money': 'Dinheiro'
+      }
+      return labels[method] || method;
   }
 
   if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-8 h-8 text-muted-foreground" /></div>
@@ -175,16 +258,26 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                         {data.tables.map((table) => {
                             const clientName = getCustomerName(table);
+                            // Checa se tem itens não entregues para aviso visual
+                            const hasPending = table.orders.some((o: any) => ['aceito', 'preparando', 'pronto', 'enviado'].includes(o.status));
+                            
                             return (
                                 <Card 
                                     key={table.table_number} 
-                                    className="cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all group bg-white dark:bg-zinc-900 overflow-hidden relative"
+                                    className={`cursor-pointer hover:shadow-md transition-all group bg-white dark:bg-zinc-900 overflow-hidden relative ${hasPending ? 'border-orange-200 dark:border-orange-900' : 'hover:border-emerald-500'}`}
                                     onClick={() => handleOpenTable(table)}
                                 >
-                                    {/* Se tiver nome do cliente, mostra um badge visual */}
+                                    {/* Badge de Cliente */}
                                     {clientName && (
                                         <div className="absolute top-0 right-0 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-bl-lg text-[10px] font-bold flex items-center gap-1">
                                             <User className="w-3 h-3" /> {clientName.split(' ')[0]}
+                                        </div>
+                                    )}
+
+                                    {/* Indicador de Pendência */}
+                                    {hasPending && !clientName && (
+                                        <div className="absolute top-0 right-0 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-bl-lg text-[10px] font-bold">
+                                            Em Preparo
                                         </div>
                                     )}
 
@@ -217,7 +310,7 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                 )}
             </TabsContent>
 
-            {/* ABA RETIRADA */}
+            {/* ABA RETIRADA (Mantida igual) */}
             <TabsContent value="pickups">
                  <div className="bg-white dark:bg-zinc-900 rounded-xl border shadow-sm overflow-hidden">
                     {data.pickups.length === 0 ? (
@@ -244,7 +337,6 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                                                 </Badge>
                                                 <span className="text-xs font-mono font-bold">{formatCurrency(order.total_price)}</span>
                                                 
-                                                {/* Exibição da Forma de Pagamento */}
                                                 {order.payment_method && (
                                                     <div className="flex items-center gap-1 text-xs text-muted-foreground bg-slate-100 dark:bg-zinc-800 border px-2 py-0.5 rounded-md ml-1">
                                                         {getPaymentIcon(order.payment_method)}
@@ -293,7 +385,13 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                                         <div className="flex justify-between items-start mb-2">
                                             <div>
                                                 <p className="text-xs font-bold text-muted-foreground">Pedido #{order.id.slice(0,4)}</p>
-                                                <p className="text-[10px] text-muted-foreground">{new Date(order.created_at).toLocaleTimeString()}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-[10px] text-muted-foreground">{new Date(order.created_at).toLocaleTimeString()}</p>
+                                                    {/* Mostra status se não estiver entregue */}
+                                                    {order.status !== 'entregue' && (
+                                                        <Badge variant="secondary" className="text-[10px] h-4 px-1">{order.status}</Badge>
+                                                    )}
+                                                </div>
                                             </div>
                                             <Button 
                                                 variant="ghost" 
@@ -322,7 +420,7 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                                 <span className="text-muted-foreground text-sm">Total a Receber</span>
                                 <span className="text-3xl font-bold text-emerald-600">{formatCurrency(selectedTable.total)}</span>
                             </div>
-                            <Button size="lg" className="w-full font-bold" onClick={() => setIsPaymentModalOpen(true)}>
+                            <Button size="lg" className="w-full font-bold" onClick={requestPayment}>
                                 RECEBER E LIBERAR MESA
                             </Button>
                         </SheetFooter>
@@ -347,7 +445,6 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                 <div className="grid gap-4 py-4">
                     <p className="text-xs font-medium text-muted-foreground mb-2">Selecione a forma de pagamento:</p>
                     <div className="grid grid-cols-2 gap-4">
-                        {/* Opções de Pagamento (Mantidas iguais para brevidade) */}
                         {['credit_card', 'debit_card', 'pix', 'money'].map((method) => (
                             <div 
                                 key={method}
@@ -363,11 +460,54 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Cancelar</Button>
-                    <Button onClick={handleCloseTable} disabled={isProcessing} className="w-full sm:w-auto">
+                    {/* Botão confirma e tenta fechar (vai pro PIN se necessário) */}
+                    <Button onClick={handleCloseTableAttempt} disabled={isProcessing} className="w-full sm:w-auto">
                         {isProcessing ? "Processando..." : "Confirmar Pagamento"}
                     </Button>
                 </DialogFooter>
             </DialogContent>
+        </Dialog>
+
+        {/* MODAL DE CONFIRMAÇÃO COM PIN */}
+        <Dialog open={isPinModalOpen} onOpenChange={setIsPinModalOpen}>
+             <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                    <div className="flex items-center gap-2 text-amber-600">
+                        <AlertTriangle className="w-6 h-6" />
+                        <DialogTitle>Atenção!</DialogTitle>
+                    </div>
+                    <DialogDescription className="pt-2">
+                        Esta mesa possui pedidos que ainda estão <strong>na cozinha</strong> ou <strong>não foram servidos</strong>.
+                        <br/><br/>
+                        Deseja reportar <strong>DESISTÊNCIA</strong> e cancelar?
+                    </DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-muted-foreground"/>
+                            Digite sua Chave de Acesso (PIN)
+                        </label>
+                        <Input 
+                            type="password" 
+                            placeholder="****" 
+                            maxLength={4} 
+                            className={`text-center text-2xl tracking-[0.5em] font-bold ${pinError ? 'border-red-500' : ''}`}
+                            value={pinCode}
+                            onChange={(e) => { setPinCode(e.target.value); setPinError(false); }}
+                        />
+                        {pinError && <p className="text-xs text-red-500 font-medium">PIN incorreto. Tente novamente.</p>}
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsPinModalOpen(false)}>Cancelar</Button>
+                    <Button variant="destructive" onClick={handlePinConfirm} disabled={isProcessing}>
+                        {isProcessing ? "Verificando..." : "Confirmar Cancelamento"}
+                    </Button>
+                </DialogFooter>
+             </DialogContent>
         </Dialog>
     </div>
   )

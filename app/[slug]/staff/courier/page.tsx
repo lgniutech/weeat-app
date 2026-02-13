@@ -8,7 +8,6 @@ import { logoutStaffAction } from "@/app/actions/staff"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { 
@@ -22,9 +21,10 @@ import {
   PackageCheck,
   ExternalLink,
   AlertCircle,
-  Clock
+  Clock,
+  ChefHat,
+  Banknote
 } from "lucide-react"
-import { cn } from "@/lib/utils"
 
 export default function CourierPage({ params }: { params: { slug: string } }) {
   const [orders, setOrders] = useState<any[]>([])
@@ -74,8 +74,17 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
 
     startTransition(async () => {
       const res = await updateCourierStatusAction(selectedOrders, "em_rota")
+      
       if (res.success) {
         toast({ title: "Remessa Iniciada!", description: "Boa entrega!", className: "bg-blue-600 text-white" })
+        setSelectedOrders([])
+        fetchOrders()
+      } else {
+        toast({ 
+          title: "Atenção!", 
+          description: res.message || "Erro ao coletar pedidos.", 
+          variant: "destructive" 
+        })
         setSelectedOrders([])
         fetchOrders()
       }
@@ -105,8 +114,6 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
       return
     }
 
-    // No mundo real, usaríamos uma API de otimização. Aqui simulamos a rota.
-    // Para Google Maps, usamos multi-destinos
     if (type === 'google') {
       const origin = "current+location"
       const destination = encodeURIComponent(addresses[addresses.length - 1])
@@ -114,13 +121,48 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
       const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=bicycling`
       window.open(url, '_blank')
     } else {
-      // Waze não suporta múltiplos waypoints nativamente via URL simples tão bem quanto o Google, 
-      // então abrimos o primeiro destino ou uma busca.
       const url = `https://waze.com/ul?q=${encodeURIComponent(addresses[0])}&navigate=yes`
       window.open(url, '_blank')
     }
   }
 
+  // --- FUNÇÕES DE AUXÍLIO E CÁLCULO ---
+  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
+
+  const calculateChange = (changeFor: string, total: number) => {
+    if (!changeFor) return null;
+    
+    // Tenta limpar a string para pegar apenas o número
+    // Ex: "R$ 50,00" -> "50.00"
+    const cleanStr = changeFor.toString().replace(/[^0-9.,]/g, "").replace(",", ".");
+    const changeForNum = parseFloat(cleanStr);
+    
+    if (isNaN(changeForNum)) return null;
+    
+    const change = changeForNum - total;
+    return change > 0 ? change : 0;
+  }
+
+  // Componente de Exibição do Troco
+  const ChangeDisplay = ({ order }: { order: any }) => {
+    if (!order.change_for) return null;
+    
+    const changeValue = calculateChange(order.change_for, order.total_price);
+    
+    return (
+        <div className="mt-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 px-3 py-2 rounded-md text-xs border border-yellow-200 dark:border-yellow-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+            <div className="flex items-center gap-1.5">
+                <Banknote className="w-4 h-4 text-yellow-600" />
+                <span className="font-bold text-sm">Troco: {changeValue !== null ? formatCurrency(changeValue) : "?"}</span>
+            </div>
+            <span className="text-[10px] text-yellow-700 dark:text-yellow-400 opacity-80">
+                (Levar p/ {order.change_for})
+            </span>
+        </div>
+    )
+  }
+
+  const kitchenOrders = orders.filter(o => ['aceito', 'preparando'].includes(o.status))
   const readyOrders = orders.filter(o => o.status === 'enviado')
   const inRouteOrders = orders.filter(o => o.status === 'em_rota')
 
@@ -148,6 +190,46 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
       </header>
 
       <main className="flex-1 p-4 md:p-6 space-y-6">
+        
+        {/* SEÇÃO: NA COZINHA (VISUALIZAÇÃO APENAS) */}
+        {kitchenOrders.length > 0 && (
+          <section className="opacity-75 grayscale-[0.3]">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                <ChefHat className="w-5 h-5" />
+                Na Cozinha ({kitchenOrders.length})
+              </h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {kitchenOrders.map(order => (
+                <Card key={order.id} className="p-4 flex items-start gap-4 border-dashed bg-slate-50 dark:bg-slate-900/50">
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <span className="font-bold text-sm text-slate-500">#{order.id.slice(-4)}</span>
+                      <Badge variant="outline" className="text-[10px] uppercase">{order.status}</Badge>
+                    </div>
+                    <h3 className="font-semibold mt-1 text-slate-600 dark:text-slate-400">{order.customer_name}</h3>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                      <MapPin className="w-3 h-3" /> {order.address || "Endereço não informado"}
+                    </p>
+                    
+                    <ChangeDisplay order={order} />
+
+                    <div className="mt-2 pt-2 border-t flex justify-between items-center">
+                      <span className="font-bold text-slate-500">{formatCurrency(order.total_price)}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
+
         {/* SEÇÃO: COLETAR PEDIDOS */}
         <section>
           <div className="flex items-center justify-between mb-4">
@@ -180,8 +262,11 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                     <MapPin className="w-3 h-3" /> {order.address || "Endereço não informado"}
                   </p>
+
+                  <ChangeDisplay order={order} />
+
                   <div className="mt-3 pt-3 border-t flex justify-between items-center">
-                    <span className="font-bold text-blue-600">R$ {order.total_price.toFixed(2)}</span>
+                    <span className="font-bold text-blue-600">{formatCurrency(order.total_price)}</span>
                     <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                       <Clock className="w-3 h-3" /> {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </span>
@@ -230,9 +315,12 @@ export default function CourierPage({ params }: { params: { slug: string } }) {
                       )}
                     </div>
                     <p className="text-sm mt-1 text-slate-600 dark:text-slate-400">{order.address}</p>
+                    
+                    <ChangeDisplay order={order} />
+
                     <div className="flex gap-4 mt-2">
                        <span className="text-xs font-medium">Pagamento: {order.payment_method}</span>
-                       <span className="text-xs font-bold text-orange-600">Total: R$ {order.total_price.toFixed(2)}</span>
+                       <span className="text-xs font-bold text-orange-600">Total: {formatCurrency(order.total_price)}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

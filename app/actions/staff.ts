@@ -63,6 +63,19 @@ export async function getStaffSession() {
   try { return JSON.parse(session.value); } catch { return null; }
 }
 
+// --- VALIDAR PIN (AÇÃO DE SEGURANÇA) ---
+export async function validateStaffPin(storeId: string, pin: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("staff_users")
+    .select("id")
+    .eq("store_id", storeId)
+    .eq("pin", pin)
+    .single();
+
+  return !!data;
+}
+
 // --- CRUD DE FUNCIONÁRIOS ---
 
 export async function getStoreStaffAction(storeId: string) {
@@ -96,7 +109,6 @@ export async function createStaffAction(storeId: string, name: string, role: str
       if (error.message.includes("unique_pin_per_store")) {
         return { error: "Este PIN já está sendo usado por outro funcionário." };
       }
-      // Se for erro de constraint (role inválida), o 'message' vai avisar
       console.error("Erro Supabase:", error); 
       throw new Error(error.message);
     }
@@ -106,7 +118,6 @@ export async function createStaffAction(storeId: string, name: string, role: str
 
   } catch (err: any) {
     console.error("Erro Create Staff:", err);
-    // Retorna o erro real para o toast do front-end
     return { error: err.message || "Erro ao criar funcionário." };
   }
 }
