@@ -123,7 +123,7 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
           setIsPinModalOpen(true)
       } else {
           // Sem pendências, prossegue direto
-          await executeCloseTable()
+          await executeCloseTable(false) // False = Normal close
       }
   }
 
@@ -137,7 +137,7 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
       const isValid = await validateStaffPin(storeId!, pinCode)
       
       if (isValid) {
-          await executeCloseTable()
+          await executeCloseTable(true) // True = Forced (Desistance)
           setIsPinModalOpen(false)
       } else {
           setPinError(true)
@@ -146,12 +146,18 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
       setIsProcessing(false)
   }
 
-  const executeCloseTable = async () => {
+  // MODIFICADO: Adicionado parâmetro isForced
+  const executeCloseTable = async (isForced: boolean) => {
       setIsProcessing(true)
-      const result = await closeTableAction(storeId!, selectedTable.table_number, paymentMethod)
+      const result = await closeTableAction(storeId!, selectedTable.table_number, paymentMethod, isForced)
       
       if (result.success) {
-          toast({ title: "Mesa Fechada", description: `Mesa ${selectedTable.table_number} liberada.` })
+          if(isForced) {
+            toast({ title: "Cancelado", description: "Mesa encerrada como desistência.", className: "bg-red-600 text-white" })
+          } else {
+            toast({ title: "Mesa Fechada", description: `Mesa ${selectedTable.table_number} liberada.` })
+          }
+          
           setIsPaymentModalOpen(false)
           setSelectedTable(null)
           const res = await getCashierDataAction(storeId!)
@@ -473,7 +479,7 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                     <DialogDescription className="pt-2">
                         Esta mesa possui pedidos que ainda estão <strong>na cozinha</strong> ou <strong>não foram servidos</strong>.
                         <br/><br/>
-                        Deseja realmente continuar e fechar a mesa?
+                        Deseja reportar <strong>DESISTÊNCIA</strong> e cancelar?
                     </DialogDescription>
                 </DialogHeader>
                 
@@ -498,7 +504,7 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                 <DialogFooter>
                     <Button variant="ghost" onClick={() => setIsPinModalOpen(false)}>Cancelar</Button>
                     <Button variant="destructive" onClick={handlePinConfirm} disabled={isProcessing}>
-                        {isProcessing ? "Verificando..." : "Forçar Fechamento"}
+                        {isProcessing ? "Verificando..." : "Confirmar Cancelamento"}
                     </Button>
                 </DialogFooter>
              </DialogContent>
