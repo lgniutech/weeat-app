@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info, Loader2 } from "lucide-react"
+import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info, Loader2, Banknote } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge" 
@@ -76,6 +76,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [deliveryMethod, setDeliveryMethod] = useState<'entrega' | 'retirada' | 'mesa'>('entrega')
   const [tableNumber, setTableNumber] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState('pix')
+  const [changeFor, setChangeFor] = useState("") // NOVO: Estado para o troco
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
   
@@ -301,6 +302,12 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     if (!customerName) { toast({ title: "Faltou o nome", description: "Informe seu nome.", variant: "destructive" }); return; }
     if (deliveryMethod !== 'mesa' && !customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
     
+    // Validação de Troco
+    if (deliveryMethod === 'entrega' && paymentMethod === 'money' && !changeFor) {
+        toast({ title: "Troco necessário", description: "Informe para quanto precisa de troco.", variant: "destructive" });
+        return;
+    }
+
     if (deliveryMethod === 'entrega') {
         if (!customerAddress.street || !customerAddress.number || !customerAddress.zipCode) { 
             toast({ title: "Endereço incompleto", description: "Preencha todos os campos do endereço.", variant: "destructive" }); 
@@ -322,6 +329,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
       address: fullAddress,
       tableNumber: tableNumber || undefined,
       paymentMethod: paymentMethod,
+      changeFor: paymentMethod === 'money' ? changeFor : undefined, // NOVO: Envia o troco
       totalPrice: total,
       items: cart.map(item => ({
         product_name: item.name,
@@ -343,6 +351,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
           setAppliedCoupon(null)
           setIsCartOpen(false)
           setOrderSuccess({ id: result.orderId, total: savedTotal }) 
+          setChangeFor("") // Limpa o troco
         } else {
           toast({ title: "Erro", description: result.error, variant: "destructive" })
         }
@@ -815,6 +824,24 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                                 <SelectItem value="money">Dinheiro</SelectItem>
                                             </SelectContent>
                                         </Select>
+
+                                        {/* NOVO: Campo de Troco */}
+                                        {deliveryMethod === 'entrega' && paymentMethod === 'money' && (
+                                            <div className="animate-in fade-in slide-in-from-top-1 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded-lg">
+                                                <Label className="text-xs mb-1 block font-bold text-yellow-800 dark:text-yellow-200 flex items-center gap-1">
+                                                    <Banknote className="w-3 h-3" /> Troco para quanto?
+                                                </Label>
+                                                <Input 
+                                                    placeholder="Ex: 50,00" 
+                                                    value={changeFor} 
+                                                    onChange={e => setChangeFor(e.target.value)} 
+                                                    className="bg-white dark:bg-black"
+                                                />
+                                                <p className="text-[10px] text-muted-foreground mt-1">
+                                                    Total: {formatCurrency(total)}. O entregador levará troco.
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </>
                             )}
