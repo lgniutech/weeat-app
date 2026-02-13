@@ -5,15 +5,13 @@ import { startOfDay, endOfDay } from "date-fns";
 
 export type DashboardData = {
   metrics: {
-    revenue: number;
     ordersCount: number;
-    avgTicket: number;
     cancelledCount: number;
   };
   statusCounts: {
-    queue: number;      // Corrigido: 'aceito' (Fila da Cozinha)
-    preparing: number;  // Corrigido: 'preparando' (Em produção)
-    ready: number;      // Corrigido: 'enviado' (Expedição/Pronto)
+    queue: number;      // 'aceito'
+    preparing: number;  // 'preparando'
+    ready: number;      // 'enviado'/'pronto'
   };
   salesMix: {
     name: string;
@@ -34,13 +32,12 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
   try {
     if (!storeId) throw new Error("ID da loja não fornecido.");
 
-    // 1. Busca Pedidos do Dia
+    // 1. Busca Pedidos do Dia (Sem somar totais monetários)
     const { data: orders, error: ordersError } = await supabase
       .from("orders")
       .select(`
         id,
         status,
-        total_price,
         delivery_type,
         created_at,
         customer_name,
@@ -65,37 +62,33 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
       .eq("is_available", false)
       .limit(10); 
 
-    // --- Processamento Lógico (Alinhado com a Staff) ---
+    // --- Processamento Operacional ---
     
     const normalize = (s: string) => s?.toLowerCase().trim() || '';
 
     const validOrders = orders?.filter(o => normalize(o.status) !== 'cancelado') || [];
     const cancelledOrders = orders?.filter(o => normalize(o.status) === 'cancelado') || [];
 
-    // Métricas Financeiras
-    const revenue = validOrders.reduce((acc, o) => acc + (o.total_price || 0), 0);
     const ordersCount = validOrders.length;
-    const avgTicket = ordersCount > 0 ? revenue / ordersCount : 0;
 
-    // --- O FUNIL OPERACIONAL REAL ---
-    // 1. FILA (A Fazer na Cozinha): Status 'aceito'
-    // O pedido entra como 'aceito' no `createOrderAction`
+    // --- O FUNIL OPERACIONAL ---
+    
+    // 1. FILA (A Fazer): Status 'aceito' ou 'pendente'
     const queueCount = validOrders.filter(o => 
-      normalize(o.status) === 'aceito' || normalize(o.status) === 'pendente'
+      ['aceito', 'pendente'].includes(normalize(o.status))
     ).length;
     
-    // 2. PREPARANDO (Fogo): Status 'preparando'
+    // 2. COZINHA (No Fogo): Status 'preparando'
     const preparingCount = validOrders.filter(o => 
       ['preparando', 'em_preparo'].includes(normalize(o.status))
     ).length;
     
-    // 3. PRONTO/EXPEDIÇÃO: Status 'enviado' (Saiu da cozinha)
-    // O `advanceKitchenStatusAction` move para 'enviado'
+    // 3. EXPEDIÇÃO (Pronto): Status 'enviado' ou 'pronto'
     const readyCount = validOrders.filter(o => 
       ['enviado', 'pronto', 'saiu_para_entrega'].includes(normalize(o.status))
     ).length;
 
-    // Mix de Vendas
+    // Mix de Canais (Por volume, não valor)
     const deliveryCount = validOrders.filter(o => o.delivery_type === 'delivery').length;
     const retiradaCount = validOrders.filter(o => o.delivery_type === 'retirada').length;
     const mesaCount = validOrders.filter(o => o.delivery_type === 'mesa').length;
@@ -108,9 +101,7 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
 
     return {
       metrics: {
-        revenue,
         ordersCount,
-        avgTicket,
         cancelledCount: cancelledOrders.length
       },
       statusCounts: {
