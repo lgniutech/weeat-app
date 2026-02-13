@@ -277,7 +277,8 @@ export async function validateCouponUiAction(storeId: string, code: string, curr
 }
 
 // --- 6. FECHAR MESA ---
-export async function closeTableAction(tableNum: string, storeId: string) {
+// MODIFICADO: Adicionado parâmetro isForced
+export async function closeTableAction(tableNum: string, storeId: string, isForced: boolean = false) {
   const supabase = await createClient();
   const { data: orders } = await supabase.from("orders")
       .select("id")
@@ -289,10 +290,24 @@ export async function closeTableAction(tableNum: string, storeId: string) {
   if (!orders || orders.length === 0) return { success: true };
   const ids = orders.map(o => o.id);
 
+  // Se forçado (PIN), marca como cancelado/não pago. Se não, concluído/cartão.
+  const newStatus = isForced ? "cancelado" : "concluido";
+  const paymentMethod = isForced ? "nao_pago" : "card_machine";
+  const cancelReason = isForced ? "Desistência (Fechamento forçado via PIN)" : null;
+
   await supabase.from("orders")
-      .update({ status: "concluido", payment_method: "card_machine", last_status_change: new Date().toISOString() })
+      .update({ 
+          status: newStatus, 
+          payment_method: paymentMethod, 
+          cancellation_reason: cancelReason,
+          last_status_change: new Date().toISOString() 
+      })
       .in("id", ids);
-  await supabase.from("order_items").update({ status: 'concluido' }).in("order_id", ids);
+
+  // Atualiza também os itens
+  await supabase.from("order_items")
+      .update({ status: newStatus })
+      .in("order_id", ids);
 
   revalidatePath("/");
   return { success: true };
