@@ -223,7 +223,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
           setPinError(false);
           setIsPinDialogOpen(true);
       } else {
-          await executeCloseTable();
+          await executeCloseTable(false); // False = Normal close
       }
   }
 
@@ -236,19 +236,24 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       const isValid = await validateStaffPin(storeId!, pinCode);
       if (isValid) {
           setIsPinDialogOpen(false);
-          await executeCloseTable();
+          await executeCloseTable(true); // True = Forced (Desistance)
       } else {
           setPinError(true);
           toast({ title: "PIN Inválido", variant: "destructive" });
       }
   }
 
-  const executeCloseTable = async () => {
+  // MODIFICADO: Adicionado parâmetro isForced
+  const executeCloseTable = async (isForced: boolean) => {
     startTransition(async () => {
-        const res = await closeTableAction(selectedTable.id, storeId!)
+        const res = await closeTableAction(selectedTable.id, storeId!, isForced)
         if (res?.success) {
             setIsManagementOpen(false)
-            toast({ title: "Mesa Encerrada!", className: "bg-green-600 text-white" })
+            if (isForced) {
+                toast({ title: "Mesa Encerrada (Desistência)", description: "Itens cancelados.", className: "bg-red-600 text-white" })
+            } else {
+                toast({ title: "Mesa Encerrada!", className: "bg-green-600 text-white" })
+            }
             fetchTables()
         } else {
             toast({ title: "Erro", description: res?.error, variant: "destructive" })
@@ -495,7 +500,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                   <DialogDescription className="pt-2">
                       Existem pedidos na cozinha ou não servidos.
                       <br/>
-                      Insira seu PIN para forçar o fechamento.
+                      Insira seu PIN para reportar <strong>Desistência</strong> e cancelar.
                   </DialogDescription>
               </DialogHeader>
               <div className="py-2">
@@ -511,7 +516,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
               </div>
               <DialogFooter>
                   <Button variant="ghost" onClick={() => setIsPinDialogOpen(false)}>Cancelar</Button>
-                  <Button variant="destructive" onClick={handlePinConfirm} disabled={isPending}>Confirmar</Button>
+                  <Button variant="destructive" onClick={handlePinConfirm} disabled={isPending}>Confirmar Cancelamento</Button>
               </DialogFooter>
           </DialogContent>
       </Dialog>
