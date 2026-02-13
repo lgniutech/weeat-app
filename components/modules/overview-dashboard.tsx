@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useTransition, useCallback } from "react"
 import { getDashboardOverviewAction, type DashboardData } from "@/app/actions/dashboard"
-import { createClient } from "@/lib/supabase/client" // Importante para Realtime
+import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { toast } from "sonner"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { 
   Activity, 
@@ -20,17 +19,16 @@ import {
   Sun,
   Cloud,
   CloudLightning,
-  Snowflake,
-  Wind,
   MapPin,
   ChefHat,
   CheckCircle2,
-  Clock
+  Clock,
+  ArrowRight
 } from "lucide-react"
 
 export function OverviewDashboard({ store }: { store: any }) {
   const defaultData: DashboardData = {
-    metrics: { revenue: 0, ordersCount: 0, avgTicket: 0, cancelledCount: 0 },
+    metrics: { ordersCount: 0, cancelledCount: 0 },
     statusCounts: { queue: 0, preparing: 0, ready: 0 },
     salesMix: [],
     recentOrders: [],
@@ -54,30 +52,24 @@ export function OverviewDashboard({ store }: { store: any }) {
     })
   }, [store.id])
 
-  // Efeito de Carga Inicial + Realtime (Igual da Cozinha)
   useEffect(() => {
     loadData()
     
-    // Configura Realtime para atualizar o Dashboard instantaneamente
+    // Configura Realtime
     const supabase = createClient()
     const channel = supabase
       .channel('dashboard_updates')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` },
-        () => {
-          // Quando houver qualquer mudança em pedidos, recarrega os dados
-          loadData()
-        }
+        () => loadData()
       )
       .subscribe()
 
-    return () => {
-        supabase.removeChannel(channel)
-    }
+    return () => { supabase.removeChannel(channel) }
   }, [loadData, store.id])
 
-  // --- 2. Busca de Clima (Mantido original) ---
+  // --- 2. Busca de Clima ---
   useEffect(() => {
     async function fetchStoreWeather() {
         if (!store.city && !store.settings?.location?.lat) return;
@@ -111,7 +103,6 @@ export function OverviewDashboard({ store }: { store: any }) {
   }, [store.city, store.state, store.settings]);
 
   // Helpers
-  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
   const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
   // Ícones de Clima
@@ -129,7 +120,7 @@ export function OverviewDashboard({ store }: { store: any }) {
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* LINHA 1: RESUMO VITAL */}
+      {/* LINHA 1: VITAL (4 Colunas) */}
       <div className="grid gap-4 md:grid-cols-4">
         
         {/* KPI: PEDIDOS ATIVOS */}
@@ -150,17 +141,17 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* KPI: FATURAMENTO HOJE */}
-        <Card className="dark:bg-zinc-900 dark:border-zinc-800">
+        {/* KPI: CANCELAMENTOS (Operacional) */}
+        <Card className={`${metrics.cancelledCount > 0 ? 'border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900' : 'dark:bg-zinc-900 dark:border-zinc-800'}`}>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Faturamento Hoje</CardTitle>
-            <span className="text-xs text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full font-bold">
-                Ticket Médio: {formatCurrency(metrics.avgTicket)}
-            </span>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados</CardTitle>
+            <XCircle className={`w-4 h-4 ${metrics.cancelledCount > 0 ? 'text-red-500' : 'text-slate-300'}`} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatCurrency(metrics.revenue)}</div>
-            <p className="text-xs text-muted-foreground mt-1">{metrics.ordersCount} pedidos finalizados/ativos</p>
+            <div className={`text-2xl font-bold ${metrics.cancelledCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100'}`}>
+              {metrics.cancelledCount}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">pedidos hoje</p>
           </CardContent>
         </Card>
 
@@ -184,7 +175,7 @@ export function OverviewDashboard({ store }: { store: any }) {
         </Card>
       </div>
 
-      {/* LINHA 2: FLUXO DE PEDIDOS (ALINHADO COM A COZINHA) */}
+      {/* LINHA 2: FLUXO DE PEDIDOS (Funil) */}
       <div className="grid gap-4 md:grid-cols-3">
         
         {/* 1. FILA (ACEITO) */}
@@ -192,12 +183,12 @@ export function OverviewDashboard({ store }: { store: any }) {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-slate-600 dark:text-slate-400">
               <AlertCircle className={`w-4 h-4 ${statusCounts.queue > 0 ? 'text-blue-500 animate-pulse' : 'text-slate-300'}`} />
-              Fila de Pedidos (A Fazer)
+              Fila (A Fazer)
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{statusCounts.queue}</div>
-            <p className="text-xs text-muted-foreground">aguardando início do preparo</p>
+            <p className="text-xs text-muted-foreground">aguardando cozinha</p>
           </CardContent>
         </Card>
 
@@ -206,12 +197,12 @@ export function OverviewDashboard({ store }: { store: any }) {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-slate-600 dark:text-slate-400">
               <Utensils className={`w-4 h-4 ${statusCounts.preparing > 0 ? 'text-orange-500' : 'text-slate-300'}`} />
-              Em Preparo (Cozinha)
+              Em Preparo
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{statusCounts.preparing}</div>
-            <p className="text-xs text-muted-foreground">sendo produzidos agora</p>
+            <p className="text-xs text-muted-foreground">sendo produzidos</p>
           </CardContent>
         </Card>
 
@@ -225,27 +216,27 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{statusCounts.ready}</div>
-            <p className="text-xs text-muted-foreground">aguardando entrega/mesa</p>
+            <p className="text-xs text-muted-foreground">entregando ou mesa</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* LINHA 3: DETALHES */}
+      {/* LINHA 3: DETALHES OPERACIONAIS */}
       <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-7">
         
-        {/* LISTA DE PEDIDOS RECENTES */}
+        {/* LISTA DE PEDIDOS (Sem Valores) */}
         <Card className="md:col-span-2 lg:col-span-4 dark:bg-zinc-900 dark:border-zinc-800 h-[400px] flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Store className="w-5 h-5 text-primary" /> Últimos Pedidos
+              <Store className="w-5 h-5 text-primary" /> Entrada de Pedidos
             </CardTitle>
-            <CardDescription>Fluxo de entrada em tempo real</CardDescription>
+            <CardDescription>Monitoramento em tempo real</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 p-0 overflow-hidden">
              <ScrollArea className="h-[300px] px-6">
                 <div className="space-y-4 pt-2">
                   {recentOrders.length === 0 ? (
-                    <div className="text-center py-10 text-muted-foreground">Nenhum pedido hoje.</div>
+                    <div className="text-center py-10 text-muted-foreground">Nenhuma atividade recente.</div>
                   ) : (
                     recentOrders.map((order) => (
                       <div key={order.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
@@ -267,9 +258,13 @@ export function OverviewDashboard({ store }: { store: any }) {
                             </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                           <span className="block text-sm font-bold text-slate-800 dark:text-slate-200">{formatCurrency(order.total_price)}</span>
-                           <Badge variant="outline" className="text-[10px] h-5 px-1.5 uppercase tracking-wide border-0 bg-slate-100 dark:bg-slate-800 text-slate-500">
+                        <div className="flex items-center gap-2">
+                           {/* Status simplificado */}
+                           <Badge variant="outline" className={`text-[10px] h-5 px-2 uppercase tracking-wide border-0 ${
+                             order.status === 'cancelado' ? 'bg-red-100 text-red-700' :
+                             order.status === 'enviado' ? 'bg-green-100 text-green-700' :
+                             'bg-slate-100 text-slate-600'
+                           }`}>
                               {order.status}
                            </Badge>
                         </div>
@@ -281,10 +276,10 @@ export function OverviewDashboard({ store }: { store: any }) {
           </CardContent>
         </Card>
 
-        {/* GRÁFICOS E ESTOQUE */}
+        {/* COLUNA LATERAL: MIX E ESTOQUE */}
         <div className="md:col-span-1 lg:col-span-3 space-y-6">
             <Card className="dark:bg-zinc-900 dark:border-zinc-800">
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Mix de Canais</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Volume por Canal</CardTitle></CardHeader>
                 <CardContent className="h-[180px]">
                     {salesMix.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
