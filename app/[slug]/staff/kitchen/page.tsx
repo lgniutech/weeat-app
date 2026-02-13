@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { 
   ChefHat, 
   Clock, 
@@ -22,28 +24,9 @@ import {
   Sun,
   Moon,
   Layers,
-  List,
-  Plus
+  List
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-// --- UTILS ---
-
-// Função auxiliar para evitar erros de JSON parse e garantir array
-function safeParse(data: any) {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if (typeof data === 'string') {
-    try {
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed)) return parsed;
-      return [];
-    } catch (e) {
-      return [];
-    }
-  }
-  return []; 
-}
 
 // --- TIMER ---
 function OrderTimer({ createdAt }: { createdAt: string }) {
@@ -71,116 +54,9 @@ function OrderTimer({ createdAt }: { createdAt: string }) {
   )
 }
 
-// --- SUB-COMPONENTES VISUAIS ---
-
-function OrderCard({ order, onAction, btnText, btnColor, icon, isCooking }: any) {
-  const isTable = order.delivery_type === 'mesa';
-  const displayTitle = isTable 
-    ? (order.table_number ? `Mesa ${order.table_number}` : "Mesa ?") 
-    : `${order.delivery_type === 'delivery' ? 'Delivery' : 'Retirada'} - ${order.customer_name}`;
-
-  return (
-    <Card className={cn("border shadow-sm overflow-hidden transition-all", isCooking ? "border-orange-200 dark:border-orange-900 ring-1 ring-orange-100 dark:ring-orange-900" : "border-slate-200")}>
-      <div className="p-4">
-        <div className="flex justify-between items-start mb-3">
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-              #{order.id.slice(0,4)} • {isTable ? 'Local' : 'Viagem'}
-            </span>
-            <span className={cn(
-                "font-black text-slate-800 dark:text-slate-100 leading-none", 
-                isTable ? "text-2xl" : "text-lg" 
-            )}>
-              {displayTitle}
-            </span>
-          </div>
-          <OrderTimer createdAt={order.created_at} />
-        </div>
-        <div className="h-px bg-slate-100 dark:bg-slate-800 my-3" />
-        
-        <div className="space-y-4">
-          {order.order_items.filter((i:any) => i.status !== 'concluido').map((item: any) => {
-            const removed = safeParse(item.removed_ingredients);
-            const addons = safeParse(item.selected_addons);
-
-            return (
-              <div key={item.id} className="text-sm">
-                <div className="flex gap-3 items-start">
-                  <span className="font-bold bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-900 dark:text-slate-100 h-fit min-w-[32px] text-center text-sm">
-                    {item.quantity}
-                  </span>
-                  <div className="flex-1">
-                      <p className="font-bold text-slate-700 dark:text-slate-200 text-base leading-tight">
-                        {item.name}
-                      </p>
-
-                      {/* AREA DE DETALHES (Adicionais, Remoções, Obs) */}
-                      <div className="flex flex-col gap-1.5 mt-1.5">
-                        
-                        {/* 1. ADICIONAIS (EM VERDE, SEM PREÇO) */}
-                        {addons.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                             {addons.map((addon: any, idx: number) => {
-                               // CORREÇÃO: Verifica se é objeto ou string para evitar Crash
-                               const addonName = (typeof addon === 'object' && addon?.name) ? addon.name : addon;
-                               
-                               return (
-                                 <span key={idx} className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 px-1.5 rounded uppercase flex items-center">
-                                   <Plus className="w-2.5 h-2.5 mr-0.5" /> ADICIONAL DE {addonName}
-                                 </span>
-                               )
-                             })}
-                          </div>
-                        )}
-
-                        {/* 2. INGREDIENTES REMOVIDOS (EM VERMELHO) */}
-                        {removed.length > 0 && (
-                           <div className="flex flex-wrap gap-1">
-                             {removed.map((ing: any, idx: number) => {
-                               // CORREÇÃO: Verifica se é objeto ou string para evitar Crash
-                               const ingName = (typeof ing === 'object' && ing?.name) ? ing.name : ing;
-
-                               return (
-                                 <span key={idx} className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900 px-1.5 rounded uppercase">
-                                   SEM {ingName}
-                                 </span>
-                               )
-                             })}
-                           </div>
-                        )}
-
-                        {/* 3. OBSERVAÇÕES */}
-                        {item.observation && (
-                            <div className="flex items-start gap-1 text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-100 dark:border-yellow-900 px-1.5 py-0.5 rounded text-[11px] font-bold w-fit">
-                                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                                <span className="uppercase">{item.observation}</span>
-                            </div>
-                        )}
-                      </div>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-          
-          {/* Aviso se houver itens parciais */}
-          {order.order_items.some((i:any) => i.status === 'concluido') && (
-              <p className="text-[10px] text-green-600 font-bold text-center bg-green-50 dark:bg-green-950/20 p-1 rounded">
-                Alguns itens deste pedido já foram finalizados
-              </p>
-          )}
-        </div>
-      </div>
-      <div className={cn("p-3 border-t cursor-pointer flex items-center justify-center font-bold text-white transition-colors select-none active:scale-[0.98]", btnColor)} onClick={onAction}>
-        {icon}{btnText}
-      </div>
-    </Card>
-  )
-}
-
 function KitchenContent({ params }: { params: { slug: string } }) {
   const [orders, setOrders] = useState<any[]>([])
-  const [viewMode, setViewMode] = useState<'orders' | 'items'>('orders')
+  const [viewMode, setViewMode] = useState<'orders' | 'items'>('orders') // ESTADO DO MODO DE VISÃO
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const { toast } = useToast()
@@ -234,10 +110,11 @@ function KitchenContent({ params }: { params: { slug: string } }) {
 
   // --- AÇÃO: ITEM INDIVIDUAL ---
   const handleAdvanceItem = (itemId: string, orderId: string) => {
+      // Remove visualmente o item da lista imediatamente
       setOrders(prev => prev.map(o => ({
           ...o,
           order_items: o.order_items.filter((i: any) => i.id !== itemId)
-      })).filter(o => o.order_items.length > 0)) 
+      })).filter(o => o.order_items.length > 0)) // Remove pedido se ficar vazio
 
       startTransition(async () => {
           const res = await advanceItemStatusAction(itemId, orderId)
@@ -249,17 +126,17 @@ function KitchenContent({ params }: { params: { slug: string } }) {
       })
   }
 
-  // Filtros
+  // Lógica de Filtro para Colunas (Modo Pedidos)
   const todoOrders = orders.filter(o => o.status === 'aceito')
   const cookingOrders = orders.filter(o => o.status === 'preparando')
 
-  // Flatten para visão de itens
+  // Lógica de "Flatten" (Modo Itens) - Transforma lista de pedidos em lista de itens
   const allItems = orders.flatMap(order => 
     order.order_items
-        .filter((item: any) => item.status !== 'concluido') 
+        .filter((item: any) => item.status !== 'concluido') // Esconde itens já feitos
         .map((item: any) => ({
             ...item,
-            _order: order 
+            _order: order // Mantém referência ao pedido pai para mostrar mesa/tempo
         }))
   ).sort((a, b) => new Date(a._order.created_at).getTime() - new Date(b._order.created_at).getTime())
 
@@ -275,12 +152,14 @@ function KitchenContent({ params }: { params: { slug: string } }) {
           <div>
             <h1 className="font-bold text-xl text-slate-800 dark:text-slate-100 leading-none">Cozinha</h1>
             <p className="text-xs text-muted-foreground mt-1">
-                {viewMode === 'orders' ? 'Visão por Pedido' : 'Visão por Item (Produção)'}
+                {viewMode === 'orders' ? 'Visão por Pedido' : 'Visão por Item (Linha de Produção)'}
             </p>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
+            
+            {/* SWITCH DE MODO DE VISÃO */}
             <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
                 <Button 
                     size="sm" 
@@ -361,8 +240,8 @@ function KitchenContent({ params }: { params: { slug: string } }) {
 
         {/* MODO 2: VISÃO DE ITENS INDIVIDUAIS */}
         {viewMode === 'items' && (
-            <div className="max-w-6xl mx-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="max-w-5xl mx-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {allItems.length === 0 && (
                          <div className="col-span-full py-20 text-center opacity-50">
                              <Utensils className="w-16 h-16 mx-auto mb-4 text-slate-300" />
@@ -371,13 +250,9 @@ function KitchenContent({ params }: { params: { slug: string } }) {
                          </div>
                     )}
                     
-                    {allItems.map((item: any, idx: number) => {
-                        const removed = safeParse(item.removed_ingredients);
-                        const addons = safeParse(item.selected_addons);
-
-                        return (
-                        <Card key={`${item.id}-${idx}`} className="overflow-hidden border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-all animate-in zoom-in-50 duration-300 flex flex-col">
-                             <div className="p-4 flex flex-col gap-3 flex-1">
+                    {allItems.map((item: any, idx: number) => (
+                        <Card key={`${item.id}-${idx}`} className="overflow-hidden border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-all animate-in zoom-in-50 duration-300">
+                             <div className="p-4 flex flex-col gap-3">
                                  {/* Header do Item */}
                                  <div className="flex justify-between items-start">
                                      <div>
@@ -389,7 +264,7 @@ function KitchenContent({ params }: { params: { slug: string } }) {
                                      <OrderTimer createdAt={item._order.created_at} />
                                  </div>
                                  
-                                 {/* Conteúdo do Item */}
+                                 {/* Nome do Item Gigante */}
                                  <div>
                                      <div className="flex items-baseline gap-2">
                                         <span className="text-2xl font-black text-slate-800 dark:text-slate-100">{item.quantity}x</span>
@@ -397,69 +272,88 @@ function KitchenContent({ params }: { params: { slug: string } }) {
                                      </div>
                                      
                                      {/* Modificadores */}
-                                     <div className="mt-3 space-y-2">
-                                        
-                                        {/* ADICIONAIS (EM VERDE, SEM PREÇO) */}
-                                        {addons.length > 0 && (
+                                     <div className="mt-2 space-y-1">
+                                        {item.removed_ingredients && JSON.parse(item.removed_ingredients).length > 0 && (
                                             <div className="flex flex-wrap gap-1">
-                                                {addons.map((addon: any, i: number) => {
-                                                    // CORREÇÃO: Verifica se é objeto ou string
-                                                    const addonName = (typeof addon === 'object' && addon?.name) ? addon.name : addon;
-                                                    
-                                                    return (
-                                                        <span key={i} className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 px-1.5 py-0.5 rounded uppercase flex items-center">
-                                                            <Plus className="w-2.5 h-2.5 mr-0.5"/> ADICIONAL DE {addonName}
-                                                        </span>
-                                                    )
-                                                })}
+                                                {JSON.parse(item.removed_ingredients).map((ing: string, i: number) => (
+                                                <span key={i} className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-1 rounded uppercase">
+                                                    SEM {ing}
+                                                </span>
+                                                ))}
                                             </div>
                                         )}
-
-                                        {/* Removidos (Em Vermelho) */}
-                                        {removed.length > 0 && (
-                                            <div className="flex flex-wrap gap-1">
-                                                {removed.map((ing: any, i: number) => {
-                                                    // CORREÇÃO: Verifica se é objeto ou string
-                                                    const ingName = (typeof ing === 'object' && ing?.name) ? ing.name : ing;
-
-                                                    return (
-                                                        <span key={i} className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900 px-1.5 py-0.5 rounded uppercase">
-                                                            SEM {ingName}
-                                                        </span>
-                                                    )
-                                                })}
-                                            </div>
-                                        )}
-
-                                        {/* Observações */}
                                         {item.observation && (
-                                            <div className="flex items-start gap-1 p-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-xs rounded border border-yellow-100 dark:border-yellow-900/50 font-bold">
+                                            <div className="flex items-start gap-1 p-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-xs rounded border border-yellow-100 dark:border-yellow-900/50">
                                                 <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                                                <span className="uppercase">{item.observation}</span>
+                                                <span className="uppercase font-bold">{item.observation}</span>
                                             </div>
                                         )}
                                      </div>
                                  </div>
-                             </div>
-                             
-                             {/* Botão no rodapé do card */}
-                             <div className="p-3 mt-auto">
-                                <Button 
-                                    className="w-full font-bold bg-slate-900 hover:bg-green-600 text-white transition-colors"
+
+                                 <Button 
+                                    className="w-full mt-2 font-bold bg-slate-900 hover:bg-green-600 text-white transition-colors"
                                     onClick={() => handleAdvanceItem(item.id, item._order.id)}
-                                >
+                                 >
                                     <CheckCircle2 className="w-4 h-4 mr-2" />
                                     MARCAR PRONTO
-                                </Button>
+                                 </Button>
                              </div>
                         </Card>
-                    )})}
+                    ))}
                 </div>
             </div>
         )}
 
       </main>
     </div>
+  )
+}
+
+// --- SUB-COMPONENTES VISUAIS ---
+
+function OrderCard({ order, onAction, btnText, btnColor, icon, isCooking }: any) {
+  return (
+    <Card className={cn("border shadow-sm overflow-hidden transition-all", isCooking ? "border-orange-200 dark:border-orange-900 ring-1 ring-orange-100 dark:ring-orange-900" : "border-slate-200")}>
+      <div className="p-4">
+        <div className="flex justify-between items-start mb-3">
+          <div>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+              {order.delivery_type === 'mesa' ? 'Mesa' : 'Pedido'}
+            </span>
+            <span className="text-3xl font-black text-slate-800 dark:text-slate-100 leading-none">
+              {order.table_number || "?"}
+            </span>
+          </div>
+          <OrderTimer createdAt={order.created_at} />
+        </div>
+        <div className="h-px bg-slate-100 dark:bg-slate-800 my-3" />
+        <div className="space-y-3">
+          {order.order_items.filter((i:any) => i.status !== 'concluido').map((item: any) => (
+            <div key={item.id} className="text-sm">
+              <div className="flex gap-3">
+                <span className="font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-900 dark:text-slate-100 h-fit min-w-[32px] text-center">{item.quantity}</span>
+                <div className="flex-1">
+                    <p className="font-semibold text-slate-700 dark:text-slate-200 text-base leading-tight">{item.name}</p>
+                    {item.observation && (
+                        <div className="mt-1 flex items-start gap-1 text-yellow-700 bg-yellow-50 border border-yellow-100 px-1.5 py-0.5 rounded text-xs font-medium">
+                            <AlertTriangle className="w-3 h-3 mt-0.5" /><span className="uppercase">{item.observation}</span>
+                        </div>
+                    )}
+                </div>
+              </div>
+            </div>
+          ))}
+          {/* Se alguns itens já foram concluídos individualmente, mostra aviso */}
+          {order.order_items.some((i:any) => i.status === 'concluido') && (
+              <p className="text-[10px] text-green-600 font-bold text-center bg-green-50 p-1 rounded">Alguns itens já finalizados</p>
+          )}
+        </div>
+      </div>
+      <div className={cn("p-3 border-t cursor-pointer flex items-center justify-center font-bold text-white transition-colors select-none active:scale-[0.98]", btnColor)} onClick={onAction}>
+        {icon}{btnText}
+      </div>
+    </Card>
   )
 }
 

@@ -7,7 +7,7 @@ export async function getKitchenOrdersAction(storeId: string) {
   const supabase = await createClient();
 
   // Busca pedidos da cozinha (Aceitos ou Preparando)
-  // Garante a seleção de removed_ingredients e selected_addons
+  // Agora trazendo também o 'status' de cada item individualmente
   const { data, error } = await supabase
     .from("orders")
     .select(`
@@ -40,6 +40,7 @@ export async function getKitchenOrdersAction(storeId: string) {
   return data || [];
 }
 
+// --- NOVO: AÇÃO PARA AVANÇAR PEDIDO COMPLETO (MANTIDA) ---
 export async function advanceKitchenStatusAction(orderId: string, currentStatus: string) {
   const supabase = await createClient();
   let nextStatus = "";
@@ -49,7 +50,9 @@ export async function advanceKitchenStatusAction(orderId: string, currentStatus:
   else return { success: false, message: "Status inválido." };
 
   const now = new Date().toISOString();
-  // Se o pedido for finalizado (enviado), marca todos os itens como concluídos também
+
+  // Atualiza o pedido e TODOS os itens dentro dele para o mesmo status
+  // Isso garante sincronia se o cozinheiro usar o modo "Pedido Completo"
   const itemStatus = nextStatus === 'enviado' ? 'concluido' : 'preparando';
 
   const { error } = await supabase
@@ -59,6 +62,7 @@ export async function advanceKitchenStatusAction(orderId: string, currentStatus:
 
   if (error) return { success: false, message: "Erro ao atualizar pedido." };
 
+  // Atualiza todos os itens também
   await supabase
     .from("order_items")
     .update({ status: itemStatus })
@@ -68,10 +72,11 @@ export async function advanceKitchenStatusAction(orderId: string, currentStatus:
   return { success: true };
 }
 
+// --- NOVO: AÇÃO PARA AVANÇAR ITEM INDIVIDUAL ---
 export async function advanceItemStatusAction(itemId: string, orderId: string) {
     const supabase = await createClient();
 
-    // 1. Marca o item específico como concluído
+    // 1. Marca o item como 'concluido'
     const { error } = await supabase
         .from("order_items")
         .update({ status: 'concluido' })
@@ -79,7 +84,7 @@ export async function advanceItemStatusAction(itemId: string, orderId: string) {
 
     if (error) return { success: false, message: "Erro ao atualizar item." };
 
-    // 2. Verifica se todos os itens desse pedido já foram concluídos
+    // 2. Verifica se TODOS os itens desse pedido já estão concluídos
     const { data: items } = await supabase
         .from("order_items")
         .select("status")
@@ -87,12 +92,12 @@ export async function advanceItemStatusAction(itemId: string, orderId: string) {
 
     const allDone = items?.every(i => i.status === 'concluido');
 
-    // 3. Se todos estiverem prontos, finaliza o pedido inteiro
+    // 3. Se tudo estiver pronto, finaliza o pedido inteiro automaticamente!
     if (allDone) {
         await supabase
             .from("orders")
             .update({ 
-                status: 'enviado', 
+                status: 'enviado', // Manda para o garçom
                 last_status_change: new Date().toISOString()
             })
             .eq("id", orderId);
@@ -100,12 +105,12 @@ export async function advanceItemStatusAction(itemId: string, orderId: string) {
         return { success: true, orderFinished: true };
     }
 
-    // Caso contrário, garante que o pedido está "preparando" (caso estivesse apenas "aceito")
+    // Se não terminou tudo, garante que o pedido esteja pelo menos "preparando"
     await supabase
         .from("orders")
         .update({ status: 'preparando' })
         .eq("id", orderId)
-        .eq("status", "aceito"); 
+        .eq("status", "aceito"); // Só muda se ainda estava como 'novo'
 
     revalidatePath("/");
     return { success: true, orderFinished: false };
