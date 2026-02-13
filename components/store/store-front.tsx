@@ -37,6 +37,8 @@ import { createOrderAction, getTableOrdersAction } from "@/app/actions/order"
 import { validateCouponAction, incrementCouponUsageAction } from "@/app/actions/coupons"
 import { useTheme } from "next-themes"
 import Image from "next/image"
+// IMPORTAÇÃO DAS NOVAS FUNÇÕES DE FORMATAÇÃO
+import { formatPhone, formatCep, formatOnlyLetters } from "@/lib/utils"
 
 interface StoreFrontProps {
   store: any
@@ -736,10 +738,21 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
                         <div className="space-y-4">
                             <h3 className="font-semibold text-sm">Seus Dados</h3>
-                            <Input placeholder="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                            {/* NOME COM FILTRO DE LETRAS */}
+                            <Input 
+                                placeholder="Seu Nome" 
+                                value={customerName} 
+                                onChange={e => setCustomerName(formatOnlyLetters(e.target.value))} 
+                            />
                             
-                            {/* CORREÇÃO: Telefone agora visível para todos (inclusive mesa) */}
-                            <Input placeholder="WhatsApp" type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+                            {/* TELEFONE COM MÁSCARA */}
+                            <Input 
+                                placeholder="WhatsApp" 
+                                type="tel" 
+                                value={customerPhone} 
+                                onChange={e => setCustomerPhone(formatPhone(e.target.value))} 
+                                maxLength={15}
+                            />
 
                             {!tableNumber && (
                                 <>
@@ -761,10 +774,11 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                                 <Label className="text-xs mb-1 block">CEP (Apenas números)</Label>
                                                 <div className="flex gap-2">
                                                     <Input 
-                                                        placeholder="00000000" 
-                                                        maxLength={8}
+                                                        placeholder="00000-000" 
+                                                        maxLength={9}
                                                         value={customerAddress.zipCode} 
-                                                        onChange={e => setCustomerAddress({...customerAddress, zipCode: e.target.value})}
+                                                        // APLICAÇÃO DA MÁSCARA DE CEP
+                                                        onChange={e => setCustomerAddress({...customerAddress, zipCode: formatCep(e.target.value)})}
                                                         onBlur={handleCheckCep}
                                                         className={cepError ? "border-red-500 pr-10" : "pr-10"}
                                                     />
