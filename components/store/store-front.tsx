@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info, Loader2 } from "lucide-react"
+import { Search, ShoppingBag, Plus, Minus, Trash2, MapPin, Clock, Ticket, X, Utensils, Receipt, AlertCircle, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge" 
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import {
   Sheet,
@@ -30,8 +31,6 @@ import {
 } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { createOrderAction, getTableOrdersAction } from "@/app/actions/order"
 import { validateCouponAction, incrementCouponUsageAction } from "@/app/actions/coupons"
@@ -44,31 +43,10 @@ interface StoreFrontProps {
   products: any[]
 }
 
-// Interface para item do carrinho
-interface CartItem {
-  cartItemId: string
-  id: string
-  name: string
-  price: number // Preço unitário (base + adicionais)
-  quantity: number
-  removedIngredients: string[] // Nomes ou IDs
-  selectedAddons: string[] // IDs
-  selectedAddonsDetails: any[] // Objetos completos para exibição
-  note: string
-  image_url?: string
-}
-
 export function StoreFront({ store, categories, products = [] }: StoreFrontProps) {
-  const [cart, setCart] = useState<CartItem[]>([])
+  const [cart, setCart] = useState<any[]>([])
   const [isCartOpen, setIsCartOpen] = useState(false)
-  
-  // Produto Selecionado e Personalização
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
-  const [quantity, setQuantity] = useState(1)
-  const [removedIngredients, setRemovedIngredients] = useState<string[]>([])
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([])
-  const [orderNote, setOrderNote] = useState("")
-
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("todos")
   
@@ -78,20 +56,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
   const [paymentMethod, setPaymentMethod] = useState('pix')
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
-  
-  // Endereço e Validação de CEP
-  const [customerAddress, setCustomerAddress] = useState({ 
-    zipCode: "",
-    street: "", 
-    number: "", 
-    complement: "", 
-    neighborhood: "", 
-    city: store.city || "",
-    state: store.state || ""
-  })
-  const [cepLoading, setCepLoading] = useState(false)
-  const [cepError, setCepError] = useState<string | null>(null)
-
+  const [customerAddress, setCustomerAddress] = useState({ street: "", number: "", complement: "", neighborhood: "", city: store.city || "" })
   const [isOrderPlacing, setIsOrderPlacing] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState<{id: string, total: number} | null>(null)
 
@@ -125,68 +90,26 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     if (store.theme_mode) setTheme(store.theme_mode)
   }, [])
 
-  // Resetar estados ao abrir modal de produto
-  useEffect(() => {
-    if (selectedProduct) {
-        setQuantity(1)
-        setRemovedIngredients([])
-        setSelectedAddons([])
-        setOrderNote("")
-    }
-  }, [selectedProduct])
-
-  // Lógica de Adicionar ao Carrinho (Com personalização)
-  const handleAddToCart = () => {
-    if (!selectedProduct) return
-
-    // Calcular preço base + adicionais
-    const addonsTotal = selectedAddons.reduce((acc, addonId) => {
-        const addon = selectedProduct.addons.find((a: any) => a.id === addonId)
-        return acc + (addon ? Number(addon.price) : 0)
-    }, 0)
-    
-    const unitPrice = Number(selectedProduct.price) + addonsTotal
-
-    // Pegar detalhes dos adicionais para exibição
-    const addonsDetails = selectedAddons.map(id => selectedProduct.addons.find((a: any) => a.id === id)).filter(Boolean)
-
-    // Pegar nomes dos ingredientes removidos para exibição/envio
-    const removedDetails = removedIngredients.map(id => {
-        const ing = selectedProduct.ingredients.find((i: any) => i.id === id)
-        return ing ? ing.name : null
-    }).filter(Boolean) as string[]
-
-    const newItem: CartItem = {
-        cartItemId: crypto.randomUUID(), // ID único para o item no carrinho
-        id: selectedProduct.id,
-        name: selectedProduct.name,
-        image_url: selectedProduct.image_url,
-        price: unitPrice,
-        quantity: quantity,
-        removedIngredients: removedDetails,
-        selectedAddons: selectedAddons, // IDs
-        selectedAddonsDetails: addonsDetails,
-        note: orderNote
-    }
-
-    setCart(prev => [...prev, newItem])
+  const addToCart = (product: any) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.id === product.id)
+      if (existing) return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
+      return [...prev, { ...product, quantity: 1 }]
+    })
     setIsCartOpen(true)
     setSelectedProduct(null)
-    toast({ title: "Adicionado!", description: `${quantity}x ${selectedProduct.name} na sacola.` })
+    toast({ title: "Adicionado!", description: `${product.name} foi para a sacola.` })
   }
 
-  const updateQuantity = (cartItemId: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-        if (item.cartItemId === cartItemId) {
-            return { ...item, quantity: Math.max(0, item.quantity + delta) }
-        }
-        return item
-    }).filter(item => item.quantity > 0))
+  const updateQuantity = (itemId: string, delta: number) => {
+    setCart(prev => prev.map(item => item.id === itemId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter(item => item.quantity > 0))
   }
 
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   
   // --- LÓGICA DO PEDIDO MÍNIMO E CUPOM ---
+  
+  // 1. Remove cupom automaticamente se o subtotal cair abaixo do mínimo do cupom
   useEffect(() => {
     if (appliedCoupon && appliedCoupon.min_order_value > 0) {
         if (subtotal < appliedCoupon.min_order_value) {
@@ -201,9 +124,13 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     }
   }, [subtotal, appliedCoupon]);
 
+  // 2. Cálculo do desconto com proteção extra
   const discountAmount = useMemo(() => {
     if (!appliedCoupon) return 0;
+    
+    // Proteção extra: se por algum motivo o cupom estiver aplicado mas o valor for baixo, retorna 0
     if (appliedCoupon.min_order_value && subtotal < appliedCoupon.min_order_value) return 0;
+
     return appliedCoupon.type === 'percent' ? (subtotal * appliedCoupon.value) / 100 : appliedCoupon.value;
   }, [subtotal, appliedCoupon]);
 
@@ -218,56 +145,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     const matchesCategory = selectedCategory === "todos" || p.category_id === selectedCategory
     return matchesSearch && matchesCategory && p.is_available
   })
-
-  // --- FUNÇÃO DE NORMALIZAÇÃO DE STRING ---
-  const normalizeString = (str: string) => {
-    return str
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-  }
-
-  // --- BUSCA DE CEP ---
-  const handleCheckCep = async () => {
-    const cep = customerAddress.zipCode.replace(/\D/g, "");
-    if (cep.length !== 8) return;
-
-    setCepLoading(true);
-    setCepError(null);
-
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await response.json();
-
-      if (data.erro) {
-        setCepError("CEP não encontrado.");
-        setCepLoading(false);
-        return;
-      }
-
-      // Validação de Cidade
-      const storeCityNormalized = normalizeString(store.city || "");
-      const cepCityNormalized = normalizeString(data.localidade || "");
-
-      if (storeCityNormalized !== cepCityNormalized) {
-        setCepError(`Desculpe, só entregamos em ${store.city}.`);
-        setCustomerAddress(prev => ({ ...prev, street: "", neighborhood: "", state: "", city: "" }));
-      } else {
-        setCustomerAddress(prev => ({
-          ...prev,
-          street: data.logradouro,
-          neighborhood: data.bairro,
-          city: data.localidade,
-          state: data.uf
-        }));
-        setCepError(null);
-      }
-    } catch (error) {
-      setCepError("Erro ao buscar CEP.");
-    } finally {
-      setCepLoading(false);
-    }
-  };
 
   // --- AÇÕES MESA ---
   const handleOpenBill = async () => {
@@ -289,29 +166,22 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
     if (cart.length === 0) return
     
     if (isBelowMin) {
-        toast({ title: "Pedido Mínimo", description: `Faltam ${formatCurrency(remainingForMin)} para finalizar.`, variant: "destructive" });
-        return;
-    }
-
-    if (deliveryMethod === 'entrega' && cepError) {
-        toast({ title: "Endereço Inválido", description: "Verifique o CEP antes de continuar.", variant: "destructive" });
+        toast({ 
+            title: "Pedido Mínimo não atingido", 
+            description: `Faltam ${formatCurrency(remainingForMin)} para finalizar.`, 
+            variant: "destructive" 
+        });
         return;
     }
 
     if (!customerName) { toast({ title: "Faltou o nome", description: "Informe seu nome.", variant: "destructive" }); return; }
     if (deliveryMethod !== 'mesa' && !customerPhone) { toast({ title: "Faltou o telefone", description: "Informe seu WhatsApp.", variant: "destructive" }); return; }
-    
-    if (deliveryMethod === 'entrega') {
-        if (!customerAddress.street || !customerAddress.number || !customerAddress.zipCode) { 
-            toast({ title: "Endereço incompleto", description: "Preencha todos os campos do endereço.", variant: "destructive" }); 
-            return; 
-        }
-    }
+    if (deliveryMethod === 'entrega' && !customerAddress.street) { toast({ title: "Endereço incompleto", description: "Informe a rua.", variant: "destructive" }); return; }
 
     setIsOrderPlacing(true)
 
     const fullAddress = deliveryMethod === 'entrega' 
-        ? `${customerAddress.street}, ${customerAddress.number} - ${customerAddress.neighborhood} (${customerAddress.city}/${customerAddress.state}) CEP: ${customerAddress.zipCode} ${customerAddress.complement ? ` - ${customerAddress.complement}` : ''}`
+        ? `${customerAddress.street}, ${customerAddress.number} - ${customerAddress.neighborhood} (${customerAddress.city}) ${customerAddress.complement ? ` - ${customerAddress.complement}` : ''}`
         : deliveryMethod === 'mesa' ? `Mesa: ${tableNumber}` : 'Retirada no Balcão';
 
     const orderData = {
@@ -327,9 +197,8 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         product_name: item.name,
         quantity: item.quantity,
         unit_price: item.price,
-        removed_ingredients: item.removedIngredients,
-        selected_addons: item.selectedAddonsDetails.map(a => `${a.name} (+${formatCurrency(a.price)})`),
-        notes: item.note
+        removed_ingredients: [],
+        selected_addons: [] 
       })),
       notes: appliedCoupon ? `Cupom: ${appliedCoupon.code}` : undefined
     }
@@ -383,25 +252,6 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
 
-  const storeAddress = [
-    store.street,
-    store.number,
-    store.neighborhood ? `- ${store.neighborhood}` : null,
-    store.city ? `- ${store.city}` : null,
-    store.state
-  ].filter(Boolean).join(", ").replace(", -", " -");
-
-  // Calculo do preço total no modal
-  const modalTotalPrice = useMemo(() => {
-    if(!selectedProduct) return 0;
-    const addonsTotal = selectedAddons.reduce((acc, addonId) => {
-        const addon = selectedProduct.addons.find((a: any) => a.id === addonId)
-        return acc + (addon ? Number(addon.price) : 0)
-    }, 0)
-    return (Number(selectedProduct.price) + addonsTotal) * quantity
-  }, [selectedProduct, selectedAddons, quantity])
-
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20 font-sans">
       
@@ -421,15 +271,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 )}
                 <div>
                     <h1 className="font-bold text-lg leading-tight">{store.name}</h1>
-                    
-                    {storeAddress && (
-                      <div className="flex items-start gap-1 text-xs text-muted-foreground mt-1 max-w-[200px] sm:max-w-md">
-                          <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
-                          <span className="leading-tight">{storeAddress}</span>
-                      </div>
-                    )}
-
-                    <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-2 mt-1">
+                    <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-2">
                         <div className="flex items-center gap-1"><Clock className="w-3 h-3" /> <span>Aberto</span></div>
                         
                         {minOrderValue > 0 && !tableNumber && (
@@ -469,14 +311,14 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                 <Input placeholder="Buscar produtos..." className="pl-9 bg-slate-100 dark:bg-zinc-800 border-none" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
              </div>
              
-             <div className="w-full overflow-x-auto pb-2 scrollbar-hide">
-                <div className="flex gap-2 min-w-max">
+             <ScrollArea className="w-full whitespace-nowrap pb-2">
+                <div className="flex gap-2">
                     <Button variant={selectedCategory === "todos" ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory("todos")} className="rounded-full">Todos</Button>
                     {categories.map(cat => (
                         <Button key={cat.id} variant={selectedCategory === cat.id ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(cat.id)} className="rounded-full">{cat.name}</Button>
                     ))}
                 </div>
-             </div>
+             </ScrollArea>
           </div>
         </div>
       </div>
@@ -502,112 +344,28 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
         </div>
       </div>
 
-      {/* MODAL PRODUTO (CORRIGIDO SCROLL) */}
+      {/* MODAL PRODUTO */}
       <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
-        <DialogContent className="sm:max-w-[500px] p-0 flex flex-col max-h-[90vh]">
+        <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden">
             {selectedProduct && (
                 <>
-                   {/* ÁREA COM SCROLL NATIVO */}
-                   <div className="flex-1 overflow-y-auto">
-                        {selectedProduct.image_url && (
-                            <div className="w-full h-48 relative shrink-0">
-                                <Image src={selectedProduct.image_url} alt={selectedProduct.name} fill className="object-cover" />
-                            </div>
-                        )}
-                        <div className="p-6 space-y-6">
-                            <DialogHeader>
-                                <DialogTitle className="text-xl">{selectedProduct.name}</DialogTitle>
-                                <DialogDescription className="text-base mt-2">{selectedProduct.description || "Sem descrição."}</DialogDescription>
-                            </DialogHeader>
-
-                            {/* INGREDIENTES (3 COLUNAS) */}
-                            {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Ingredientes</h4>
-                                    <p className="text-xs text-muted-foreground">Desmarque para remover.</p>
-                                    <div className="grid grid-cols-3 gap-2"> 
-                                        {selectedProduct.ingredients.map((ing: any) => (
-                                            <div key={ing.id} className="flex items-center space-x-2 border rounded-md p-2 bg-slate-50 dark:bg-zinc-800/50">
-                                                <Checkbox 
-                                                    id={`ing-${ing.id}`} 
-                                                    checked={!removedIngredients.includes(ing.id)}
-                                                    onCheckedChange={(checked) => {
-                                                        if (!checked) {
-                                                            setRemovedIngredients([...removedIngredients, ing.id])
-                                                        } else {
-                                                            setRemovedIngredients(removedIngredients.filter(id => id !== ing.id))
-                                                        }
-                                                    }}
-                                                />
-                                                <Label htmlFor={`ing-${ing.id}`} className="cursor-pointer font-normal text-xs truncate" title={ing.name}>
-                                                    {ing.name}
-                                                </Label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* ADICIONAIS */}
-                            {selectedProduct.addons && selectedProduct.addons.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Adicionais</h4>
-                                    <div className="grid grid-cols-1 gap-2">
-                                        {selectedProduct.addons.map((addon: any) => (
-                                            <div key={addon.id} className="flex items-center space-x-2 border rounded-md p-3 justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Checkbox 
-                                                        id={`addon-${addon.id}`}
-                                                        checked={selectedAddons.includes(addon.id)}
-                                                        onCheckedChange={(checked) => {
-                                                            if (checked) {
-                                                                setSelectedAddons([...selectedAddons, addon.id])
-                                                            } else {
-                                                                setSelectedAddons(selectedAddons.filter(id => id !== addon.id))
-                                                            }
-                                                        }}
-                                                    />
-                                                    <Label htmlFor={`addon-${addon.id}`} className="cursor-pointer font-normal">
-                                                        {addon.name}
-                                                    </Label>
-                                                </div>
-                                                <span className="text-emerald-600 font-medium text-sm">+ {formatCurrency(addon.price)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* OBSERVAÇÕES */}
-                            <div className="space-y-3">
-                                <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Observações</h4>
-                                <Textarea 
-                                    placeholder="Ex: Carne bem passada, sem sal, etc." 
-                                    value={orderNote}
-                                    onChange={(e) => setOrderNote(e.target.value)}
-                                    className="resize-none"
-                                />
-                            </div>
+                    {selectedProduct.image_url && <div className="w-full h-48 relative"><Image src={selectedProduct.image_url} alt={selectedProduct.name} fill className="object-cover" /></div>}
+                    <div className="p-6">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl">{selectedProduct.name}</DialogTitle>
+                            <DialogDescription className="text-base mt-2">{selectedProduct.description || "Sem descrição."}</DialogDescription>
+                        </DialogHeader>
+                        <div className="mt-8 flex items-center justify-between">
+                            <span className="text-xl font-bold text-emerald-600">{formatCurrency(selectedProduct.price)}</span>
+                            <Button onClick={() => addToCart(selectedProduct)}>Adicionar à Sacola</Button>
                         </div>
-                    </div>
-                    
-                    {/* FOOTER FIXO */}
-                    <div className="p-4 bg-white dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-4 shrink-0 z-20 shadow-[0_-5px_10px_rgba(0,0,0,0.03)]">
-                         <div className="flex items-center gap-3 bg-slate-100 dark:bg-zinc-800 rounded-lg p-1">
-                            <Button variant="ghost" size="icon" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="h-8 w-8"><Minus className="w-4 h-4"/></Button>
-                            <span className="font-semibold w-4 text-center">{quantity}</span>
-                            <Button variant="ghost" size="icon" onClick={() => setQuantity(quantity + 1)} className="h-8 w-8"><Plus className="w-4 h-4"/></Button>
-                         </div>
-                         <Button className="flex-1 h-12 text-base font-bold" onClick={handleAddToCart}>
-                            Adicionar - {formatCurrency(modalTotalPrice)}
-                         </Button>
                     </div>
                 </>
             )}
         </DialogContent>
       </Dialog>
 
-      {/* CHECKOUT */}
+      {/* CHECKOUT - SCROLL CORRIGIDO E VALIDAÇÃO CUPOM */}
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
         <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-slate-50 dark:bg-zinc-950 h-full max-h-[100dvh]" side="right">
             <SheetHeader className="p-6 bg-white dark:bg-zinc-900 shadow-sm flex-none">
@@ -650,37 +408,17 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
                         <div className="space-y-4">
                             {cart.map((item) => (
-                                <div key={item.cartItemId} className="flex flex-col bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-100 dark:border-zinc-800 gap-3">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex-1">
-                                            <p className="font-medium text-sm">{item.name}</p>
-                                            <p className="text-xs font-bold text-emerald-600">{formatCurrency(item.price)}</p>
-                                            
-                                            {/* DETALHES DE PERSONALIZAÇÃO */}
-                                            {(item.removedIngredients.length > 0 || item.selectedAddons.length > 0 || item.note) && (
-                                                <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5 border-l-2 pl-2 border-slate-200">
-                                                    {item.removedIngredients.map(ing => (
-                                                        <div key={ing} className="text-red-500 line-through decoration-red-500/50">Sem {ing}</div>
-                                                    ))}
-                                                    {item.selectedAddonsDetails.map((add: any) => (
-                                                        <div key={add.id} className="text-emerald-600 font-medium">+ {add.name} ({formatCurrency(add.price)})</div>
-                                                    ))}
-                                                    {item.note && (
-                                                        <div className="italic text-slate-500">"Obs: {item.note}"</div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col items-end gap-2">
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-500 hover:bg-red-50" onClick={() => updateQuantity(item.cartItemId, -item.quantity)}><Trash2 className="w-4 h-4" /></Button>
-                                        </div>
+                                <div key={item.id} className="flex items-center gap-4 bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-100 dark:border-zinc-800">
+                                    <div className="flex-1">
+                                        <p className="font-medium text-sm">{item.name}</p>
+                                        <p className="text-xs text-muted-foreground">{formatCurrency(item.price)}</p>
                                     </div>
-                                    
-                                    <div className="flex items-center justify-end gap-2 bg-slate-50 dark:bg-zinc-800/50 p-1.5 rounded-md self-end">
-                                         <Button variant="ghost" size="icon" className="h-6 w-6 bg-white shadow-sm" onClick={() => updateQuantity(item.cartItemId, -1)}><Minus className="w-3 h-3" /></Button>
-                                         <span className="text-xs font-medium w-6 text-center">{item.quantity}</span>
-                                         <Button variant="ghost" size="icon" className="h-6 w-6 bg-white shadow-sm" onClick={() => updateQuantity(item.cartItemId, 1)}><Plus className="w-3 h-3" /></Button>
+                                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-zinc-800 rounded-md p-1">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, -1)}><Minus className="w-3 h-3" /></Button>
+                                        <span className="text-xs font-medium w-4 text-center">{item.quantity}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, 1)}><Plus className="w-3 h-3" /></Button>
                                     </div>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-500 hover:bg-red-50" onClick={() => updateQuantity(item.id, -item.quantity)}><Trash2 className="w-4 h-4" /></Button>
                                 </div>
                             ))}
                         </div>
@@ -709,6 +447,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                             />
                                             <Button variant="secondary" onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponCode}>{isValidatingCoupon ? "..." : "Aplicar"}</Button>
                                         </div>
+                                        {/* MENSAGEM DE ERRO DO CUPOM INLINE */}
                                         {couponError && (
                                             <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 animate-in slide-in-from-top-1">
                                                 <AlertCircle className="w-3 h-3" /> {couponError}
@@ -736,74 +475,16 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                                             <RadioGroupItem value="retirada" id="retirada" className="sr-only" /><ShoppingBag className="mb-2 h-6 w-6" /><span className="text-xs font-medium">Retirar</span>
                                         </div>
                                     </RadioGroup>
-                                    
-                                    {/* FORMULÁRIO DE ENDEREÇO COM CEP */}
                                     {deliveryMethod === 'entrega' && (
-                                        <div className="space-y-2 animate-in slide-in-from-top-2 bg-slate-50 dark:bg-zinc-800/50 p-3 rounded-lg">
-                                            
-                                            {/* Campo de CEP */}
-                                            <div className="relative">
-                                                <Label className="text-xs mb-1 block">CEP (Apenas números)</Label>
-                                                <div className="flex gap-2">
-                                                    <Input 
-                                                        placeholder="00000000" 
-                                                        maxLength={8}
-                                                        value={customerAddress.zipCode} 
-                                                        onChange={e => setCustomerAddress({...customerAddress, zipCode: e.target.value})}
-                                                        onBlur={handleCheckCep}
-                                                        className={cepError ? "border-red-500 pr-10" : "pr-10"}
-                                                    />
-                                                    {cepLoading && (
-                                                        <div className="absolute right-3 top-8">
-                                                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                {cepError && <p className="text-xs text-red-500 mt-1 font-medium">{cepError}</p>}
-                                            </div>
-
+                                        <div className="space-y-2 animate-in slide-in-from-top-2">
                                             <div className="grid grid-cols-4 gap-2">
-                                                <div className="col-span-3">
-                                                    <Label className="text-xs mb-1 block">Rua</Label>
-                                                    <Input 
-                                                        placeholder="Rua" 
-                                                        value={customerAddress.street} 
-                                                        onChange={e => setCustomerAddress({...customerAddress, street: e.target.value})} 
-                                                        disabled={!!cepError || cepLoading} // Trava se CEP errado
-                                                    />
-                                                </div>
-                                                <div className="col-span-1">
-                                                    <Label className="text-xs mb-1 block">Nº</Label>
-                                                    <Input 
-                                                        placeholder="123" 
-                                                        value={customerAddress.number} 
-                                                        onChange={e => setCustomerAddress({...customerAddress, number: e.target.value})} 
-                                                    />
-                                                </div>
+                                                <Input className="col-span-3" placeholder="Rua" value={customerAddress.street} onChange={e => setCustomerAddress({...customerAddress, street: e.target.value})} />
+                                                <Input className="col-span-1" placeholder="Nº" value={customerAddress.number} onChange={e => setCustomerAddress({...customerAddress, number: e.target.value})} />
                                             </div>
-                                            
-                                            <div>
-                                                <Label className="text-xs mb-1 block">Bairro</Label>
-                                                <Input 
-                                                    placeholder="Bairro" 
-                                                    value={customerAddress.neighborhood} 
-                                                    onChange={e => setCustomerAddress({...customerAddress, neighborhood: e.target.value})} 
-                                                    disabled={!!cepError || cepLoading}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                 <Label className="text-xs mb-1 block">Complemento</Label>
-                                                 <Input placeholder="Apto, Bloco..." value={customerAddress.complement} onChange={e => setCustomerAddress({...customerAddress, complement: e.target.value})} />
-                                            </div>
-                                            
-                                            <div className="text-xs text-muted-foreground flex justify-between px-1">
-                                                <span>{customerAddress.city}</span>
-                                                <span>{customerAddress.state}</span>
-                                            </div>
+                                            <Input placeholder="Bairro" value={customerAddress.neighborhood} onChange={e => setCustomerAddress({...customerAddress, neighborhood: e.target.value})} />
+                                            <Input placeholder="Complemento" value={customerAddress.complement} onChange={e => setCustomerAddress({...customerAddress, complement: e.target.value})} />
                                         </div>
                                     )}
-
                                     <div className="space-y-3 pt-2">
                                         <h3 className="font-semibold text-sm">Pagamento</h3>
                                         <Select value={paymentMethod} onValueChange={setPaymentMethod}>
@@ -837,10 +518,10 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                         size="lg" 
                         className="w-full font-bold text-base" 
                         onClick={handleCheckout} 
-                        disabled={isOrderPlacing || isBelowMin || (deliveryMethod === 'entrega' && !!cepError)}
-                        variant={(isBelowMin || (deliveryMethod === 'entrega' && !!cepError)) ? "outline" : "default"}
+                        disabled={isOrderPlacing || isBelowMin}
+                        variant={isBelowMin ? "outline" : "default"}
                     >
-                        {isOrderPlacing ? "Enviando..." : (isBelowMin ? "Valor Mínimo não atingido" : (cepError && deliveryMethod === 'entrega' ? "CEP Inválido/Não atendido" : "ENVIAR PEDIDO"))}
+                        {isOrderPlacing ? "Enviando..." : (isBelowMin ? "Valor Mínimo não atingido" : "ENVIAR PEDIDO")}
                     </Button>
                 </SheetFooter>
             )}
