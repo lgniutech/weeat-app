@@ -5,27 +5,42 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// --- NOVAS FUNÇÕES ---
+// --- FUNÇÕES DE FORMATAÇÃO E MÁSCARAS ---
 
 export function formatPhone(value: string) {
   if (!value) return ""
   
   // Remove tudo que não é número
-  const numbers = value.replace(/\D/g, "")
+  let numbers = value.replace(/\D/g, "")
   
-  // Limita a 11 dígitos (DDD + 9 + 8 dígitos)
-  // Aplica a máscara (11) 91234-5678 visualmente
-  const char = { 0: "(", 2: ") ", 7: "-" }
-  let phone = ""
+  // Limita a 11 dígitos
+  if (numbers.length > 11) numbers = numbers.slice(0, 11)
+
+  // Aplica a máscara (99) 99999-9999 ou (99) 9999-9999
+  return numbers
+    .replace(/^(\d{2})(\d)/g, "($1) $2")
+    .replace(/(\d)(\d{4})$/, "$1-$2")
+}
+
+export function formatCep(value: string) {
+  if (!value) return ""
   
-  for (let i = 0; i < numbers.length; i++) {
-    // @ts-ignore
-    if (char[i]) phone += char[i]
-    phone += numbers[i]
-  }
+  // Remove tudo que não é número
+  let numbers = value.replace(/\D/g, "")
   
-  // Retorna formatado: (11) 91234-5678 (Max 15 chars)
-  return phone.slice(0, 15) 
+  // Limita a 8 dígitos
+  if (numbers.length > 8) numbers = numbers.slice(0, 8)
+
+  // Aplica a máscara 00000-000
+  return numbers.replace(/^(\d{5})(\d)/, "$1-$2")
+}
+
+export function formatOnlyLetters(value: string) {
+  if (!value) return ""
+  
+  // Mantém apenas letras (com acentos) e espaços
+  // Remove números e símbolos especiais
+  return value.replace(/[^a-zA-ZÀ-ÿ\s]/g, "")
 }
 
 export function cleanPhone(value: string) {
