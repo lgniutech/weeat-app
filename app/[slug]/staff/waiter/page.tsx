@@ -272,7 +272,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       });
   }
 
-  // --- CORREÇÃO PRINCIPAL: Otimismo na UI ---
   const handleServeBarItems = async (itemIds: string[]) => {
       const validIds = itemIds.filter(id => id && typeof id === 'string');
       if (validIds.length === 0) {
@@ -282,36 +281,24 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
       startTransition(async () => {
           try {
-              // 1. Atualização Otimista: Removemos visualmente AGORA
-              if (selectedTable && selectedTable.items) {
-                  const updatedItems = selectedTable.items.map((item: any) => {
+              // Atualização Otimista local
+              setSelectedTable((prev: any) => {
+                  if (!prev || !prev.items) return prev;
+                  const updatedItems = prev.items.map((item: any) => {
                       if (validIds.includes(item.id)) {
-                          return { ...item, status: 'entregue' }; // Marca como entregue localmente
+                          return { ...item, status: 'entregue' };
                       }
                       return item;
                   });
-                  
-                  // Atualiza estado local da mesa selecionada
-                  setSelectedTable((prev: any) => ({ ...prev, items: updatedItems }));
-                  
-                  // Atualiza estado global das mesas para refletir nos cards
-                  setTables((prevTables) => prevTables.map(t => {
-                      if (t.id === selectedTable.id) {
-                         return { ...t, items: updatedItems };
-                      }
-                      return t;
-                  }));
-              }
+                  return { ...prev, items: updatedItems };
+              });
 
-              // 2. Chama o Servidor
               const res = await serveBarItemsAction(validIds);
               
               if (res?.success) {
                   toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
-                  // 3. Confirma com dados reais do servidor
                   await fetchTables(); 
               } else {
-                  // Se falhar, reverte (busca dados originais)
                   console.error(res?.error);
                   toast({ title: "Erro", description: "Falha ao salvar.", variant: "destructive" });
                   fetchTables(); 
@@ -319,6 +306,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
           } catch (err) {
               console.error(err);
               toast({ title: "Erro de Conexão", variant: "destructive" });
+              fetchTables();
           }
       });
   }
@@ -341,13 +329,12 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
   const finalCartTotal = validatedCouponData?.valid ? cartTotal - validatedCouponData.discount : cartTotal;
 
-  // Lógica para filtrar itens de Bar Pendentes na mesa selecionada (não cozinha)
   const pendingBarItems = useMemo(() => {
       if (!selectedTable?.items) return [];
       return selectedTable.items.filter((item: any) => 
-          item.send_to_kitchen === false &&  // Não vai pra cozinha
-          item.status !== 'entregue' &&      // Não foi entregue
-          item.status !== 'cancelado' &&     // Não foi cancelado
+          item.send_to_kitchen === false &&  
+          item.status !== 'entregue' &&      
+          item.status !== 'cancelado' &&     
           item.status !== 'concluido'
       );
   }, [selectedTable]);
@@ -373,7 +360,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         {tables.map(table => {
             const isReady = table.hasReadyItems;
             
-            // Verifica se tem itens de bar pendentes nessa mesa
             const hasPendingBar = table.items?.some((i: any) => 
                 i.send_to_kitchen === false && 
                 i.status !== 'entregue' && 
@@ -390,15 +376,12 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             if (table.status === 'free') {
                  cardClasses = "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400";
             } else if (isReady) {
-                 // Prioridade 1: Verde
                  cardClasses = "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse";
                  iconComponent = <div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>;
             } else if (hasPendingBar) {
-                 // Prioridade 2: Âmbar
                  cardClasses = "bg-amber-100 dark:bg-amber-900/40 border-amber-500 ring-2 ring-amber-300 dark:ring-amber-800 text-amber-800 dark:text-amber-300";
                  iconComponent = <div className="absolute top-2 right-2 animate-pulse"><BellRing className="w-6 h-6 text-amber-600 fill-amber-200" /></div>;
             } else {
-                 // Prioridade 3: Azul
                  cardClasses = "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400";
             }
 
@@ -463,7 +446,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </DialogHeader>
             
             <div className="py-2 space-y-4">
-                {/* AVISO: PEDIDOS DA COZINHA PRONTOS */}
                 {selectedTable?.hasReadyItems && (
                     <div className="bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500 p-4 rounded-r shadow-sm animate-in fade-in slide-in-from-top-2">
                         <div className="flex items-center gap-3 mb-3">
@@ -480,7 +462,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     </div>
                 )}
 
-                {/* AVISO: ITENS DE BAR (BEBIDAS) PARA PEGAR */}
                 {pendingBarItems.length > 0 && (
                      <div className="bg-amber-100 dark:bg-amber-900/40 border-l-4 border-amber-500 p-4 rounded-r shadow-sm animate-in slide-in-from-left-2">
                         <div className="flex justify-between items-start mb-2">
@@ -623,7 +604,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </DialogContent>
       </Dialog>
       
-      {/* Diálogos PIN e Menu mantidos */}
       <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
           <DialogContent className="sm:max-w-xs">
               <DialogHeader>
