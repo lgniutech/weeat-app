@@ -10,6 +10,7 @@ interface OrderItemInput {
   observation?: string;
   removed_ingredients: string[]; 
   selected_addons: { name: string; price: number }[]; 
+  send_to_kitchen?: boolean; // NOVO CAMPO
 }
 
 interface OrderInput {
@@ -30,7 +31,6 @@ interface OrderInput {
 export async function createOrderAction(order: OrderInput) {
   const supabase = await createClient();
 
-  // Define status inicial como 'aceito' para cair direto na cozinha
   const initialStatus = 'aceito'; 
 
   const orderData = {
@@ -70,7 +70,9 @@ export async function createOrderAction(order: OrderInput) {
     observation: item.observation,
     removed_ingredients: JSON.stringify(item.removed_ingredients),
     selected_addons: JSON.stringify(item.selected_addons),
-    status: 'aceito' // Alinhado com o status do pedido
+    status: 'aceito',
+    // Salva a flag. Se não vier (versões antigas de cache), assume true para garantir.
+    send_to_kitchen: item.send_to_kitchen !== undefined ? item.send_to_kitchen : true 
   }));
 
   // 3. Insere os Itens
@@ -78,7 +80,6 @@ export async function createOrderAction(order: OrderInput) {
 
   if (itemsError) {
     console.error("Erro ao criar itens:", itemsError);
-    // Idealmente faria rollback, mas Supabase via client não tem transação simples.
     return { error: "Erro ao registrar itens do pedido." };
   }
 
@@ -163,8 +164,6 @@ export async function getCustomerOrdersAction(phone: string) {
 export async function getTableOrdersAction(storeId: string, tableNumber: string) {
   const supabase = await createClient();
 
-  // Filtra pedidos das últimas 24 horas para garantir que mesas antigas sejam limpas
-  // mas evita problemas de fuso horário estrito de "hoje"
   const yesterday = new Date();
   yesterday.setHours(yesterday.getHours() - 24);
   const filterDate = yesterday.toISOString();
@@ -184,7 +183,8 @@ export async function getTableOrdersAction(storeId: string, tableNumber: string)
         total_price,
         observation,
         removed_ingredients,
-        selected_addons
+        selected_addons,
+        send_to_kitchen
       )
     `)
     .eq("store_id", storeId)
