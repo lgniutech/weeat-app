@@ -284,8 +284,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
               const res = await serveBarItemsAction(validIds);
               if (res?.success) {
                   toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
-                  // Não await aqui para não travar a UI se a conexão estiver lenta
-                  fetchTables(); 
+                  // Forçar atualização imediata dos dados locais para atualizar a UI
+                  await fetchTables(); 
               } else {
                   console.error(res?.error);
                   toast({ title: "Erro", description: res?.error || "Falha desconhecida", variant: "destructive" });
@@ -345,7 +345,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       <main className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {tables.length === 0 && <p className="col-span-full text-center text-muted-foreground">Carregando mesas...</p>}
         {tables.map(table => {
-            const isReady = table.hasReadyItems;
+            const isReady = table.hasReadyItems; // Cozinha Pronta (Prioridade 1)
             
             // Verifica se tem itens de bar pendentes nessa mesa
             const hasPendingBar = table.items?.some((i: any) => 
@@ -358,32 +358,39 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             let statusLabel = "Servido";
             if(table.isPreparing) statusLabel = "Preparando...";
 
+            // Lógica de Prioridade de Cores e Ícones
+            // 1. Cozinha Pronta (Verde)
+            // 2. Bar Pendente (Âmbar)
+            // 3. Ocupada/Preparando (Azul)
+            
+            let cardClasses = "";
+            let iconComponent = null;
+
+            if (table.status === 'free') {
+                 cardClasses = "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400";
+            } else if (isReady) {
+                 // Prioridade 1: Verde
+                 cardClasses = "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse";
+                 iconComponent = <div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>;
+            } else if (hasPendingBar) {
+                 // Prioridade 2: Âmbar (Só aparece se NÃO tiver cozinha pronta)
+                 cardClasses = "bg-amber-100 dark:bg-amber-900/40 border-amber-500 ring-2 ring-amber-300 dark:ring-amber-800 text-amber-800 dark:text-amber-300";
+                 iconComponent = <div className="absolute top-2 right-2 animate-pulse"><BellRing className="w-6 h-6 text-amber-600 fill-amber-200" /></div>;
+            } else {
+                 // Prioridade 3: Azul (Preparando ou apenas ocupada)
+                 cardClasses = "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400";
+            }
+
             return (
               <div 
                 key={table.id}
                 onClick={() => openTableManagement(table)}
                 className={cn(
                   "h-32 rounded-xl flex flex-col items-center justify-center cursor-pointer border-2 shadow-sm relative overflow-hidden transition-all active:scale-95",
-                  
-                  // Livre
-                  table.status === 'free' && "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400",
-                  
-                  // Ocupada (Padrão)
-                  table.status === 'occupied' && !isReady && !hasPendingBar && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
-                  
-                  // Ocupada COM ITENS PENDENTES (AMARELO - PEGAR ITEM)
-                  // Prioridade alta, similar ao verde da cozinha, mas com cor âmbar/amarelo
-                  hasPendingBar && !isReady && "bg-amber-100 dark:bg-amber-900/40 border-amber-500 ring-2 ring-amber-300 dark:ring-amber-800 text-amber-800 dark:text-amber-300",
-
-                  // Cozinha Pronta (Prioridade Máxima - Verde) - Se tiver cozinha pronta, o verde ganha destaque, mas os ícones indicam ambos
-                  isReady && "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse"
+                  cardClasses
                 )}
               >
-                {/* Ícone de Cozinha Pronta (Sino Verde) */}
-                {isReady && (<div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>)}
-                
-                {/* Ícone de Pegar Item (Sino Amarelo) - Se não tiver cozinha pronta ocupando o lugar */}
-                {hasPendingBar && !isReady && (<div className="absolute top-2 right-2 animate-pulse"><BellRing className="w-6 h-6 text-amber-600 fill-amber-200" /></div>)}
+                {iconComponent}
 
                 <span className="text-3xl font-bold">{table.id}</span>
                 <div className="mt-2 text-center">
@@ -393,6 +400,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                         <div className="flex flex-col items-center">
                             {isReady ? (
                                 <span className="text-xs font-black bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-0.5 rounded-full uppercase">COZINHA PRONTA!</span>
+                            ) : hasPendingBar ? (
+                                <span className="text-[10px] font-black text-amber-900 dark:text-amber-100 mt-1 flex items-center gap-1 uppercase bg-amber-400/50 dark:bg-amber-800 px-1.5 py-0.5 rounded shadow-sm">
+                                    <BellRing className="w-3 h-3"/> Pegar item
+                                </span>
                             ) : (
                                 <>
                                     {table.discount > 0 && (
@@ -400,16 +411,9 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                     )}
                                     <span className="text-xs font-bold">R$ {table.total.toFixed(0)}</span>
                                     
-                                    {/* Status Texto */}
-                                    {hasPendingBar ? (
-                                        <span className="text-[10px] font-black text-amber-900 dark:text-amber-100 mt-1 flex items-center gap-1 uppercase bg-amber-400/50 dark:bg-amber-800 px-1.5 py-0.5 rounded shadow-sm">
-                                            <BellRing className="w-3 h-3"/> Pegar item
-                                        </span>
-                                    ) : (
-                                        <span className={cn("text-[10px] font-medium uppercase mt-1", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
-                                            {statusLabel}
-                                        </span>
-                                    )}
+                                    <span className={cn("text-[10px] font-medium uppercase mt-1", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
+                                        {statusLabel}
+                                    </span>
                                 </>
                             )}
                         </div>
@@ -438,7 +442,25 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </DialogHeader>
             
             <div className="py-2 space-y-4">
-                {/* AVISO: ITENS DE BAR (BEBIDAS) PARA PEGAR */}
+                {/* AVISO: PEDIDOS DA COZINHA PRONTOS (PRIORIDADE 1) */}
+                {selectedTable?.hasReadyItems && (
+                    <div className="bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500 p-4 rounded-r shadow-sm animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-center gap-3 mb-3">
+                            <BellRing className="w-6 h-6 text-green-700 dark:text-green-400 animate-bounce" />
+                            <div>
+                                <h3 className="font-bold text-green-800 dark:text-green-300">Cozinha Pronta!</h3>
+                                <p className="text-xs text-green-700 dark:text-green-400">Leve os pratos à mesa.</p>
+                            </div>
+                        </div>
+                        <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12 text-lg shadow-md transition-all active:scale-95" onClick={handleServeKitchenOrders} disabled={isPending}>
+                            {isPending ? <RefreshCw className="animate-spin mr-2"/> : <CheckCircle2 className="mr-2 h-5 w-5"/>}
+                            SERVIR COZINHA
+                        </Button>
+                    </div>
+                )}
+
+                {/* AVISO: ITENS DE BAR (BEBIDAS) PARA PEGAR (PRIORIDADE 2) */}
+                {/* Mostramos este aviso mesmo se tiver cozinha pronta, pois pode acumular, mas visualmente fica abaixo da cozinha */}
                 {pendingBarItems.length > 0 && (
                      <div className="bg-amber-100 dark:bg-amber-900/40 border-l-4 border-amber-500 p-4 rounded-r shadow-sm animate-in slide-in-from-left-2">
                         <div className="flex justify-between items-start mb-2">
@@ -465,23 +487,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                             CONFIRMAR ENTREGA
                         </Button>
                      </div>
-                )}
-
-                {/* AVISO: PEDIDOS DA COZINHA PRONTOS */}
-                {selectedTable?.hasReadyItems && (
-                    <div className="bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500 p-4 rounded-r shadow-sm animate-in fade-in slide-in-from-top-2">
-                        <div className="flex items-center gap-3 mb-3">
-                            <BellRing className="w-6 h-6 text-green-700 dark:text-green-400 animate-bounce" />
-                            <div>
-                                <h3 className="font-bold text-green-800 dark:text-green-300">Cozinha Pronta!</h3>
-                                <p className="text-xs text-green-700 dark:text-green-400">Leve os pratos à mesa.</p>
-                            </div>
-                        </div>
-                        <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12 text-lg shadow-md transition-all active:scale-95" onClick={handleServeKitchenOrders} disabled={isPending}>
-                            {isPending ? <RefreshCw className="animate-spin mr-2"/> : <CheckCircle2 className="mr-2 h-5 w-5"/>}
-                            SERVIR COZINHA
-                        </Button>
-                    </div>
                 )}
 
                 {selectedTable?.status === 'free' ? (
@@ -598,7 +603,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </DialogContent>
       </Dialog>
       
-      {/* Modal PIN e Menu mantidos iguais, apenas contexto fechado abaixo */}
+      {/* Modal PIN e Menu mantidos */}
       <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
           <DialogContent className="sm:max-w-xs">
               <DialogHeader>
