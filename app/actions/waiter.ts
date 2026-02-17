@@ -170,18 +170,22 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
       if (error) return { error: error.message };
 
       if (items.length > 0) {
-          const orderItems = items.map(i => ({
-            order_id: order.id,
-            product_name: i.name,
-            quantity: i.quantity,
-            unit_price: i.price,
-            total_price: (i.totalPrice || i.price * i.quantity),
-            observation: i.observation || "",
-            removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
-            selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
-            status: 'aceito',
-            send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : true
-          }));
+          const orderItems = items.map(i => {
+            // LÓGICA ALTERADA: Se não for para cozinha, já define como entregue
+            const sendToKitchen = i.send_to_kitchen !== undefined ? i.send_to_kitchen : true;
+            return {
+              order_id: order.id,
+              product_name: i.name,
+              quantity: i.quantity,
+              unit_price: i.price,
+              total_price: (i.totalPrice || i.price * i.quantity),
+              observation: i.observation || "",
+              removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
+              selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
+              status: sendToKitchen ? 'aceito' : 'entregue', // Se não vai pra cozinha, já marca como entregue
+              send_to_kitchen: sendToKitchen
+            };
+          });
           await supabase.from("order_items").insert(orderItems);
       }
       
@@ -195,18 +199,24 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
   const supabase = await createClient();
   try {
       const addedItemsTotal = newItems.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
-      const orderItems = newItems.map(i => ({
-        order_id: orderId,
-        product_name: i.name,
-        quantity: i.quantity,
-        unit_price: i.price,
-        total_price: (i.totalPrice || i.price * i.quantity),
-        observation: i.observation || "",
-        removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
-        selected_addons: i.selectedAddons ? JSON.stringify(i.selected_addons) : null,
-        status: 'aceito',
-        send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : true
-      }));
+      
+      const orderItems = newItems.map(i => {
+        // LÓGICA ALTERADA: Se não for para cozinha, já define como entregue
+        const sendToKitchen = i.send_to_kitchen !== undefined ? i.send_to_kitchen : true;
+        return {
+          order_id: orderId,
+          product_name: i.name,
+          quantity: i.quantity,
+          unit_price: i.price,
+          total_price: (i.totalPrice || i.price * i.quantity),
+          observation: i.observation || "",
+          removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
+          selected_addons: i.selectedAddons ? JSON.stringify(i.selected_addons) : null,
+          status: sendToKitchen ? 'aceito' : 'entregue', // Se não vai pra cozinha, já marca como entregue
+          send_to_kitchen: sendToKitchen
+        };
+      });
+
       await supabase.from("order_items").insert(orderItems);
       
       const { data: currentOrder } = await supabase.from("orders").select("total_price, discount").eq("id", orderId).single();
