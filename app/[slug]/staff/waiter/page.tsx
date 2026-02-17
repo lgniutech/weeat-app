@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag, AlertTriangle, Lock, CupSoda } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag, AlertTriangle, Lock, CupSoda, HandPlatter } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -270,13 +270,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       });
   }
 
-  // Entrega de itens DE BAR
+  // Entrega de itens DE BAR / ESTOQUE
   const handleServeBarItems = async (itemIds: string[]) => {
       if (itemIds.length === 0) return;
       startTransition(async () => {
           const res = await serveBarItemsAction(itemIds);
           if (res?.success) {
-              toast({ title: "Bebidas Entregues!", className: "bg-blue-600 text-white" });
+              toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
               fetchTables(); 
           } else {
               toast({ title: "Erro", description: res?.error, variant: "destructive" });
@@ -302,7 +302,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
   const finalCartTotal = validatedCouponData?.valid ? cartTotal - validatedCouponData.discount : cartTotal;
 
-  // Lógica para filtrar itens de Bar Pendentes na mesa selecionada
+  // Lógica para filtrar itens de Bar Pendentes na mesa selecionada (não cozinha)
   const pendingBarItems = useMemo(() => {
       if (!selectedTable?.items) return [];
       return selectedTable.items.filter((item: any) => 
@@ -358,18 +358,19 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                   // Ocupada (Padrão)
                   table.status === 'occupied' && !isReady && !hasPendingBar && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
                   
-                  // Ocupada COM BEBIDAS PENDENTES (Alerta Azul Forte)
-                  hasPendingBar && !isReady && "bg-blue-100 dark:bg-blue-900/40 border-blue-500 ring-2 ring-blue-300 dark:ring-blue-800 text-blue-800 dark:text-blue-300",
+                  // Ocupada COM ITENS PENDENTES (AMARELO - PEGAR ITEM)
+                  // Prioridade alta, similar ao verde da cozinha, mas com cor âmbar/amarelo
+                  hasPendingBar && !isReady && "bg-amber-100 dark:bg-amber-900/40 border-amber-500 ring-2 ring-amber-300 dark:ring-amber-800 text-amber-800 dark:text-amber-300",
 
-                  // Cozinha Pronta (Prioridade Máxima - Verde)
+                  // Cozinha Pronta (Prioridade Máxima - Verde) - Se tiver cozinha pronta, o verde ganha destaque, mas os ícones indicam ambos
                   isReady && "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse"
                 )}
               >
-                {/* Ícone de Cozinha Pronta */}
+                {/* Ícone de Cozinha Pronta (Sino Verde) */}
                 {isReady && (<div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>)}
                 
-                {/* Ícone de Bar Pendente */}
-                {hasPendingBar && !isReady && (<div className="absolute top-2 right-2 animate-pulse"><CupSoda className="w-6 h-6 text-blue-600 dark:text-blue-400" /></div>)}
+                {/* Ícone de Pegar Item (Sino Amarelo) - Se não tiver cozinha pronta ocupando o lugar */}
+                {hasPendingBar && !isReady && (<div className="absolute top-2 right-2 animate-pulse"><BellRing className="w-6 h-6 text-amber-600 fill-amber-200" /></div>)}
 
                 <span className="text-3xl font-bold">{table.id}</span>
                 <div className="mt-2 text-center">
@@ -388,8 +389,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                     
                                     {/* Status Texto */}
                                     {hasPendingBar ? (
-                                        <span className="text-[10px] font-black text-blue-700 dark:text-blue-300 mt-1 flex items-center gap-1 uppercase bg-blue-200 dark:bg-blue-800 px-1.5 py-0.5 rounded">
-                                            <CupSoda className="w-3 h-3"/> Servir Bebidas
+                                        <span className="text-[10px] font-black text-amber-900 dark:text-amber-100 mt-1 flex items-center gap-1 uppercase bg-amber-400/50 dark:bg-amber-800 px-1.5 py-0.5 rounded shadow-sm">
+                                            <BellRing className="w-3 h-3"/> Pegar item
                                         </span>
                                     ) : (
                                         <span className={cn("text-[10px] font-medium uppercase mt-1", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
@@ -423,26 +424,26 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </DialogHeader>
             
             <div className="py-2 space-y-4">
-                {/* AVISO: ITENS DE BAR (BEBIDAS) PARA RETIRAR */}
+                {/* AVISO: ITENS DE BAR (BEBIDAS) PARA PEGAR */}
                 {pendingBarItems.length > 0 && (
-                     <div className="bg-blue-100 dark:bg-blue-900/40 border-l-4 border-blue-500 p-4 rounded-r shadow-sm animate-in slide-in-from-left-2">
+                     <div className="bg-amber-100 dark:bg-amber-900/40 border-l-4 border-amber-500 p-4 rounded-r shadow-sm animate-in slide-in-from-left-2">
                         <div className="flex justify-between items-start mb-2">
                              <div className="flex items-center gap-2">
-                                <CupSoda className="w-6 h-6 text-blue-700 dark:text-blue-400" />
+                                <BellRing className="w-6 h-6 text-amber-700 dark:text-amber-400 animate-pulse" />
                                 <div>
-                                    <h3 className="font-bold text-blue-800 dark:text-blue-200">Retirar no Balcão</h3>
-                                    <p className="text-xs text-blue-700 dark:text-blue-300">Bebidas aguardando entrega.</p>
+                                    <h3 className="font-bold text-amber-800 dark:text-amber-200">Pegar item</h3>
+                                    <p className="text-xs text-amber-700 dark:text-amber-300">Itens aguardando entrega.</p>
                                 </div>
                              </div>
-                             <Badge className="bg-blue-600 text-white hover:bg-blue-700">{pendingBarItems.length} itens</Badge>
+                             <Badge className="bg-amber-600 text-white hover:bg-amber-700">{pendingBarItems.length} itens</Badge>
                         </div>
-                        <ul className="text-sm text-blue-900 dark:text-blue-100 mb-3 space-y-1 ml-1 list-disc list-inside opacity-90 font-medium">
+                        <ul className="text-sm text-amber-900 dark:text-amber-100 mb-3 space-y-1 ml-1 list-disc list-inside opacity-90 font-medium">
                             {pendingBarItems.map((item: any, idx: number) => (
                                 <li key={idx}>{item.quantity}x {item.name || item.product_name}</li>
                             ))}
                         </ul>
                         <Button 
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 shadow-sm text-base" 
+                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-12 shadow-sm text-base" 
                             onClick={() => handleServeBarItems(pendingBarItems.map((i: any) => i.id))} 
                             disabled={isPending}
                         >
