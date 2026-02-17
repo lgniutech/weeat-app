@@ -16,9 +16,15 @@ export type TableData = {
   couponCode?: string;
   items?: any[];
   orderStatus?: string;
+  
+  // Cozinha
   hasReadyItems: boolean;
-  readyOrderIds: string[];
+  readyOrderIds: string[]; // IDs dos PEDIDOS (orders) que a cozinha finalizou
   isPreparing: boolean;
+
+  // Bar / Copa (Novos Campos)
+  hasBarItems: boolean; 
+  barItemIds: string[]; // IDs dos ITENS (order_items) específicos para baixar
 };
 
 async function calculateDiscount(supabase: any, storeId: string, grossTotal: number, code: string) {
@@ -71,9 +77,21 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
        o.table_number === tableNum || (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
+    // Lógica da Cozinha (Baseada no status do PEDIDO GERAL ou itens da cozinha)
+    // Se o status do pedido é 'enviado' (que significa 'pronto_cozinha' em alguns fluxos, mas aqui vamos olhar itens também se precisar)
+    // Ajuste: Geralmente 'enviado' no `orders` significa que a cozinha despachou.
     const readyOrders = tableOrders.filter(o => o.status === 'enviado');
     const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
     
+    // Lógica do Bar (Baseada nos ITENS individuais)
+    // Item de bar é: send_to_kitchen = false E status != 'entregue' E status != 'cancelado'
+    const barItemsPending = tableOrders.flatMap(o => o.order_items || []).filter(item => {
+        return item.send_to_kitchen === false && 
+               item.status !== 'entregue' && 
+               item.status !== 'concluido' && 
+               item.status !== 'cancelado';
+    });
+
     let status: TableStatus = 'free';
     if (tableOrders.length > 0) status = 'occupied';
 
@@ -99,9 +117,15 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
       couponCode: activeCoupon,
       items: allItems,
       orderStatus: tableOrders[0]?.status,
+      
+      // Cozinha
       hasReadyItems: readyOrders.length > 0,
       readyOrderIds: readyOrders.map(o => o.id),
-      isPreparing: isPreparing
+      isPreparing: isPreparing,
+
+      // Bar
+      hasBarItems: barItemsPending.length > 0,
+      barItemIds: barItemsPending.map(item => item.id)
     };
   });
 
@@ -171,8 +195,11 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
 
       if (items.length > 0) {
           const orderItems = items.map(i => {
-            // LÓGICA ALTERADA: Se não for para cozinha, já define como entregue
             const sendToKitchen = i.send_to_kitchen !== undefined ? i.send_to_kitchen : true;
+            // LÓGICA ATUALIZADA:
+            // Se send_to_kitchen = TRUE -> status 'aceito' (aparece na cozinha)
+            // Se send_to_kitchen = FALSE -> status 'aceito' (NÃO aparece na cozinha, mas aparece como pendente no garçom)
+            // Antes era 'entregue' direto, agora forçamos 'aceito' para exigir baixa manual.
             return {
               order_id: order.id,
               product_name: i.name,
@@ -182,7 +209,7 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
               observation: i.observation || "",
               removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
               selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
-              status: sendToKitchen ? 'aceito' : 'entregue', // Se não vai pra cozinha, já marca como entregue
+              status: 'aceito', // MUDANÇA AQUI: Sempre aceito inicialmente
               send_to_kitchen: sendToKitchen
             };
           });
@@ -201,8 +228,8 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
       const addedItemsTotal = newItems.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
       
       const orderItems = newItems.map(i => {
-        // LÓGICA ALTERADA: Se não for para cozinha, já define como entregue
         const sendToKitchen = i.send_to_kitchen !== undefined ? i.send_to_kitchen : true;
+        // LÓGICA ATUALIZADA (Mesma do Create):
         return {
           order_id: orderId,
           product_name: i.name,
@@ -212,7 +239,7 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
           observation: i.observation || "",
           removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
           selected_addons: i.selectedAddons ? JSON.stringify(i.selected_addons) : null,
-          status: sendToKitchen ? 'aceito' : 'entregue', // Se não vai pra cozinha, já marca como entregue
+          status: 'aceito', // MUDANÇA AQUI: Sempre aceito inicialmente
           send_to_kitchen: sendToKitchen
         };
       });
@@ -288,6 +315,7 @@ export async function serveReadyOrdersAction(orderIds: string[]) {
     return { success: true };
 }
 
+// NOVA FUNÇÃO: Serve apenas itens de bar/balcão
 export async function serveBarItemsAction(itemIds: string[]) {
     if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
         return { success: false, error: "Nenhum item selecionado." };
