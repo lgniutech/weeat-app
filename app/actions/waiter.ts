@@ -21,7 +21,6 @@ export type TableData = {
   isPreparing: boolean;
 };
 
-// --- HELPER: CALCULAR DESCONTO ---
 async function calculateDiscount(supabase: any, storeId: string, grossTotal: number, code: string) {
     if (!code) return { discount: 0, code: null, error: null };
 
@@ -49,7 +48,6 @@ async function calculateDiscount(supabase: any, storeId: string, grossTotal: num
     return { discount: discountAmount, code: code, error: null, couponId: coupon.id };
 }
 
-// --- 1. BUSCAR STATUS ---
 export async function getTablesStatusAction(storeId: string): Promise<TableData[]> {
   const supabase = await createClient();
 
@@ -60,7 +58,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     .from("orders")
     .select(`
       id, status, total_price, discount, coupon_code, address, customer_name, table_number,
-      order_items ( id, name:product_name, quantity, price:unit_price, send_to_kitchen, status, removed_ingredients, selected_addons )
+      order_items ( id, product_name, quantity, unit_price, total_price, send_to_kitchen, status, removed_ingredients, selected_addons )
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "mesa")
@@ -73,7 +71,6 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
        o.table_number === tableNum || (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
-    // Filtro Cozinha
     const readyOrders = tableOrders.filter(o => o.status === 'enviado');
     const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
     
@@ -84,7 +81,12 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     const totalDiscount = tableOrders.reduce((acc, o) => acc + (o.discount || 0), 0);
     const activeCoupon = tableOrders.find(o => o.coupon_code)?.coupon_code;
     const subtotal = total + totalDiscount;
-    const allItems = activeOrders?.filter(o => o.table_number === tableNum).flatMap(o => o.order_items || []) || [];
+
+    const allItems = tableOrders.flatMap(o => o.order_items || []).map(item => ({
+        ...item,
+        name: item.product_name,
+        price: item.unit_price
+    }));
 
     return {
       id: tableNum,
@@ -106,7 +108,6 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   return tables;
 }
 
-// --- 2. MENU ---
 export async function getWaiterMenuAction(storeId: string) {
   const supabase = await createClient();
   const { data: categories } = await supabase
@@ -132,7 +133,6 @@ export async function getWaiterMenuAction(storeId: string) {
   })).filter(cat => cat.products.length > 0);
 }
 
-// --- 3. CRIAR PEDIDO ---
 export async function createTableOrderAction(storeId: string, tableNum: string, items: any[], clientName?: string, clientPhone?: string, couponCode?: string) {
   const supabase = await createClient();
   try {
@@ -180,7 +180,7 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
             removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
             selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
             status: 'aceito',
-            send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : (i.sendToKitchen !== undefined ? i.sendToKitchen : true)
+            send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : true
           }));
           await supabase.from("order_items").insert(orderItems);
       }
@@ -191,7 +191,6 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
   } catch (err: any) { return { error: "Erro interno." }; }
 }
 
-// --- 4. ADICIONAR ITENS ---
 export async function addItemsToTableAction(orderId: string, newItems: any[], currentTableTotal: number, couponCode?: string) {
   const supabase = await createClient();
   try {
@@ -204,9 +203,9 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
         total_price: (i.totalPrice || i.price * i.quantity),
         observation: i.observation || "",
         removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
-        selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
+        selected_addons: i.selectedAddons ? JSON.stringify(i.selected_addons) : null,
         status: 'aceito',
-        send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : (i.sendToKitchen !== undefined ? i.sendToKitchen : true)
+        send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : true
       }));
       await supabase.from("order_items").insert(orderItems);
       
@@ -240,7 +239,6 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
   } catch (err) { return { error: "Erro ao processar." }; }
 }
 
-// --- 5. VALIDAR CUPOM ---
 export async function validateCouponUiAction(storeId: string, code: string, currentAmount: number) {
     const supabase = await createClient();
     const res = await calculateDiscount(supabase, storeId, currentAmount, code);
@@ -248,7 +246,6 @@ export async function validateCouponUiAction(storeId: string, code: string, curr
     return { valid: true, discount: res.discount, finalPrice: currentAmount - res.discount };
 }
 
-// --- 6. FECHAR MESA ---
 export async function closeTableAction(tableNum: string, storeId: string, isForced: boolean = false) {
   const supabase = await createClient();
   const { data: orders } = await supabase.from("orders")
@@ -274,7 +271,6 @@ export async function closeTableAction(tableNum: string, storeId: string, isForc
   return { success: true };
 }
 
-// --- 7. SERVIR COZINHA ---
 export async function serveReadyOrdersAction(orderIds: string[]) {
     const supabase = await createClient();
     await supabase.from("orders").update({ status: "entregue", last_status_change: new Date().toISOString() }).in("id", orderIds);
@@ -282,14 +278,12 @@ export async function serveReadyOrdersAction(orderIds: string[]) {
     return { success: true };
 }
 
-// --- 8. SERVIR ITENS DE BAR (SIMPLIFICADO E ROBUSTO) ---
 export async function serveBarItemsAction(itemIds: string[]) {
     if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
         return { success: false, error: "Nenhum item selecionado." };
     }
     const supabase = await createClient();
     try {
-        // Apenas marca como entregue. Simples e direto.
         const { error } = await supabase
             .from("order_items")
             .update({ status: 'entregue' })
@@ -297,7 +291,6 @@ export async function serveBarItemsAction(itemIds: string[]) {
 
         if (error) throw error;
         
-        // Força revalidação total
         revalidatePath("/", "layout");
         return { success: true };
     } catch (error: any) {
