@@ -272,19 +272,26 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   // Entrega de itens DE BAR / ESTOQUE
   const handleServeBarItems = async (itemIds: string[]) => {
-      if (itemIds.length === 0) return;
+      // CORREÇÃO: Garante que não envia undefined/null
+      const validIds = itemIds.filter(id => id);
+      if (validIds.length === 0) {
+          toast({ title: "Nenhum item válido selecionado", variant: "destructive" });
+          return;
+      }
+
       startTransition(async () => {
           try {
-              const res = await serveBarItemsAction(itemIds);
+              const res = await serveBarItemsAction(validIds);
               if (res?.success) {
                   toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
                   fetchTables(); 
               } else {
+                  console.error(res?.error);
                   toast({ title: "Erro", description: res?.error || "Falha desconhecida", variant: "destructive" });
               }
           } catch (err) {
               console.error(err);
-              toast({ title: "Erro de Conexão", description: "Tente novamente.", variant: "destructive" });
+              toast({ title: "Erro de Conexão", description: "Tente novamente ou atualize a página.", variant: "destructive" });
           }
       });
   }
@@ -426,6 +433,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                         {selectedTable?.status === 'free' ? "Livre" : "Ocupada"}
                     </Badge>
                 </DialogTitle>
+                <DialogDescription className="hidden">Gerenciamento da Mesa</DialogDescription>
             </DialogHeader>
             
             <div className="py-2 space-y-4">
@@ -625,6 +633,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         <DialogContent className="h-[95vh] w-full max-w-lg flex flex-col p-0 gap-0">
              <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
                <DialogTitle>Cardápio (Mesa {selectedTable?.id})</DialogTitle>
+               <DialogDescription className="hidden">Cardápio da Mesa</DialogDescription>
                <Button variant="ghost" size="sm" onClick={() => setIsMenuOpen(false)}>Voltar</Button>
             </div>
             <div className="p-2 space-y-2 border-b bg-white dark:bg-slate-950">
