@@ -12,7 +12,7 @@ import {
     closeTableAction,
     serveReadyOrdersAction,
     validateCouponUiAction,
-    serveBarItemsAction // NOVA FUNÇÃO IMPORTADA
+    serveBarItemsAction 
 } from "@/app/actions/waiter"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -270,7 +270,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       });
   }
 
-  // Entrega de itens DE BAR (NOVA LÓGICA)
+  // Entrega de itens DE BAR
   const handleServeBarItems = async (itemIds: string[]) => {
       if (itemIds.length === 0) return;
       startTransition(async () => {
@@ -308,7 +308,8 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       return selectedTable.items.filter((item: any) => 
           item.send_to_kitchen === false &&  // Não vai pra cozinha
           item.status !== 'entregue' &&      // Não foi entregue
-          item.status !== 'cancelado'        // Não foi cancelado
+          item.status !== 'cancelado' &&     // Não foi cancelado
+          item.status !== 'concluido'
       );
   }, [selectedTable]);
 
@@ -332,8 +333,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         {tables.length === 0 && <p className="col-span-full text-center text-muted-foreground">Carregando mesas...</p>}
         {tables.map(table => {
             const isReady = table.hasReadyItems;
+            
             // Verifica se tem itens de bar pendentes nessa mesa
-            const hasPendingBar = table.items?.some((i: any) => i.send_to_kitchen === false && i.status !== 'entregue' && i.status !== 'cancelado');
+            const hasPendingBar = table.items?.some((i: any) => 
+                i.send_to_kitchen === false && 
+                i.status !== 'entregue' && 
+                i.status !== 'cancelado' &&
+                i.status !== 'concluido'
+            );
             
             let statusLabel = "Servido";
             if(table.isPreparing) statusLabel = "Preparando...";
@@ -344,8 +351,17 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 onClick={() => openTableManagement(table)}
                 className={cn(
                   "h-32 rounded-xl flex flex-col items-center justify-center cursor-pointer border-2 shadow-sm relative overflow-hidden transition-all active:scale-95",
+                  
+                  // Livre
                   table.status === 'free' && "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400",
-                  table.status === 'occupied' && !isReady && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
+                  
+                  // Ocupada (Padrão)
+                  table.status === 'occupied' && !isReady && !hasPendingBar && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
+                  
+                  // Ocupada COM BEBIDAS PENDENTES (Alerta Azul Forte)
+                  hasPendingBar && !isReady && "bg-blue-100 dark:bg-blue-900/40 border-blue-500 ring-2 ring-blue-300 dark:ring-blue-800 text-blue-800 dark:text-blue-300",
+
+                  // Cozinha Pronta (Prioridade Máxima - Verde)
                   isReady && "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse"
                 )}
               >
@@ -353,7 +369,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 {isReady && (<div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>)}
                 
                 {/* Ícone de Bar Pendente */}
-                {hasPendingBar && !isReady && (<div className="absolute top-2 right-2"><CupSoda className="w-5 h-5 text-blue-500" /></div>)}
+                {hasPendingBar && !isReady && (<div className="absolute top-2 right-2 animate-pulse"><CupSoda className="w-6 h-6 text-blue-600 dark:text-blue-400" /></div>)}
 
                 <span className="text-3xl font-bold">{table.id}</span>
                 <div className="mt-2 text-center">
@@ -369,9 +385,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                         <span className="text-[10px] line-through text-muted-foreground">R$ {table.subtotal?.toFixed(0)}</span>
                                     )}
                                     <span className="text-xs font-bold">R$ {table.total.toFixed(0)}</span>
-                                    {hasPendingBar && <span className="text-[10px] font-bold text-blue-600 mt-1 flex items-center gap-1"><CupSoda className="w-3 h-3"/> BEBIDAS</span>}
-                                    {!hasPendingBar && (
-                                        <span className={cn("text-[10px] font-medium uppercase", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
+                                    
+                                    {/* Status Texto */}
+                                    {hasPendingBar ? (
+                                        <span className="text-[10px] font-black text-blue-700 dark:text-blue-300 mt-1 flex items-center gap-1 uppercase bg-blue-200 dark:bg-blue-800 px-1.5 py-0.5 rounded">
+                                            <CupSoda className="w-3 h-3"/> Servir Bebidas
+                                        </span>
+                                    ) : (
+                                        <span className={cn("text-[10px] font-medium uppercase mt-1", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
                                             {statusLabel}
                                         </span>
                                     )}
@@ -404,25 +425,28 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             <div className="py-2 space-y-4">
                 {/* AVISO: ITENS DE BAR (BEBIDAS) PARA RETIRAR */}
                 {pendingBarItems.length > 0 && (
-                     <div className="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-4 rounded-r shadow-sm animate-in slide-in-from-left-2">
+                     <div className="bg-blue-100 dark:bg-blue-900/40 border-l-4 border-blue-500 p-4 rounded-r shadow-sm animate-in slide-in-from-left-2">
                         <div className="flex justify-between items-start mb-2">
                              <div className="flex items-center gap-2">
-                                <CupSoda className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                                <h3 className="font-bold text-blue-800 dark:text-blue-200">Retirar no Balcão</h3>
+                                <CupSoda className="w-6 h-6 text-blue-700 dark:text-blue-400" />
+                                <div>
+                                    <h3 className="font-bold text-blue-800 dark:text-blue-200">Retirar no Balcão</h3>
+                                    <p className="text-xs text-blue-700 dark:text-blue-300">Bebidas aguardando entrega.</p>
+                                </div>
                              </div>
-                             <Badge className="bg-blue-200 text-blue-800 hover:bg-blue-300 dark:bg-blue-800 dark:text-blue-200">{pendingBarItems.length} itens</Badge>
+                             <Badge className="bg-blue-600 text-white hover:bg-blue-700">{pendingBarItems.length} itens</Badge>
                         </div>
-                        <ul className="text-sm text-blue-900 dark:text-blue-100 mb-3 space-y-1 ml-1 list-disc list-inside opacity-80">
+                        <ul className="text-sm text-blue-900 dark:text-blue-100 mb-3 space-y-1 ml-1 list-disc list-inside opacity-90 font-medium">
                             {pendingBarItems.map((item: any, idx: number) => (
                                 <li key={idx}>{item.quantity}x {item.name || item.product_name}</li>
                             ))}
                         </ul>
                         <Button 
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 shadow-sm" 
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 shadow-sm text-base" 
                             onClick={() => handleServeBarItems(pendingBarItems.map((i: any) => i.id))} 
                             disabled={isPending}
                         >
-                            {isPending ? <RefreshCw className="animate-spin w-4 h-4 mr-2"/> : <CheckCircle2 className="mr-2 h-4 w-4"/>}
+                            {isPending ? <RefreshCw className="animate-spin w-5 h-5 mr-2"/> : <CheckCircle2 className="mr-2 h-5 w-5"/>}
                             CONFIRMAR ENTREGA
                         </Button>
                      </div>
