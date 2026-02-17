@@ -14,7 +14,7 @@ import {
     getStoreAddonsAction,
     createAddonAction,
     updateCategoryOrderAction,
-    getCategoryAddonHistoryAction // Importamos a nova função
+    getCategoryAddonHistoryAction 
 } from "@/app/actions/menu"
 import { compressImage } from "@/lib/client-image-compression" 
 import { Button } from "@/components/ui/button"
@@ -25,7 +25,7 @@ import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2, X, Pencil, Search, GripVertical, Save } from "lucide-react"
+import { Plus, Trash2, UtensilsCrossed, Image as ImageIcon, Loader2, X, Pencil, Search, GripVertical, Save, ChefHat, CupSoda } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 
@@ -112,10 +112,8 @@ function AddonSelector({ storeId, value = [], onChange, categoryId }: { storeId:
     const [loading, setLoading] = useState(false)
     const [categoryDefaults, setCategoryDefaults] = useState<Record<string, number>>({})
 
-    // Busca todos os addons da loja
     useEffect(() => { getStoreAddonsAction(storeId).then(setAllAddons) }, [storeId])
 
-    // Busca histórico de preços desta categoria sempre que ela muda
     useEffect(() => {
         if (categoryId) {
             getCategoryAddonHistoryAction(storeId, categoryId).then(setCategoryDefaults)
@@ -148,11 +146,7 @@ function AddonSelector({ storeId, value = [], onChange, categoryId }: { storeId:
 
     const addAddonToProduct = (id: string) => {
         if (value.find(s => s.id === id)) return
-        
-        // A MÁGICA ACONTECE AQUI:
-        // Verifica se existe um preço padrão para esta categoria, senão usa 0
         const defaultPrice = categoryDefaults[id] !== undefined ? categoryDefaults[id] : 0
-        
         onChange([...value, { id, price: defaultPrice }])
     }
 
@@ -221,7 +215,6 @@ function AddonSelector({ storeId, value = [], onChange, categoryId }: { storeId:
                             <Badge key={addon.id} variant="outline" className="cursor-pointer hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-700 transition-all dark:border-zinc-700 dark:text-slate-400 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-200" onClick={() => addAddonToProduct(addon.id)}>
                                 <Plus className="h-3 w-3 mr-1 opacity-50" />
                                 {addon.name}
-                                {/* Exibe o preço sugerido no badge se existir */}
                                 {categoryDefaults[addon.id] !== undefined && categoryDefaults[addon.id] > 0 && (
                                     <span className="ml-1 text-[10px] opacity-60">
                                         (R$ {categoryDefaults[addon.id]})
@@ -267,18 +260,21 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
     const [selectedIngredients, setSelectedIngredients] = useState<string[]>([])
     const [selectedAddons, setSelectedAddons] = useState<any[]>([])
     
-    // Novo estado para controlar a categoria selecionada
-    // Se for edição, usa a do produto. Se for novo, usa a primeira disponível.
+    // Configura o valor inicial do sendToKitchen. Se for produto novo, padrão é true. Se edição, usa valor do banco.
+    const [sendToKitchen, setSendToKitchen] = useState<boolean>(
+        product ? (product.send_to_kitchen !== false) : true 
+    )
+
     const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
         product?.category_id || (categories.length > 0 ? categories[0].id : "")
     )
 
     useEffect(() => { if (state?.success) setIsOpen(false) }, [state])
 
-    // Atualiza o estado da categoria se as props mudarem
     useEffect(() => {
         if (!isOpen && !isEdit && categories.length > 0) {
             setSelectedCategoryId(categories[0].id)
+            setSendToKitchen(true) // Reset para padrão ao abrir novo
         }
     }, [categories, isEdit, isOpen])
 
@@ -289,9 +285,11 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
                 setSelectedIngredients(product.ingredients?.map((i: any) => i.id) || [])
                 setSelectedAddons(product.addons?.map((a: any) => ({ id: a.id, price: a.price })) || [])
                 setSelectedCategoryId(product.category_id)
+                setSendToKitchen(product.send_to_kitchen !== false)
             } else {
                 setSelectedIngredients([])
                 setSelectedAddons([])
+                setSendToKitchen(true)
                 if (categories.length > 0) setSelectedCategoryId(categories[0].id)
             }
         }
@@ -335,6 +333,9 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
                     <input type="hidden" name="ingredients" value={JSON.stringify(selectedIngredients)} />
                     <input type="hidden" name="addons" value={JSON.stringify(selectedAddons)} />
                     
+                    {/* Campo hidden para o Switch */}
+                    <input type="hidden" name="sendToKitchen" value={sendToKitchen.toString()} />
+                    
                     <div className="grid grid-cols-2 gap-4">
                          <div className="space-y-2">
                             <Label className="dark:text-slate-300">Categoria</Label>
@@ -359,20 +360,49 @@ function ProductForm({ storeId, categories, product }: { storeId: string, catego
                         <Input name="name" defaultValue={product?.name} placeholder="Ex: X-Bacon Supremo" required className="dark:bg-zinc-900 dark:border-zinc-700" />
                     </div>
 
+                    {/* NOVO SWITCH: Enviar para Cozinha */}
+                    <div className="flex items-center justify-between rounded-lg border p-4 bg-slate-50 dark:bg-zinc-900 dark:border-zinc-800">
+                        <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                                {sendToKitchen ? <ChefHat className="h-4 w-4 text-orange-500" /> : <CupSoda className="h-4 w-4 text-blue-500" />}
+                                <Label className="text-base dark:text-slate-200">
+                                    {sendToKitchen ? "Enviar para Cozinha" : "Bar / Copa / Geladeira"}
+                                </Label>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                {sendToKitchen 
+                                    ? "Este item aparecerá na tela da cozinha para preparo." 
+                                    : "Este item não vai para a tela da cozinha (ex: refrigerantes lata)."}
+                            </p>
+                        </div>
+                        <Switch 
+                            checked={sendToKitchen} 
+                            onCheckedChange={setSendToKitchen} 
+                        />
+                    </div>
+
                     <div className="space-y-2">
                         <Label className="dark:text-slate-300">Descrição</Label>
                         <Textarea name="description" defaultValue={product?.description || ""} placeholder="Uma breve descrição..." rows={2} className="dark:bg-zinc-900 dark:border-zinc-700" />
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <div className="p-4 bg-slate-50/50 dark:bg-zinc-900/50 rounded-lg border dark:border-zinc-800">
-                            <IngredientSelector storeId={storeId} value={selectedIngredients} onChange={setSelectedIngredients} />
+                    {/* Só mostra ingredientes se for para cozinha, para limpar a UI */}
+                    {sendToKitchen && (
+                        <div className="grid md:grid-cols-2 gap-6 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="p-4 bg-slate-50/50 dark:bg-zinc-900/50 rounded-lg border dark:border-zinc-800">
+                                <IngredientSelector storeId={storeId} value={selectedIngredients} onChange={setSelectedIngredients} />
+                            </div>
+                            <div className="p-4 bg-yellow-50/30 dark:bg-yellow-900/10 rounded-lg border border-yellow-100/50 dark:border-yellow-900/30">
+                                <AddonSelector storeId={storeId} value={selectedAddons} onChange={setSelectedAddons} categoryId={selectedCategoryId} />
+                            </div>
                         </div>
+                    )}
+
+                    {!sendToKitchen && (
                         <div className="p-4 bg-yellow-50/30 dark:bg-yellow-900/10 rounded-lg border border-yellow-100/50 dark:border-yellow-900/30">
-                            {/* Passamos o categoryId para o seletor de addons */}
-                            <AddonSelector storeId={storeId} value={selectedAddons} onChange={setSelectedAddons} categoryId={selectedCategoryId} />
+                             <AddonSelector storeId={storeId} value={selectedAddons} onChange={setSelectedAddons} categoryId={selectedCategoryId} />
                         </div>
-                    </div>
+                    )}
 
                     <ImageUploadPreview name="image" initialImage={product?.image_url} />
 
@@ -558,6 +588,14 @@ export function MenuManager({ store, categories }: { store: any, categories: any
                                             ) : (
                                                 <div className="h-full w-full flex items-center justify-center text-slate-300 dark:text-zinc-600"><ImageIcon className="h-8 w-8" /></div>
                                             )}
+                                            {/* Ícone Indicador se vai para cozinha ou não */}
+                                            <div className="absolute top-1 left-1">
+                                                {product.send_to_kitchen === false && (
+                                                    <div className="bg-blue-100 text-blue-700 dark:bg-blue-900/80 dark:text-blue-200 p-1 rounded-full shadow-sm" title="Item de Bar/Copa">
+                                                        <CupSoda className="h-3 w-3" />
+                                                    </div>
+                                                )}
+                                            </div>
                                             {!product.is_available && <div className="absolute inset-0 bg-white/60 dark:bg-black/60 flex items-center justify-center backdrop-blur-[1px]"><span className="text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800">ESGOTADO</span></div>}
                                         </div>
                                         
