@@ -62,7 +62,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     .from("orders")
     .select(`
       id, status, total_price, discount, coupon_code, address, customer_name, table_number,
-      order_items ( name:product_name, quantity, price:unit_price )
+      order_items ( name:product_name, quantity, price:unit_price, send_to_kitchen )
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "mesa")
@@ -75,7 +75,11 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
        o.table_number === tableNum || (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
+    // Verifica itens prontos considerando APENAS os que vão para a cozinha para status de "Cozinha"
+    // Mas para "Entregue" geral, verifica tudo.
     const readyOrders = tableOrders.filter(o => o.status === 'enviado');
+    
+    // Mesa está "preparando" se tiver algum pedido aceito/preparando
     const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
     
     let status: TableStatus = 'free';
@@ -110,11 +114,12 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
 // --- 2. MENU ---
 export async function getWaiterMenuAction(storeId: string) {
   const supabase = await createClient();
+  // ATUALIZADO: Buscando o campo send_to_kitchen
   const { data: categories } = await supabase
     .from("categories")
     .select(`
       id, name, products (
-        id, name, price, description, is_available, category_id, image_url,
+        id, name, price, description, is_available, category_id, image_url, send_to_kitchen,
         product_ingredients (ingredient:ingredients (id, name)),
         product_addons (price, addon:addons (id, name))
       )
@@ -144,10 +149,8 @@ export async function createTableOrderAction(
 ) {
   const supabase = await createClient();
   try {
-      // 1. Calcula totais brutos
       const itemsTotal = items.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
       
-      // 2. Calcula Cupom se existir
       let discount = 0;
       let finalCouponCode = null;
       
@@ -164,7 +167,6 @@ export async function createTableOrderAction(
       const finalName = clientName && clientName.trim() !== "" ? clientName : `Mesa ${tableNum}`;
       const finalPhone = clientPhone && clientPhone.trim() !== "" ? clientPhone : "00000000000";
 
-      // 3. Insere Pedido
       const { data: order, error } = await supabase.from("orders").insert({
         store_id: storeId,
         customer_name: finalName,
@@ -182,8 +184,8 @@ export async function createTableOrderAction(
 
       if (error) return { error: error.message };
 
-      // 4. Insere Itens
       if (items.length > 0) {
+          // ATUALIZADO: Salvando send_to_kitchen
           const orderItems = items.map(i => ({
             order_id: order.id,
             product_name: i.name,
@@ -193,7 +195,8 @@ export async function createTableOrderAction(
             observation: i.observation || "",
             removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
             selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
-            status: 'pendente'
+            status: 'pendente', // Inicialmente pendente, será 'aceito' pelo fluxo
+            send_to_kitchen: i.sendToKitchen !== undefined ? i.sendToKitchen : true // Salva a flag
           }));
           await supabase.from("order_items").insert(orderItems);
       }
@@ -216,7 +219,7 @@ export async function addItemsToTableAction(
   try {
       const addedItemsTotal = newItems.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
       
-      // Insere novos itens
+      // ATUALIZADO: Salvando send_to_kitchen
       const orderItems = newItems.map(i => ({
         order_id: orderId,
         product_name: i.name,
@@ -226,11 +229,12 @@ export async function addItemsToTableAction(
         observation: i.observation || "",
         removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
         selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
-        status: 'pendente'
+        status: 'pendente',
+        send_to_kitchen: i.sendToKitchen !== undefined ? i.sendToKitchen : true
       }));
       await supabase.from("order_items").insert(orderItems);
       
-      // Recalcula totais
+      // Recalcula totais (lógica igual anterior)
       const { data: currentOrder } = await supabase.from("orders").select("total_price, discount").eq("id", orderId).single();
       
       if (!currentOrder) return { error: "Pedido não encontrado" };
@@ -241,7 +245,6 @@ export async function addItemsToTableAction(
       let discount = currentOrder.discount || 0;
       let finalCouponCode = null; 
 
-      // Se enviou um código novo (ou re-enviou o mesmo para aplicar sobre o novo total)
       if (couponCode && couponCode.trim() !== "") {
           const { data: store } = await supabase.from("orders").select("store_id").eq("id", orderId).single();
           const res = await calculateDiscount(supabase, store.store_id, newGrossTotal, couponCode.toUpperCase());
@@ -252,7 +255,6 @@ export async function addItemsToTableAction(
           if(res.couponId) await supabase.rpc('increment_coupon_usage', { coupon_id: res.couponId });
       }
 
-      // Atualiza pedido
       await supabase.from("orders")
         .update({ 
             total_price: newGrossTotal - discount,
@@ -268,7 +270,7 @@ export async function addItemsToTableAction(
   } catch (err) { return { error: "Erro ao processar." }; }
 }
 
-// --- 5. VALIDAR CUPOM (RÁPIDO - PARA UI) ---
+// --- 5. VALIDAR CUPOM ---
 export async function validateCouponUiAction(storeId: string, code: string, currentAmount: number) {
     const supabase = await createClient();
     const res = await calculateDiscount(supabase, storeId, currentAmount, code);
@@ -277,7 +279,6 @@ export async function validateCouponUiAction(storeId: string, code: string, curr
 }
 
 // --- 6. FECHAR MESA ---
-// MODIFICADO: Adicionado parâmetro isForced
 export async function closeTableAction(tableNum: string, storeId: string, isForced: boolean = false) {
   const supabase = await createClient();
   const { data: orders } = await supabase.from("orders")
@@ -290,7 +291,6 @@ export async function closeTableAction(tableNum: string, storeId: string, isForc
   if (!orders || orders.length === 0) return { success: true };
   const ids = orders.map(o => o.id);
 
-  // Se forçado (PIN), marca como cancelado/não pago. Se não, concluído/cartão.
   const newStatus = isForced ? "cancelado" : "concluido";
   const paymentMethod = isForced ? "nao_pago" : "card_machine";
   const cancelReason = isForced ? "Desistência (Fechamento forçado via PIN)" : null;
@@ -304,7 +304,6 @@ export async function closeTableAction(tableNum: string, storeId: string, isForc
       })
       .in("id", ids);
 
-  // Atualiza também os itens
   await supabase.from("order_items")
       .update({ status: newStatus })
       .in("order_id", ids);
