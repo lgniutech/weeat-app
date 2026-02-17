@@ -34,7 +34,7 @@ type Product = {
     description: string;
     category_id: string;
     image_url?: string;
-    send_to_kitchen?: boolean; // Novo campo
+    send_to_kitchen?: boolean;
     ingredients?: { id: string, name: string }[];
     addons?: { id: string, name: string, price: number }[];
 }
@@ -274,12 +274,17 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const handleServeBarItems = async (itemIds: string[]) => {
       if (itemIds.length === 0) return;
       startTransition(async () => {
-          const res = await serveBarItemsAction(itemIds);
-          if (res?.success) {
-              toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
-              fetchTables(); 
-          } else {
-              toast({ title: "Erro", description: res?.error, variant: "destructive" });
+          try {
+              const res = await serveBarItemsAction(itemIds);
+              if (res?.success) {
+                  toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
+                  fetchTables(); 
+              } else {
+                  toast({ title: "Erro", description: res?.error || "Falha desconhecida", variant: "destructive" });
+              }
+          } catch (err) {
+              console.error(err);
+              toast({ title: "Erro de Conexão", description: "Tente novamente.", variant: "destructive" });
           }
       });
   }
