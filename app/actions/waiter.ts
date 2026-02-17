@@ -195,7 +195,8 @@ export async function createTableOrderAction(
             removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
             selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
             status: 'aceito', // Status inicial já aceito para mesa
-            send_to_kitchen: i.sendToKitchen !== undefined ? i.sendToKitchen : true 
+            // CORREÇÃO AQUI: Verifica send_to_kitchen (do banco) OU sendToKitchen (camelCase)
+            send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : (i.sendToKitchen !== undefined ? i.sendToKitchen : true)
           }));
           await supabase.from("order_items").insert(orderItems);
       }
@@ -228,7 +229,8 @@ export async function addItemsToTableAction(
         removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
         selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
         status: 'aceito',
-        send_to_kitchen: i.sendToKitchen !== undefined ? i.sendToKitchen : true
+        // CORREÇÃO AQUI: Verifica send_to_kitchen (do banco) OU sendToKitchen (camelCase)
+        send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : (i.sendToKitchen !== undefined ? i.sendToKitchen : true)
       }));
       await supabase.from("order_items").insert(orderItems);
       
