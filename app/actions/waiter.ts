@@ -19,12 +19,12 @@ export type TableData = {
   
   // Cozinha
   hasReadyItems: boolean;
-  readyOrderIds: string[]; // IDs dos PEDIDOS (orders) que a cozinha finalizou
+  readyOrderIds: string[];
   isPreparing: boolean;
 
-  // Bar / Copa (Novos Campos)
+  // Bar / Copa
   hasBarItems: boolean; 
-  barItemIds: string[]; // IDs dos ITENS (order_items) específicos para baixar
+  barItemIds: string[];
 };
 
 async function calculateDiscount(supabase: any, storeId: string, grossTotal: number, code: string) {
@@ -77,13 +77,11 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
        o.table_number === tableNum || (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
-    // Lógica da Cozinha (Baseada no status do PEDIDO GERAL ou itens da cozinha)
-    // Se o status do pedido é 'enviado' (que significa 'pronto_cozinha' em alguns fluxos, mas aqui vamos olhar itens também se precisar)
-    // Ajuste: Geralmente 'enviado' no `orders` significa que a cozinha despachou.
+    // Lógica da Cozinha
     const readyOrders = tableOrders.filter(o => o.status === 'enviado');
     const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
     
-    // Lógica do Bar (Baseada nos ITENS individuais)
+    // Lógica do Bar
     // Item de bar é: send_to_kitchen = false E status != 'entregue' E status != 'cancelado'
     const barItemsPending = tableOrders.flatMap(o => o.order_items || []).filter(item => {
         return item.send_to_kitchen === false && 
@@ -196,10 +194,6 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
       if (items.length > 0) {
           const orderItems = items.map(i => {
             const sendToKitchen = i.send_to_kitchen !== undefined ? i.send_to_kitchen : true;
-            // LÓGICA ATUALIZADA:
-            // Se send_to_kitchen = TRUE -> status 'aceito' (aparece na cozinha)
-            // Se send_to_kitchen = FALSE -> status 'aceito' (NÃO aparece na cozinha, mas aparece como pendente no garçom)
-            // Antes era 'entregue' direto, agora forçamos 'aceito' para exigir baixa manual.
             return {
               order_id: order.id,
               product_name: i.name,
@@ -209,7 +203,7 @@ export async function createTableOrderAction(storeId: string, tableNum: string, 
               observation: i.observation || "",
               removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
               selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
-              status: 'aceito', // MUDANÇA AQUI: Sempre aceito inicialmente
+              status: 'aceito', 
               send_to_kitchen: sendToKitchen
             };
           });
@@ -229,7 +223,6 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
       
       const orderItems = newItems.map(i => {
         const sendToKitchen = i.send_to_kitchen !== undefined ? i.send_to_kitchen : true;
-        // LÓGICA ATUALIZADA (Mesma do Create):
         return {
           order_id: orderId,
           product_name: i.name,
@@ -239,7 +232,7 @@ export async function addItemsToTableAction(orderId: string, newItems: any[], cu
           observation: i.observation || "",
           removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
           selected_addons: i.selectedAddons ? JSON.stringify(i.selected_addons) : null,
-          status: 'aceito', // MUDANÇA AQUI: Sempre aceito inicialmente
+          status: 'aceito',
           send_to_kitchen: sendToKitchen
         };
       });
@@ -315,24 +308,52 @@ export async function serveReadyOrdersAction(orderIds: string[]) {
     return { success: true };
 }
 
-// NOVA FUNÇÃO: Serve apenas itens de bar/balcão
+// NOVA VERSÃO INTELIGENTE QUE FECHA O PEDIDO PAI
 export async function serveBarItemsAction(itemIds: string[]) {
     if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
         return { success: false, error: "Nenhum item selecionado." };
     }
     const supabase = await createClient();
+    
     try {
-        const { error } = await supabase
+        // 1. Atualiza os ITENS selecionados para 'entregue' e retorna seus order_id
+        const { data: updatedItems, error: updateError } = await supabase
             .from("order_items")
             .update({ status: 'entregue' })
-            .in("id", itemIds);
+            .in("id", itemIds)
+            .select("order_id");
 
-        if (error) throw error;
+        if (updateError) throw updateError;
+        
+        // 2. Verifica se precisamos fechar os PEDIDOS PAIS
+        const uniqueOrderIds = Array.from(new Set(updatedItems?.map(i => i.order_id)));
+
+        for (const orderId of uniqueOrderIds) {
+            // Conta quantos itens AINDA existem nesse pedido que NÃO estão entregues/cancelados/concluidos
+            const { count, error: countError } = await supabase
+                .from("order_items")
+                .select("*", { count: 'exact', head: true })
+                .eq("order_id", orderId)
+                .neq("status", "entregue")
+                .neq("status", "cancelado")
+                .neq("status", "concluido");
+
+            // Se a contagem for 0, todos os itens (cozinha e bar) foram resolvidos
+            if (!countError && count === 0) {
+                await supabase
+                    .from("orders")
+                    .update({ 
+                        status: 'entregue', // Isso tira o pedido da "Fila de Preparo"
+                        last_status_change: new Date().toISOString()
+                    })
+                    .eq("id", orderId);
+            }
+        }
         
         revalidatePath("/", "layout");
         return { success: true };
     } catch (error: any) {
         console.error("Erro serveBarItemsAction:", error);
-        return { success: false, error: "Erro no banco de dados." };
+        return { success: false, error: "Erro ao atualizar status." };
     }
 }
