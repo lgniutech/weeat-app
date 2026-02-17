@@ -21,7 +21,7 @@ export type TableData = {
   isPreparing: boolean;
 };
 
-// --- HELPER: CALCULAR DESCONTO (Privado) ---
+// --- HELPER: CALCULAR DESCONTO ---
 async function calculateDiscount(supabase: any, storeId: string, grossTotal: number, code: string) {
     if (!code) return { discount: 0, code: null, error: null };
 
@@ -45,9 +45,7 @@ async function calculateDiscount(supabase: any, storeId: string, grossTotal: num
     } else {
         discountAmount = coupon.discount_value;
     }
-
     if (discountAmount > grossTotal) discountAmount = grossTotal;
-
     return { discount: discountAmount, code: code, error: null, couponId: coupon.id };
 }
 
@@ -58,7 +56,6 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   const { data: store } = await supabase.from("stores").select("total_tables").eq("id", storeId).single();
   const totalTables = store?.total_tables || 10; 
 
-  // Buscamos pedidos ativos (não concluídos e não cancelados)
   const { data: activeOrders } = await supabase
     .from("orders")
     .select(`
@@ -76,10 +73,8 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
        o.table_number === tableNum || (o.address && o.address.replace(/\D/g, '') === tableNum)
     ) || [];
     
-    // Filtro de itens prontos DA COZINHA (status do pedido 'enviado' pela cozinha)
+    // Filtro Cozinha
     const readyOrders = tableOrders.filter(o => o.status === 'enviado');
-    
-    // Mesa está "preparando" se tiver algum pedido aceito/preparando
     const isPreparing = tableOrders.some(o => ['aceito', 'preparando'].includes(o.status));
     
     let status: TableStatus = 'free';
@@ -89,7 +84,6 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     const totalDiscount = tableOrders.reduce((acc, o) => acc + (o.discount || 0), 0);
     const activeCoupon = tableOrders.find(o => o.coupon_code)?.coupon_code;
     const subtotal = total + totalDiscount;
-    // Flat map de todos os itens da mesa
     const allItems = activeOrders?.filter(o => o.table_number === tableNum).flatMap(o => o.order_items || []) || [];
 
     return {
@@ -138,19 +132,11 @@ export async function getWaiterMenuAction(storeId: string) {
   })).filter(cat => cat.products.length > 0);
 }
 
-// --- 3. CRIAR PEDIDO (COM CUPOM) ---
-export async function createTableOrderAction(
-    storeId: string, 
-    tableNum: string, 
-    items: any[], 
-    clientName?: string, 
-    clientPhone?: string,
-    couponCode?: string
-) {
+// --- 3. CRIAR PEDIDO ---
+export async function createTableOrderAction(storeId: string, tableNum: string, items: any[], clientName?: string, clientPhone?: string, couponCode?: string) {
   const supabase = await createClient();
   try {
       const itemsTotal = items.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
-      
       let discount = 0;
       let finalCouponCode = null;
       
@@ -159,7 +145,6 @@ export async function createTableOrderAction(
           if (res.error) return { error: res.error };
           discount = res.discount;
           finalCouponCode = res.code;
-          
           if(res.couponId) await supabase.rpc('increment_coupon_usage', { coupon_id: res.couponId });
       }
 
@@ -203,21 +188,14 @@ export async function createTableOrderAction(
       await supabase.from("order_history").insert({ order_id: order.id, new_status: 'aceito' });
       revalidatePath("/", "layout");
       return { success: true, orderId: order.id };
-
   } catch (err: any) { return { error: "Erro interno." }; }
 }
 
-// --- 4. ADICIONAR ITENS (COM CUPOM) ---
-export async function addItemsToTableAction(
-    orderId: string, 
-    newItems: any[], 
-    currentTableTotal: number, 
-    couponCode?: string
-) {
+// --- 4. ADICIONAR ITENS ---
+export async function addItemsToTableAction(orderId: string, newItems: any[], currentTableTotal: number, couponCode?: string) {
   const supabase = await createClient();
   try {
       const addedItemsTotal = newItems.reduce((acc, item) => acc + (item.totalPrice || (item.price * item.quantity)), 0);
-      
       const orderItems = newItems.map(i => ({
         order_id: orderId,
         product_name: i.name,
@@ -233,7 +211,6 @@ export async function addItemsToTableAction(
       await supabase.from("order_items").insert(orderItems);
       
       const { data: currentOrder } = await supabase.from("orders").select("total_price, discount").eq("id", orderId).single();
-      
       if (!currentOrder) return { error: "Pedido não encontrado" };
 
       const previousGross = currentOrder.total_price + (currentOrder.discount || 0);
@@ -241,26 +218,22 @@ export async function addItemsToTableAction(
 
       let discount = currentOrder.discount || 0;
       let finalCouponCode = null; 
-
       if (couponCode && couponCode.trim() !== "") {
           const { data: store } = await supabase.from("orders").select("store_id").eq("id", orderId).single();
           const res = await calculateDiscount(supabase, store.store_id, newGrossTotal, couponCode.toUpperCase());
           if (res.error) return { error: res.error };
-          
           discount = res.discount;
           finalCouponCode = res.code;
           if(res.couponId) await supabase.rpc('increment_coupon_usage', { coupon_id: res.couponId });
       }
 
-      await supabase.from("orders")
-        .update({ 
+      await supabase.from("orders").update({ 
             total_price: newGrossTotal - discount,
             discount: discount,
             ...(finalCouponCode ? { coupon_code: finalCouponCode } : {}),
             status: "aceito", 
             last_status_change: new Date().toISOString() 
-        })
-        .eq("id", orderId);
+        }).eq("id", orderId);
 
       revalidatePath("/", "layout");
       return { success: true };
@@ -279,11 +252,7 @@ export async function validateCouponUiAction(storeId: string, code: string, curr
 export async function closeTableAction(tableNum: string, storeId: string, isForced: boolean = false) {
   const supabase = await createClient();
   const { data: orders } = await supabase.from("orders")
-      .select("id")
-      .eq("store_id", storeId)
-      .eq("table_number", tableNum)
-      .neq("status", "concluido") 
-      .neq("status", "cancelado");
+      .select("id").eq("store_id", storeId).eq("table_number", tableNum).neq("status", "concluido").neq("status", "cancelado");
 
   if (!orders || orders.length === 0) return { success: true };
   const ids = orders.map(o => o.id);
@@ -292,24 +261,20 @@ export async function closeTableAction(tableNum: string, storeId: string, isForc
   const paymentMethod = isForced ? "nao_pago" : "card_machine";
   const cancelReason = isForced ? "Desistência (Fechamento forçado via PIN)" : null;
 
-  await supabase.from("orders")
-      .update({ 
+  await supabase.from("orders").update({ 
           status: newStatus, 
           payment_method: paymentMethod, 
           cancellation_reason: cancelReason,
           last_status_change: new Date().toISOString() 
-      })
-      .in("id", ids);
+      }).in("id", ids);
 
-  await supabase.from("order_items")
-      .update({ status: newStatus })
-      .in("order_id", ids);
+  await supabase.from("order_items").update({ status: newStatus }).in("order_id", ids);
 
   revalidatePath("/", "layout");
   return { success: true };
 }
 
-// --- 7. SERVIR PEDIDOS DA COZINHA (EM BLOCO) ---
+// --- 7. SERVIR COZINHA ---
 export async function serveReadyOrdersAction(orderIds: string[]) {
     const supabase = await createClient();
     await supabase.from("orders").update({ status: "entregue", last_status_change: new Date().toISOString() }).in("id", orderIds);
@@ -317,68 +282,26 @@ export async function serveReadyOrdersAction(orderIds: string[]) {
     return { success: true };
 }
 
-// --- 8. SERVIR ITENS DE BAR (INDIVIDUALMENTE) E ATUALIZAR PEDIDO ---
+// --- 8. SERVIR ITENS DE BAR (SIMPLIFICADO E ROBUSTO) ---
 export async function serveBarItemsAction(itemIds: string[]) {
     if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
         return { success: false, error: "Nenhum item selecionado." };
     }
-
     const supabase = await createClient();
-
     try {
-        // 1. Atualizar status dos itens para 'entregue'
-        const { error: updateError } = await supabase
+        // Apenas marca como entregue. Simples e direto.
+        const { error } = await supabase
             .from("order_items")
             .update({ status: 'entregue' })
             .in("id", itemIds);
 
-        if (updateError) {
-            console.error("Erro update itens:", updateError);
-            return { success: false, error: "Falha ao atualizar itens." };
-        }
-
-        // 2. Verificar se precisamos atualizar o status dos pedidos (Orders)
-        // Isso é feito em background "lógico", não vamos travar o retorno se falhar,
-        // mas é importante para a consistência.
+        if (error) throw error;
         
-        // Buscar order_ids dos itens que acabamos de atualizar
-        const { data: items } = await supabase
-            .from("order_items")
-            .select("order_id")
-            .in("id", itemIds);
-
-        if (items && items.length > 0) {
-            const uniqueOrderIds = [...new Set(items.map(i => i.order_id))];
-
-            // Para cada pedido, checar se sobrou algo pendente
-            for (const orderId of uniqueOrderIds) {
-                // Conta itens que NÃO estão finalizados
-                const { count } = await supabase
-                    .from("order_items")
-                    .select("*", { count: 'exact', head: true })
-                    .eq("order_id", orderId)
-                    .neq("status", "entregue")
-                    .neq("status", "concluido")
-                    .neq("status", "cancelado");
-                
-                // Se count é 0, todos os itens foram entregues/cancelados
-                if (count === 0) {
-                    await supabase
-                        .from("orders")
-                        .update({ 
-                            status: 'entregue',
-                            last_status_change: new Date().toISOString()
-                        })
-                        .eq("id", orderId);
-                }
-            }
-        }
-
+        // Força revalidação total
         revalidatePath("/", "layout");
         return { success: true };
-
-    } catch (error) {
-        console.error("Erro server action serveBarItemsAction:", error);
-        return { success: false, error: "Erro interno ao processar entrega." };
+    } catch (error: any) {
+        console.error("Erro serveBarItemsAction:", error);
+        return { success: false, error: "Erro no banco de dados." };
     }
 }
