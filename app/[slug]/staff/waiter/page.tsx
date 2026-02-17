@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useTransition, useMemo } from "react"
+import { useState, useEffect, useTransition, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { ThemeProvider, useTheme } from "next-themes" 
 import { getStaffSession, logoutStaffAction, validateStaffPin } from "@/app/actions/staff"
@@ -100,24 +100,32 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     init()
   }, [slug, router])
 
-  const fetchTables = async () => {
+  // CORREÇÃO: Memoizar fetchTables para não recriar a função a cada render
+  // E o mais importante: NÃO depender de selectedTable dentro do useEffect abaixo
+  const fetchTables = useCallback(async () => {
     if (!storeId) return
     try {
         const data = await getTablesStatusAction(storeId)
         setTables(data)
-        if (selectedTable && isManagementOpen) {
-            const updated = data.find(t => t.id === selectedTable.id)
-            if (updated) setSelectedTable(updated)
-            else setSelectedTable(null)
+        
+        // Atualiza a mesa selecionada se ela estiver aberta
+        // Usamos o callback do set state para pegar o valor mais atual sem precisar colocar selectedTable na dependência
+        if (isManagementOpen) {
+            setSelectedTable((currentSelected: any) => {
+                if (!currentSelected) return null;
+                const updated = data.find(t => t.id === currentSelected.id)
+                return updated || null;
+            })
         }
     } catch (error) { console.error(error) }
-  }
+  }, [storeId, isManagementOpen]) // Removido selectedTable das dependências
 
+  // CORREÇÃO: Intervalo limpo sem loop infinito
   useEffect(() => {
     fetchTables()
     const interval = setInterval(fetchTables, 3000) 
     return () => clearInterval(interval)
-  }, [storeId, selectedTable, isManagementOpen])
+  }, [fetchTables]) 
 
   const openTableManagement = (table: any) => {
     setSelectedTable(table)
@@ -284,7 +292,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
               const res = await serveBarItemsAction(validIds);
               if (res?.success) {
                   toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
-                  // Forçar atualização imediata dos dados locais para atualizar a UI
+                  // Busca dados novos imediatamente para atualizar a UI e remover o aviso
                   await fetchTables(); 
               } else {
                   console.error(res?.error);
@@ -345,7 +353,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       <main className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {tables.length === 0 && <p className="col-span-full text-center text-muted-foreground">Carregando mesas...</p>}
         {tables.map(table => {
-            const isReady = table.hasReadyItems; // Cozinha Pronta (Prioridade 1)
+            const isReady = table.hasReadyItems;
             
             // Verifica se tem itens de bar pendentes nessa mesa
             const hasPendingBar = table.items?.some((i: any) => 
@@ -358,10 +366,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             let statusLabel = "Servido";
             if(table.isPreparing) statusLabel = "Preparando...";
 
-            // Lógica de Prioridade de Cores e Ícones
-            // 1. Cozinha Pronta (Verde)
-            // 2. Bar Pendente (Âmbar)
-            // 3. Ocupada/Preparando (Azul)
+            // PRIORIDADE VISUAL:
+            // 1. Cozinha Pronta (Verde) - "Comida esfriando"
+            // 2. Bar/Geladeira (Âmbar) - "Pegar bebida"
+            // 3. Preparando (Azul) - "Aguardando"
             
             let cardClasses = "";
             let iconComponent = null;
@@ -369,11 +377,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             if (table.status === 'free') {
                  cardClasses = "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400";
             } else if (isReady) {
-                 // Prioridade 1: Verde
+                 // Prioridade 1: Verde (Mesmo se tiver bar pendente, a comida é prioridade)
                  cardClasses = "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse";
                  iconComponent = <div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>;
             } else if (hasPendingBar) {
-                 // Prioridade 2: Âmbar (Só aparece se NÃO tiver cozinha pronta)
+                 // Prioridade 2: Âmbar (Aparece se NÃO tiver cozinha pronta)
                  cardClasses = "bg-amber-100 dark:bg-amber-900/40 border-amber-500 ring-2 ring-amber-300 dark:ring-amber-800 text-amber-800 dark:text-amber-300";
                  iconComponent = <div className="absolute top-2 right-2 animate-pulse"><BellRing className="w-6 h-6 text-amber-600 fill-amber-200" /></div>;
             } else {
@@ -460,7 +468,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 )}
 
                 {/* AVISO: ITENS DE BAR (BEBIDAS) PARA PEGAR (PRIORIDADE 2) */}
-                {/* Mostramos este aviso mesmo se tiver cozinha pronta, pois pode acumular, mas visualmente fica abaixo da cozinha */}
+                {/* Aparece abaixo da cozinha se ambos existirem */}
                 {pendingBarItems.length > 0 && (
                      <div className="bg-amber-100 dark:bg-amber-900/40 border-l-4 border-amber-500 p-4 rounded-r shadow-sm animate-in slide-in-from-left-2">
                         <div className="flex justify-between items-start mb-2">
@@ -603,7 +611,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </DialogContent>
       </Dialog>
       
-      {/* Modal PIN e Menu mantidos */}
+      {/* Modal PIN e Menu mantidos iguais */}
       <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
           <DialogContent className="sm:max-w-xs">
               <DialogHeader>
