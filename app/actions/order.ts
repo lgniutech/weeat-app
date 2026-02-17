@@ -10,7 +10,7 @@ interface OrderItemInput {
   observation?: string;
   removed_ingredients: string[]; 
   selected_addons: { name: string; price: number }[]; 
-  send_to_kitchen?: boolean; // NOVO CAMPO
+  send_to_kitchen?: boolean;
 }
 
 interface OrderInput {
@@ -70,8 +70,9 @@ export async function createOrderAction(order: OrderInput) {
     observation: item.observation,
     removed_ingredients: JSON.stringify(item.removed_ingredients),
     selected_addons: JSON.stringify(item.selected_addons),
-    status: 'aceito',
-    // Salva a flag. Se não vier (versões antigas de cache), assume true para garantir.
+    // Status inicial agora é sempre 'aceito', mesmo se não for pra cozinha.
+    // Isso permite que o garçom/balcão dê baixa manual.
+    status: 'aceito', 
     send_to_kitchen: item.send_to_kitchen !== undefined ? item.send_to_kitchen : true 
   }));
 
@@ -184,7 +185,8 @@ export async function getTableOrdersAction(storeId: string, tableNumber: string)
         observation,
         removed_ingredients,
         selected_addons,
-        send_to_kitchen
+        send_to_kitchen,
+        status
       )
     `)
     .eq("store_id", storeId)
