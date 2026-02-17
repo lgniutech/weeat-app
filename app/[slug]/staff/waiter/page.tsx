@@ -272,10 +272,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   // Entrega de itens DE BAR / ESTOQUE
   const handleServeBarItems = async (itemIds: string[]) => {
-      // CORREÇÃO: Garante que não envia undefined/null
-      const validIds = itemIds.filter(id => id);
+      const validIds = itemIds.filter(id => id && typeof id === 'string');
+      
       if (validIds.length === 0) {
-          toast({ title: "Nenhum item válido selecionado", variant: "destructive" });
+          toast({ title: "Nenhum item válido para entregar.", variant: "destructive" });
           return;
       }
 
@@ -284,6 +284,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
               const res = await serveBarItemsAction(validIds);
               if (res?.success) {
                   toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
+                  // Não await aqui para não travar a UI se a conexão estiver lenta
                   fetchTables(); 
               } else {
                   console.error(res?.error);
