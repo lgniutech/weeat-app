@@ -100,16 +100,12 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     init()
   }, [slug, router])
 
-  // CORREÇÃO: Memoizar fetchTables para não recriar a função a cada render
-  // E o mais importante: NÃO depender de selectedTable dentro do useEffect abaixo
   const fetchTables = useCallback(async () => {
     if (!storeId) return
     try {
         const data = await getTablesStatusAction(storeId)
         setTables(data)
         
-        // Atualiza a mesa selecionada se ela estiver aberta
-        // Usamos o callback do set state para pegar o valor mais atual sem precisar colocar selectedTable na dependência
         if (isManagementOpen) {
             setSelectedTable((currentSelected: any) => {
                 if (!currentSelected) return null;
@@ -118,14 +114,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             })
         }
     } catch (error) { console.error(error) }
-  }, [storeId, isManagementOpen]) // Removido selectedTable das dependências
+  }, [storeId, isManagementOpen])
 
-  // CORREÇÃO: Intervalo limpo sem loop infinito
   useEffect(() => {
     fetchTables()
     const interval = setInterval(fetchTables, 3000) 
     return () => clearInterval(interval)
-  }, [fetchTables]) 
+  }, [fetchTables])
 
   const openTableManagement = (table: any) => {
     setSelectedTable(table)
@@ -264,7 +259,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     })
   }
 
-  // Entrega de itens DA COZINHA
   const handleServeKitchenOrders = async () => {
       if (!selectedTable?.readyOrderIds || selectedTable.readyOrderIds.length === 0) return;
       startTransition(async () => {
@@ -278,29 +272,53 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       });
   }
 
-  // Entrega de itens DE BAR / ESTOQUE
+  // --- CORREÇÃO PRINCIPAL: Otimismo na UI ---
   const handleServeBarItems = async (itemIds: string[]) => {
       const validIds = itemIds.filter(id => id && typeof id === 'string');
-      
       if (validIds.length === 0) {
-          toast({ title: "Nenhum item válido para entregar.", variant: "destructive" });
+          toast({ title: "Nenhum item válido.", variant: "destructive" });
           return;
       }
 
       startTransition(async () => {
           try {
+              // 1. Atualização Otimista: Removemos visualmente AGORA
+              if (selectedTable && selectedTable.items) {
+                  const updatedItems = selectedTable.items.map((item: any) => {
+                      if (validIds.includes(item.id)) {
+                          return { ...item, status: 'entregue' }; // Marca como entregue localmente
+                      }
+                      return item;
+                  });
+                  
+                  // Atualiza estado local da mesa selecionada
+                  setSelectedTable((prev: any) => ({ ...prev, items: updatedItems }));
+                  
+                  // Atualiza estado global das mesas para refletir nos cards
+                  setTables((prevTables) => prevTables.map(t => {
+                      if (t.id === selectedTable.id) {
+                         return { ...t, items: updatedItems };
+                      }
+                      return t;
+                  }));
+              }
+
+              // 2. Chama o Servidor
               const res = await serveBarItemsAction(validIds);
+              
               if (res?.success) {
                   toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
-                  // Busca dados novos imediatamente para atualizar a UI e remover o aviso
+                  // 3. Confirma com dados reais do servidor
                   await fetchTables(); 
               } else {
+                  // Se falhar, reverte (busca dados originais)
                   console.error(res?.error);
-                  toast({ title: "Erro", description: res?.error || "Falha desconhecida", variant: "destructive" });
+                  toast({ title: "Erro", description: "Falha ao salvar.", variant: "destructive" });
+                  fetchTables(); 
               }
           } catch (err) {
               console.error(err);
-              toast({ title: "Erro de Conexão", description: "Tente novamente ou atualize a página.", variant: "destructive" });
+              toast({ title: "Erro de Conexão", variant: "destructive" });
           }
       });
   }
@@ -366,26 +384,21 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             let statusLabel = "Servido";
             if(table.isPreparing) statusLabel = "Preparando...";
 
-            // PRIORIDADE VISUAL:
-            // 1. Cozinha Pronta (Verde) - "Comida esfriando"
-            // 2. Bar/Geladeira (Âmbar) - "Pegar bebida"
-            // 3. Preparando (Azul) - "Aguardando"
-            
             let cardClasses = "";
             let iconComponent = null;
 
             if (table.status === 'free') {
                  cardClasses = "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400";
             } else if (isReady) {
-                 // Prioridade 1: Verde (Mesmo se tiver bar pendente, a comida é prioridade)
+                 // Prioridade 1: Verde
                  cardClasses = "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse";
                  iconComponent = <div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>;
             } else if (hasPendingBar) {
-                 // Prioridade 2: Âmbar (Aparece se NÃO tiver cozinha pronta)
+                 // Prioridade 2: Âmbar
                  cardClasses = "bg-amber-100 dark:bg-amber-900/40 border-amber-500 ring-2 ring-amber-300 dark:ring-amber-800 text-amber-800 dark:text-amber-300";
                  iconComponent = <div className="absolute top-2 right-2 animate-pulse"><BellRing className="w-6 h-6 text-amber-600 fill-amber-200" /></div>;
             } else {
-                 // Prioridade 3: Azul (Preparando ou apenas ocupada)
+                 // Prioridade 3: Azul
                  cardClasses = "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400";
             }
 
@@ -450,7 +463,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             </DialogHeader>
             
             <div className="py-2 space-y-4">
-                {/* AVISO: PEDIDOS DA COZINHA PRONTOS (PRIORIDADE 1) */}
+                {/* AVISO: PEDIDOS DA COZINHA PRONTOS */}
                 {selectedTable?.hasReadyItems && (
                     <div className="bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500 p-4 rounded-r shadow-sm animate-in fade-in slide-in-from-top-2">
                         <div className="flex items-center gap-3 mb-3">
@@ -467,8 +480,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     </div>
                 )}
 
-                {/* AVISO: ITENS DE BAR (BEBIDAS) PARA PEGAR (PRIORIDADE 2) */}
-                {/* Aparece abaixo da cozinha se ambos existirem */}
+                {/* AVISO: ITENS DE BAR (BEBIDAS) PARA PEGAR */}
                 {pendingBarItems.length > 0 && (
                      <div className="bg-amber-100 dark:bg-amber-900/40 border-l-4 border-amber-500 p-4 rounded-r shadow-sm animate-in slide-in-from-left-2">
                         <div className="flex justify-between items-start mb-2">
@@ -611,7 +623,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </DialogContent>
       </Dialog>
       
-      {/* Modal PIN e Menu mantidos iguais */}
+      {/* Diálogos PIN e Menu mantidos */}
       <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
           <DialogContent className="sm:max-w-xs">
               <DialogHeader>
