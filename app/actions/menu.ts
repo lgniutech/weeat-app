@@ -123,6 +123,10 @@ export async function createProductAction(prevState: any, formData: FormData) {
   const rawPrice = formData.get("price") as string;
   const price = parseFloat(rawPrice.replace("R$", "").replace(/\./g, "").replace(",", "."));
 
+  // Captura o booleano do formulário (checkbox/switch envia "on" se marcado, ou string "true"/"false")
+  const sendToKitchenRaw = formData.get("sendToKitchen");
+  const sendToKitchen = sendToKitchenRaw === "true" || sendToKitchenRaw === "on";
+
   const imageUrl = await handleImageUpload(supabase, formData.get("image") as File, storeId);
 
   const { data: product, error } = await supabase.from("products").insert({
@@ -131,7 +135,8 @@ export async function createProductAction(prevState: any, formData: FormData) {
     name: formData.get("name"),
     description: formData.get("description"),
     price,
-    image_url: imageUrl || ""
+    image_url: imageUrl || "",
+    send_to_kitchen: sendToKitchen // NOVO CAMPO
   }).select().single();
 
   if (error) return { error: "Erro ao criar produto." };
@@ -149,11 +154,16 @@ export async function updateProductAction(prevState: any, formData: FormData) {
     const rawPrice = formData.get("price") as string;
     const price = parseFloat(rawPrice.replace("R$", "").replace(/\./g, "").replace(",", "."));
 
+    // Captura o booleano
+    const sendToKitchenRaw = formData.get("sendToKitchen");
+    const sendToKitchen = sendToKitchenRaw === "true" || sendToKitchenRaw === "on";
+
     const updates: any = {
       category_id: formData.get("categoryId"),
       name: formData.get("name"),
       description: formData.get("description"),
-      price
+      price,
+      send_to_kitchen: sendToKitchen // NOVO CAMPO
     };
 
     const imageUrl = await handleImageUpload(supabase, formData.get("image") as File, productId);
@@ -207,8 +217,6 @@ export async function getCategoryAddonHistoryAction(storeId: string, categoryId:
     data.forEach((product: any) => {
         if (product.product_addons) {
             product.product_addons.forEach((pa: any) => {
-                // Atualiza o mapa. Como percorremos a lista, o último valor ou o predominante tende a ficar.
-                // Esta lógica simples garante que se você usou Bacon a R$5 nesta categoria, ele lembrará dos R$5.
                 priceMap[pa.addon_id] = pa.price;
             });
         }
