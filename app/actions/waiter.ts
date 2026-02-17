@@ -63,7 +63,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     .from("orders")
     .select(`
       id, status, total_price, discount, coupon_code, address, customer_name, table_number,
-      order_items ( id, name:product_name, quantity, price:unit_price, send_to_kitchen, status )
+      order_items ( id, name:product_name, quantity, price:unit_price, send_to_kitchen, status, removed_ingredients, selected_addons )
     `)
     .eq("store_id", storeId)
     .eq("delivery_type", "mesa")
@@ -201,7 +201,7 @@ export async function createTableOrderAction(
       }
       
       await supabase.from("order_history").insert({ order_id: order.id, new_status: 'aceito' });
-      revalidatePath("/");
+      revalidatePath("/", "layout");
       return { success: true, orderId: order.id };
 
   } catch (err: any) { return { error: "Erro interno." }; }
@@ -262,7 +262,7 @@ export async function addItemsToTableAction(
         })
         .eq("id", orderId);
 
-      revalidatePath("/");
+      revalidatePath("/", "layout");
       return { success: true };
   } catch (err) { return { error: "Erro ao processar." }; }
 }
@@ -305,7 +305,7 @@ export async function closeTableAction(tableNum: string, storeId: string, isForc
       .update({ status: newStatus })
       .in("order_id", ids);
 
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -313,7 +313,7 @@ export async function closeTableAction(tableNum: string, storeId: string, isForc
 export async function serveReadyOrdersAction(orderIds: string[]) {
     const supabase = await createClient();
     await supabase.from("orders").update({ status: "entregue", last_status_change: new Date().toISOString() }).in("id", orderIds);
-    revalidatePath("/");
+    revalidatePath("/", "layout");
     return { success: true };
 }
 
@@ -327,7 +327,7 @@ export async function serveBarItemsAction(itemIds: string[]) {
     const supabase = await createClient();
 
     try {
-        // 2. Busca IDs de Pedidos
+        // 2. Busca IDs de Pedidos e faz validação básica de existência
         const { data: itemsData, error: fetchError } = await supabase
             .from("order_items")
             .select("order_id")
@@ -335,16 +335,17 @@ export async function serveBarItemsAction(itemIds: string[]) {
 
         if (fetchError) {
             console.error("Erro ao buscar itens:", fetchError);
-            return { success: false, error: "Erro ao localizar itens." };
+            return { success: false, error: "Erro ao localizar itens no sistema." };
         }
 
         if (!itemsData || itemsData.length === 0) {
-             return { success: false, error: "Nenhum item encontrado." };
+             // Retorna sucesso pois se não existem, já "não estão pendentes"
+             return { success: true, message: "Itens já processados ou inexistentes." };
         }
 
         const uniqueOrderIds = [...new Set(itemsData.map(i => i.order_id))];
 
-        // 3. Atualiza Itens
+        // 3. Atualiza os Itens para 'entregue'
         const { error: updateError } = await supabase
             .from("order_items")
             .update({ status: 'entregue' })
@@ -352,11 +353,12 @@ export async function serveBarItemsAction(itemIds: string[]) {
         
         if (updateError) {
             console.error("Erro ao atualizar itens:", updateError);
-            return { success: false, error: "Falha ao atualizar status." };
+            return { success: false, error: "Falha ao atualizar status dos itens." };
         }
 
-        // 4. Verifica Pedidos Pai
-        for (const orderId of uniqueOrderIds) {
+        // 4. Verifica Pedidos Pai (Otimizado com Promise.all para não travar)
+        const updatePromises = uniqueOrderIds.map(async (orderId) => {
+            // Conta itens que NÃO estão finalizados (entregue, concluido, cancelado)
             const { count } = await supabase
                 .from("order_items")
                 .select("*", { count: 'exact', head: true })
@@ -365,19 +367,22 @@ export async function serveBarItemsAction(itemIds: string[]) {
                 .neq("status", "concluido")
                 .neq("status", "cancelado");
             
+            // Se count for 0, todos os itens foram processados, então atualiza o pedido pai
             if (count === 0) {
                 await supabase
                     .from("orders")
                     .update({ status: 'entregue', last_status_change: new Date().toISOString() })
                     .eq("id", orderId);
             }
-        }
+        });
 
-        revalidatePath("/");
+        await Promise.all(updatePromises);
+
+        revalidatePath("/", "layout");
         return { success: true };
 
     } catch (err) {
-        console.error("Erro inesperado no servidor:", err);
-        return { success: false, error: "Erro inesperado ao processar." };
+        console.error("Erro inesperado no servidor (serveBarItemsAction):", err);
+        return { success: false, error: "Erro inesperado ao processar entrega." };
     }
 }
