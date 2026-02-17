@@ -77,7 +77,6 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
     ) || [];
     
     // Filtro de itens prontos DA COZINHA (status do pedido 'enviado' pela cozinha)
-    // O status 'enviado' no pedido indica que a cozinha terminou
     const readyOrders = tableOrders.filter(o => o.status === 'enviado');
     
     // Mesa está "preparando" se tiver algum pedido aceito/preparando
@@ -321,36 +320,39 @@ export async function serveReadyOrdersAction(orderIds: string[]) {
 // --- 8. SERVIR ITENS DE BAR (INDIVIDUALMENTE) E ATUALIZAR PEDIDO ---
 export async function serveBarItemsAction(itemIds: string[]) {
     if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-        return { success: false, error: "IDs inválidos." };
+        return { success: false, error: "Nenhum item selecionado." };
     }
 
     const supabase = await createClient();
 
     try {
-        // 1. Atualizar ITENS para 'entregue'
+        // 1. Atualizar status dos itens para 'entregue'
         const { error: updateError } = await supabase
             .from("order_items")
             .update({ status: 'entregue' })
             .in("id", itemIds);
 
         if (updateError) {
-            console.error("Erro ao atualizar itens:", updateError);
-            return { success: false, error: "Falha ao atualizar itens no banco." };
+            console.error("Erro update itens:", updateError);
+            return { success: false, error: "Falha ao atualizar itens." };
         }
 
-        // 2. Verificar se devemos atualizar os Pedidos Pai
-        // Buscamos os order_ids dos itens que acabamos de atualizar
-        const { data: affectedItems } = await supabase
+        // 2. Verificar se precisamos atualizar o status dos pedidos (Orders)
+        // Isso é feito em background "lógico", não vamos travar o retorno se falhar,
+        // mas é importante para a consistência.
+        
+        // Buscar order_ids dos itens que acabamos de atualizar
+        const { data: items } = await supabase
             .from("order_items")
             .select("order_id")
             .in("id", itemIds);
-        
-        if (affectedItems && affectedItems.length > 0) {
-            // Remove duplicatas
-            const uniqueOrderIds = Array.from(new Set(affectedItems.map(i => i.order_id)));
 
-            // Para cada pedido afetado, verificamos se ainda há itens pendentes
+        if (items && items.length > 0) {
+            const uniqueOrderIds = [...new Set(items.map(i => i.order_id))];
+
+            // Para cada pedido, checar se sobrou algo pendente
             for (const orderId of uniqueOrderIds) {
+                // Conta itens que NÃO estão finalizados
                 const { count } = await supabase
                     .from("order_items")
                     .select("*", { count: 'exact', head: true })
@@ -358,24 +360,25 @@ export async function serveBarItemsAction(itemIds: string[]) {
                     .neq("status", "entregue")
                     .neq("status", "concluido")
                     .neq("status", "cancelado");
-
-                // Se count for 0, significa que não há mais nada pendente/preparando
-                // Então o pedido inteiro foi entregue
+                
+                // Se count é 0, todos os itens foram entregues/cancelados
                 if (count === 0) {
                     await supabase
                         .from("orders")
-                        .update({ status: 'entregue', last_status_change: new Date().toISOString() })
+                        .update({ 
+                            status: 'entregue',
+                            last_status_change: new Date().toISOString()
+                        })
                         .eq("id", orderId);
                 }
             }
         }
 
-        // 3. Sucesso
         revalidatePath("/", "layout");
         return { success: true };
 
-    } catch (err) {
-        console.error("Erro crítico em serveBarItemsAction:", err);
-        return { success: false, error: "Erro interno no servidor." };
+    } catch (error) {
+        console.error("Erro server action serveBarItemsAction:", error);
+        return { success: false, error: "Erro interno ao processar entrega." };
     }
 }
