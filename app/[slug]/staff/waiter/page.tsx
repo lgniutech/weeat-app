@@ -11,8 +11,7 @@ import {
     addItemsToTableAction, 
     closeTableAction,
     serveReadyOrdersAction,
-    validateCouponUiAction,
-    serveBarItemsAction 
+    validateCouponUiAction
 } from "@/app/actions/waiter"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -272,45 +271,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       });
   }
 
-  const handleServeBarItems = async (itemIds: string[]) => {
-      const validIds = itemIds.filter(id => id && typeof id === 'string');
-      if (validIds.length === 0) {
-          toast({ title: "Nenhum item válido.", variant: "destructive" });
-          return;
-      }
-
-      startTransition(async () => {
-          try {
-              // Atualização Otimista local
-              setSelectedTable((prev: any) => {
-                  if (!prev || !prev.items) return prev;
-                  const updatedItems = prev.items.map((item: any) => {
-                      if (validIds.includes(item.id)) {
-                          return { ...item, status: 'entregue' };
-                      }
-                      return item;
-                  });
-                  return { ...prev, items: updatedItems };
-              });
-
-              const res = await serveBarItemsAction(validIds);
-              
-              if (res?.success) {
-                  toast({ title: "Itens Entregues!", className: "bg-amber-600 text-white" });
-                  await fetchTables(); 
-              } else {
-                  console.error(res?.error);
-                  toast({ title: "Erro", description: "Falha ao salvar.", variant: "destructive" });
-                  fetchTables(); 
-              }
-          } catch (err) {
-              console.error(err);
-              toast({ title: "Erro de Conexão", variant: "destructive" });
-              fetchTables();
-          }
-      });
-  }
-
   const filteredProducts = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchCat = activeTab === "all" || p.category_id === activeTab
@@ -328,16 +288,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
 
   const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
   const finalCartTotal = validatedCouponData?.valid ? cartTotal - validatedCouponData.discount : cartTotal;
-
-  const pendingBarItems = useMemo(() => {
-      if (!selectedTable?.items) return [];
-      return selectedTable.items.filter((item: any) => 
-          item.send_to_kitchen === false &&  
-          item.status !== 'entregue' &&      
-          item.status !== 'cancelado' &&     
-          item.status !== 'concluido'
-      );
-  }, [selectedTable]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 transition-colors duration-300">
@@ -360,13 +310,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         {tables.map(table => {
             const isReady = table.hasReadyItems;
             
-            const hasPendingBar = table.items?.some((i: any) => 
-                i.send_to_kitchen === false && 
-                i.status !== 'entregue' && 
-                i.status !== 'cancelado' &&
-                i.status !== 'concluido'
-            );
-            
             let statusLabel = "Servido";
             if(table.isPreparing) statusLabel = "Preparando...";
 
@@ -378,9 +321,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
             } else if (isReady) {
                  cardClasses = "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse";
                  iconComponent = <div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>;
-            } else if (hasPendingBar) {
-                 cardClasses = "bg-amber-100 dark:bg-amber-900/40 border-amber-500 ring-2 ring-amber-300 dark:ring-amber-800 text-amber-800 dark:text-amber-300";
-                 iconComponent = <div className="absolute top-2 right-2 animate-pulse"><BellRing className="w-6 h-6 text-amber-600 fill-amber-200" /></div>;
             } else {
                  cardClasses = "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400";
             }
@@ -404,10 +344,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                         <div className="flex flex-col items-center">
                             {isReady ? (
                                 <span className="text-xs font-black bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-0.5 rounded-full uppercase">COZINHA PRONTA!</span>
-                            ) : hasPendingBar ? (
-                                <span className="text-[10px] font-black text-amber-900 dark:text-amber-100 mt-1 flex items-center gap-1 uppercase bg-amber-400/50 dark:bg-amber-800 px-1.5 py-0.5 rounded shadow-sm">
-                                    <BellRing className="w-3 h-3"/> Pegar item
-                                </span>
                             ) : (
                                 <>
                                     {table.discount > 0 && (
@@ -460,34 +396,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                             SERVIR COZINHA
                         </Button>
                     </div>
-                )}
-
-                {pendingBarItems.length > 0 && (
-                     <div className="bg-amber-100 dark:bg-amber-900/40 border-l-4 border-amber-500 p-4 rounded-r shadow-sm animate-in slide-in-from-left-2">
-                        <div className="flex justify-between items-start mb-2">
-                             <div className="flex items-center gap-2">
-                                <BellRing className="w-6 h-6 text-amber-700 dark:text-amber-400 animate-pulse" />
-                                <div>
-                                    <h3 className="font-bold text-amber-800 dark:text-amber-200">Pegar item</h3>
-                                    <p className="text-xs text-amber-700 dark:text-amber-300">Itens aguardando entrega.</p>
-                                </div>
-                             </div>
-                             <Badge className="bg-amber-600 text-white hover:bg-amber-700">{pendingBarItems.length} itens</Badge>
-                        </div>
-                        <ul className="text-sm text-amber-900 dark:text-amber-100 mb-3 space-y-1 ml-1 list-disc list-inside opacity-90 font-medium">
-                            {pendingBarItems.map((item: any, idx: number) => (
-                                <li key={idx}>{item.quantity}x {item.name || item.product_name}</li>
-                            ))}
-                        </ul>
-                        <Button 
-                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-12 shadow-sm text-base" 
-                            onClick={() => handleServeBarItems(pendingBarItems.map((i: any) => i.id))} 
-                            disabled={isPending}
-                        >
-                            {isPending ? <RefreshCw className="animate-spin w-5 h-5 mr-2"/> : <CheckCircle2 className="mr-2 h-5 w-5"/>}
-                            CONFIRMAR ENTREGA
-                        </Button>
-                     </div>
                 )}
 
                 {selectedTable?.status === 'free' ? (
