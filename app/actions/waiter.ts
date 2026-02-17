@@ -58,6 +58,7 @@ export async function getTablesStatusAction(storeId: string): Promise<TableData[
   const { data: store } = await supabase.from("stores").select("total_tables").eq("id", storeId).single();
   const totalTables = store?.total_tables || 10; 
 
+  // Buscamos pedidos ativos (não concluídos e não cancelados)
   const { data: activeOrders } = await supabase
     .from("orders")
     .select(`
@@ -316,11 +317,53 @@ export async function serveReadyOrdersAction(orderIds: string[]) {
     return { success: true };
 }
 
-// --- 8. NOVA: SERVIR ITENS DE BAR (INDIVIDUALMENTE) ---
+// --- 8. SERVIR ITENS DE BAR (INDIVIDUALMENTE) E ATUALIZAR PEDIDO ---
 export async function serveBarItemsAction(itemIds: string[]) {
     const supabase = await createClient();
-    // Marca apenas os itens selecionados como entregues
-    await supabase.from("order_items").update({ status: 'entregue' }).in("id", itemIds);
+
+    // 1. Marca os itens selecionados como 'entregue'
+    const { error } = await supabase
+        .from("order_items")
+        .update({ status: 'entregue' })
+        .in("id", itemIds)
+        .select("order_id"); // Retorna os IDs dos pedidos afetados
+    
+    if (error) return { success: false, error: "Falha ao atualizar itens." };
+
+    // 2. Busca os pedidos afetados para verificar se todos os itens foram entregues
+    // Precisamos saber a quais pedidos esses itens pertenciam
+    const { data: affectedItems } = await supabase
+        .from("order_items")
+        .select("order_id")
+        .in("id", itemIds);
+    
+    if (affectedItems && affectedItems.length > 0) {
+        // Extrai IDs únicos de pedidos
+        const orderIds = [...new Set(affectedItems.map(i => i.order_id))];
+
+        for (const orderId of orderIds) {
+            // Verifica se SOBROU algum item neste pedido que NÃO está entregue nem cancelado/concluido
+            // Se send_to_kitchen for true e ainda estiver 'aceito'/'preparando', ele vai contar aqui.
+            // Se send_to_kitchen for false e não foi entregue, conta aqui.
+            const { count } = await supabase
+                .from("order_items")
+                .select("*", { count: 'exact', head: true })
+                .eq("order_id", orderId)
+                .neq("status", "entregue")
+                .neq("status", "concluido")
+                .neq("status", "cancelado");
+            
+            // Se count for 0, significa que TODOS os itens desse pedido foram finalizados (entregues ou cancelados)
+            // Logo, podemos marcar o pedido pai como "entregue"
+            if (count === 0) {
+                await supabase
+                    .from("orders")
+                    .update({ status: 'entregue', last_status_change: new Date().toISOString() })
+                    .eq("id", orderId);
+            }
+        }
+    }
+
     revalidatePath("/");
     return { success: true };
 }
