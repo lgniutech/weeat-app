@@ -194,8 +194,8 @@ export async function createTableOrderAction(
             observation: i.observation || "",
             removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
             selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
-            status: 'aceito', // Status inicial já aceito para mesa
-            // CORREÇÃO AQUI: Verifica send_to_kitchen (do banco) OU sendToKitchen (camelCase)
+            status: 'aceito',
+            // GARANTE QUE PEGA O VALOR CORRETO DO FRONTEND OU DEFAULT
             send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : (i.sendToKitchen !== undefined ? i.sendToKitchen : true)
           }));
           await supabase.from("order_items").insert(orderItems);
@@ -229,7 +229,7 @@ export async function addItemsToTableAction(
         removed_ingredients: i.removedIngredients ? JSON.stringify(i.removedIngredients) : null,
         selected_addons: i.selectedAddons ? JSON.stringify(i.selectedAddons) : null,
         status: 'aceito',
-        // CORREÇÃO AQUI: Verifica send_to_kitchen (do banco) OU sendToKitchen (camelCase)
+        // GARANTE QUE PEGA O VALOR CORRETO DO FRONTEND OU DEFAULT
         send_to_kitchen: i.send_to_kitchen !== undefined ? i.send_to_kitchen : (i.sendToKitchen !== undefined ? i.sendToKitchen : true)
       }));
       await supabase.from("order_items").insert(orderItems);
@@ -320,33 +320,43 @@ export async function serveReadyOrdersAction(orderIds: string[]) {
 }
 
 // --- 8. SERVIR ITENS DE BAR (INDIVIDUALMENTE) E ATUALIZAR PEDIDO ---
+// CORRIGIDO: Lógica mais robusta para evitar carregamento infinito
 export async function serveBarItemsAction(itemIds: string[]) {
     const supabase = await createClient();
 
-    // 1. Marca os itens selecionados como 'entregue'
-    const { error } = await supabase
-        .from("order_items")
-        .update({ status: 'entregue' })
-        .in("id", itemIds)
-        .select("order_id"); // Retorna os IDs dos pedidos afetados
-    
-    if (error) return { success: false, error: "Falha ao atualizar itens." };
+    try {
+        // 1. Primeiro, descobrimos a quais pedidos esses itens pertencem
+        const { data: itemsData, error: fetchError } = await supabase
+            .from("order_items")
+            .select("order_id")
+            .in("id", itemIds);
 
-    // 2. Busca os pedidos afetados para verificar se todos os itens foram entregues
-    // Precisamos saber a quais pedidos esses itens pertenciam
-    const { data: affectedItems } = await supabase
-        .from("order_items")
-        .select("order_id")
-        .in("id", itemIds);
-    
-    if (affectedItems && affectedItems.length > 0) {
-        // Extrai IDs únicos de pedidos
-        const orderIds = [...new Set(affectedItems.map(i => i.order_id))];
+        if (fetchError) {
+            console.error("Erro ao buscar itens:", fetchError);
+            return { success: false, error: "Erro ao localizar itens." };
+        }
 
-        for (const orderId of orderIds) {
-            // Verifica se SOBROU algum item neste pedido que NÃO está entregue nem cancelado/concluido
-            // Se send_to_kitchen for true e ainda estiver 'aceito'/'preparando', ele vai contar aqui.
-            // Se send_to_kitchen for false e não foi entregue, conta aqui.
+        if (!itemsData || itemsData.length === 0) {
+             return { success: false, error: "Nenhum item encontrado." };
+        }
+
+        // Remove duplicatas de Order IDs
+        const uniqueOrderIds = [...new Set(itemsData.map(i => i.order_id))];
+
+        // 2. Atualiza o status dos itens para 'entregue'
+        const { error: updateError } = await supabase
+            .from("order_items")
+            .update({ status: 'entregue' })
+            .in("id", itemIds);
+        
+        if (updateError) {
+            console.error("Erro ao atualizar itens:", updateError);
+            return { success: false, error: "Falha ao atualizar status." };
+        }
+
+        // 3. Verifica cada pedido pai: se não houver mais nada pendente, marca como entregue
+        for (const orderId of uniqueOrderIds) {
+            // Conta quantos itens AINDA NÃO estão finalizados (nem entregues, nem concluidos, nem cancelados)
             const { count } = await supabase
                 .from("order_items")
                 .select("*", { count: 'exact', head: true })
@@ -355,8 +365,7 @@ export async function serveBarItemsAction(itemIds: string[]) {
                 .neq("status", "concluido")
                 .neq("status", "cancelado");
             
-            // Se count for 0, significa que TODOS os itens desse pedido foram finalizados (entregues ou cancelados)
-            // Logo, podemos marcar o pedido pai como "entregue"
+            // Se count for 0, tudo foi finalizado
             if (count === 0) {
                 await supabase
                     .from("orders")
@@ -364,8 +373,12 @@ export async function serveBarItemsAction(itemIds: string[]) {
                     .eq("id", orderId);
             }
         }
-    }
 
-    revalidatePath("/");
-    return { success: true };
+        revalidatePath("/");
+        return { success: true };
+
+    } catch (err) {
+        console.error("Erro inesperado no servidor:", err);
+        return { success: false, error: "Erro inesperado ao processar." };
+    }
 }
