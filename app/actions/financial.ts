@@ -32,11 +32,13 @@ export async function getFinancialMetricsAction(
     const endDate = endOfDay(dateRange.to).toISOString()
 
     // 1. Buscar Pedidos no Período
-    // Buscamos pedidos concluídos, entregues, em rota, etc. E também cancelados para métrica de perda.
+    // FILTRO APLICADO: Apenas Concluído ou Cancelado.
+    // Pedidos "entregues" (na mesa) mas não fechados, ou em preparo, são ignorados.
     const { data: orders, error } = await supabase
       .from("orders")
       .select("*")
       .eq("store_id", storeId)
+      .in("status", ["concluido", "cancelado"]) 
       .gte("created_at", startDate)
       .lte("created_at", endDate)
       .order("created_at", { ascending: false })
@@ -44,9 +46,8 @@ export async function getFinancialMetricsAction(
     if (error) throw error
 
     // 2. Processar Dados
-    const activeOrders = orders.filter(o => 
-      ['entregue', 'concluido', 'em_rota', 'enviado', 'pronto_cozinha', 'preparando', 'aceito'].includes(o.status)
-    )
+    // Active orders são apenas os concluídos (Receita Realizada)
+    const activeOrders = orders.filter(o => o.status === 'concluido')
     
     const cancelledOrders = orders.filter(o => o.status === 'cancelado')
 
@@ -110,7 +111,7 @@ export async function getFinancialMetricsAction(
           revenueByDay,
           paymentMix
         },
-        transactions: orders // Retorna a lista completa para a tabela (incluindo cancelados)
+        transactions: orders // Retorna a lista contendo apenas Concluídos e Cancelados
       }
     }
 
