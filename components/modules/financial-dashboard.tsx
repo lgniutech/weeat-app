@@ -5,11 +5,13 @@ import { getFinancialMetricsAction, type FinancialSummary } from "@/app/actions/
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, FileSpreadsheet, Printer, RefreshCw } from "lucide-react"
+import { CalendarIcon, FileSpreadsheet, FileText, RefreshCw } from "lucide-react"
 import { format, subDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import * as XLSX from "xlsx"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 import { FinancialCards } from "./financial/financial-cards"
 import { FinancialCharts } from "./financial/financial-charts"
@@ -45,17 +47,13 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
   const handleExportExcel = () => {
     if (!data?.transactions) return
 
-    // 1. Formata os dados para o Excel
     const worksheetData = data.transactions.map((t) => {
-      // Formatação simples do método de pagamento
       const paymentMethod = t.payment_method 
         ? t.payment_method.replace("_", " ").toUpperCase() 
         : "-"
 
-      // Formatação do status igual à tabela visual
       const statusLabel = t.status === 'cancelado' ? 'Cancelado' : 'Concluído'
       
-      // Capitaliza o tipo de entrega
       const deliveryType = t.delivery_type 
         ? t.delivery_type.charAt(0).toUpperCase() + t.delivery_type.slice(1)
         : "N/A"
@@ -72,41 +70,94 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
       }
     })
 
-    // 2. Cria a planilha (Worksheet)
     const worksheet = XLSX.utils.json_to_sheet(worksheetData)
 
-    // Ajusta a largura das colunas (Opcional, para melhor visualização)
     const columnWidths = [
-      { wch: 10 }, // ID
-      { wch: 20 }, // Data/Hora
-      { wch: 30 }, // Cliente
-      { wch: 15 }, // Tipo
-      { wch: 20 }, // Pagamento
-      { wch: 15 }, // Status
-      { wch: 15 }, // Valor Total
-      { wch: 10 }, // Desconto
+      { wch: 10 }, { wch: 20 }, { wch: 30 }, { wch: 15 }, 
+      { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 10 },
     ]
     worksheet['!cols'] = columnWidths
 
-    // 3. Cria o arquivo (Workbook) e adiciona a planilha
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório Financeiro")
 
-    // 4. Gera o download do arquivo .xlsx
     const fileName = `relatorio_financeiro_${format(new Date(), "yyyy-MM-dd")}.xlsx`
     XLSX.writeFile(workbook, fileName)
   }
 
-  // Lógica de Impressão (PDF Nativo do Browser)
-  const handlePrint = () => {
-    window.print()
+  // Lógica de Geração de PDF (Limpo/Extrato)
+  const handleExportPDF = () => {
+    if (!data?.transactions || !date?.from || !date?.to) return
+
+    const doc = new jsPDF()
+
+    // --- Cabeçalho ---
+    doc.setFontSize(18)
+    doc.text("Extrato Financeiro - WeEat", 14, 22)
+
+    doc.setFontSize(10)
+    doc.setTextColor(100)
+    const periodStr = `Período: ${format(date.from, "dd/MM/yyyy")} até ${format(date.to, "dd/MM/yyyy")}`
+    doc.text(periodStr, 14, 30)
+
+    // --- Resumo Rápido ---
+    const totalRevenue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+      data.transactions.reduce((acc, curr) => acc + (curr.status !== 'cancelado' ? curr.total_price : 0), 0)
+    )
+    const totalOrders = data.transactions.length
+    
+    doc.setFontSize(11)
+    doc.setTextColor(0)
+    doc.text(`Total de Vendas: ${totalRevenue}`, 14, 40)
+    doc.text(`Total de Pedidos: ${totalOrders}`, 14, 46)
+
+    // --- Tabela ---
+    const tableBody = data.transactions.map((t) => [
+      format(new Date(t.created_at), "dd/MM HH:mm", { locale: ptBR }),
+      t.customer_name || "Consumidor",
+      t.delivery_type ? t.delivery_type.toUpperCase() : "-",
+      t.payment_method ? t.payment_method.replace("_", " ").toUpperCase() : "-",
+      t.status === 'cancelado' ? 'CANCELADO' : 'CONCLUÍDO',
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.total_price)
+    ])
+
+    autoTable(doc, {
+      startY: 55,
+      head: [['Data', 'Cliente', 'Tipo', 'Pagamento', 'Status', 'Valor']],
+      body: tableBody,
+      theme: 'grid',
+      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 3 },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      // Customização de cor para status Cancelado
+      didParseCell: function(data) {
+        if (data.section === 'body' && data.column.index === 4) {
+          const status = data.cell.raw as string
+          if (status === 'CANCELADO') {
+            data.cell.styles.textColor = [220, 38, 38] // Vermelho
+          } else {
+            data.cell.styles.textColor = [22, 163, 74] // Verde
+          }
+        }
+      }
+    })
+
+    // Rodapé
+    const pageCount = doc.internal.pages.length - 1
+    doc.setFontSize(8)
+    doc.setTextColor(150)
+    const generatedDate = `Gerado em: ${format(new Date(), "dd/MM/yyyy HH:mm:ss")}`
+    doc.text(generatedDate, 14, doc.internal.pageSize.height - 10)
+
+    // Download
+    doc.save(`extrato_financeiro_${format(new Date(), "yyyy-MM-dd")}.pdf`)
   }
 
   return (
-    <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500 print:p-0 print:bg-white print:text-black">
+    <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* HEADER DE CONTROLE (Oculto na impressão) */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
+      {/* HEADER DE CONTROLE */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold tracking-tight">Relatórios Financeiros</h2>
         
         <div className="flex flex-wrap items-center gap-2">
@@ -159,31 +210,21 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
                 <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel
             </Button>
             
-            <Button onClick={handlePrint}>
-                <Printer className="mr-2 h-4 w-4" /> Imprimir / PDF
+            <Button onClick={handleExportPDF}>
+                <FileText className="mr-2 h-4 w-4" /> Baixar PDF
             </Button>
         </div>
       </div>
 
-      {/* CABEÇALHO APENAS PARA IMPRESSÃO */}
-      <div className="hidden print:block mb-8 text-center border-b pb-4">
-        <h1 className="text-3xl font-bold mb-2">Relatório Financeiro</h1>
-        <p className="text-sm">
-            Período: {date?.from && format(date.from, "dd/MM/yyyy")} até {date?.to && format(date.to, "dd/MM/yyyy")}
-        </p>
-      </div>
-
       {data ? (
         <>
-            <div className="print:break-inside-avoid">
-                <FinancialCards data={data.kpis} />
-            </div>
+            <FinancialCards data={data.kpis} />
             
-            <div className="print:break-inside-avoid mt-6">
+            <div className="mt-6">
                 <FinancialCharts revenueData={data.charts.revenueByDay} paymentData={data.charts.paymentMix} />
             </div>
 
-            <div className="print:break-before-page mt-6">
+            <div className="mt-6">
                 <TransactionsTable transactions={data.transactions} />
             </div>
         </>
