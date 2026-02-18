@@ -62,7 +62,9 @@
     "tw-animate-css": "latest",
     "vaul": "^1.1.2",
     "xlsx": "^0.18.5",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
