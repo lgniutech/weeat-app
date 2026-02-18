@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useTransition, useMemo } from "react"
+import { useState, useEffect, useTransition, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { ThemeProvider, useTheme } from "next-themes" 
 import { getStaffSession, logoutStaffAction, validateStaffPin } from "@/app/actions/staff"
@@ -11,7 +11,8 @@ import {
     addItemsToTableAction, 
     closeTableAction,
     serveReadyOrdersAction,
-    validateCouponUiAction 
+    serveBarItemsAction,
+    validateCouponUiAction
 } from "@/app/actions/waiter"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -20,11 +21,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag, AlertTriangle, Lock } from "lucide-react"
+import { User, LogOut, Plus, Search, Minus, Utensils, Moon, Sun, CheckCircle2, RefreshCw, ChevronLeft, Trash2, BellRing, Phone, Receipt, CreditCard, TicketPercent, Tag, AlertTriangle, Lock, CupSoda, HandPlatter, Beer } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-// IMPORTAÇÃO DAS FUNÇÕES DE FORMATAÇÃO
 import { formatPhone, formatOnlyLetters } from "@/lib/utils"
 
 type Product = {
@@ -34,6 +34,7 @@ type Product = {
     description: string;
     category_id: string;
     image_url?: string;
+    send_to_kitchen?: boolean;
     ingredients?: { id: string, name: string }[];
     addons?: { id: string, name: string, price: number }[];
 }
@@ -59,7 +60,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [productToCustomize, setProductToCustomize] = useState<Product | null>(null)
   
-  // Estado para PIN Modal
   const [isPinDialogOpen, setIsPinDialogOpen] = useState(false)
   const [pinCode, setPinCode] = useState("")
   const [pinError, setPinError] = useState(false)
@@ -68,17 +68,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
   
-  // Cliente Info
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
 
-  // Item Temp
   const [tempQuantity, setTempQuantity] = useState(1)
   const [tempObs, setTempObs] = useState("")
   const [tempRemovedIngredients, setTempRemovedIngredients] = useState<string[]>([])
   const [tempSelectedAddons, setTempSelectedAddons] = useState<string[]>([])
 
-  // Cupom no Carrinho
   const [cartCoupon, setCartCoupon] = useState("")
   const [validatedCouponData, setValidatedCouponData] = useState<{valid: boolean, discount: number, message?: string} | null>(null)
 
@@ -103,24 +100,27 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     init()
   }, [slug, router])
 
-  const fetchTables = async () => {
+  const fetchTables = useCallback(async () => {
     if (!storeId) return
     try {
         const data = await getTablesStatusAction(storeId)
         setTables(data)
-        if (selectedTable && isManagementOpen) {
-            const updated = data.find(t => t.id === selectedTable.id)
-            if (updated) setSelectedTable(updated)
-            else setSelectedTable(null)
+        
+        if (isManagementOpen) {
+            setSelectedTable((currentSelected: any) => {
+                if (!currentSelected) return null;
+                const updated = data.find(t => t.id === currentSelected.id)
+                return updated || null;
+            })
         }
     } catch (error) { console.error(error) }
-  }
+  }, [storeId, isManagementOpen])
 
   useEffect(() => {
     fetchTables()
     const interval = setInterval(fetchTables, 3000) 
     return () => clearInterval(interval)
-  }, [storeId, selectedTable, isManagementOpen])
+  }, [fetchTables])
 
   const openTableManagement = (table: any) => {
     setSelectedTable(table)
@@ -134,7 +134,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const openMenu = () => {
     setCart([]) 
     setSearchQuery("")
-    setCartCoupon("") // Reset cupom ao abrir
+    setCartCoupon("") 
     setValidatedCouponData(null)
     setIsMenuOpen(true)
     setIsManagementOpen(false) 
@@ -217,15 +217,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
   const handleCloseTableAttempt = async () => {
       if(!confirm("Deseja realmente solicitar o encerramento da mesa?")) return;
 
-      // Verifica se há itens na cozinha ou prontos mas não entregues
-      // isPreparing = aceito, preparando
-      // hasReadyItems = pronto/enviado (ainda não entregue)
-      if (selectedTable.isPreparing || selectedTable.hasReadyItems) {
+      // Verifica se há itens pendentes (Cozinha ou Bar)
+      if (selectedTable.isPreparing || selectedTable.hasReadyItems || selectedTable.hasBarItems) {
           setPinCode("");
           setPinError(false);
           setIsPinDialogOpen(true);
       } else {
-          await executeCloseTable(false); // False = Normal close
+          await executeCloseTable(false); 
       }
   }
 
@@ -238,14 +236,13 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       const isValid = await validateStaffPin(storeId!, pinCode);
       if (isValid) {
           setIsPinDialogOpen(false);
-          await executeCloseTable(true); // True = Forced (Desistance)
+          await executeCloseTable(true);
       } else {
           setPinError(true);
           toast({ title: "PIN Inválido", variant: "destructive" });
       }
   }
 
-  // MODIFICADO: Adicionado parâmetro isForced
   const executeCloseTable = async (isForced: boolean) => {
     startTransition(async () => {
         const res = await closeTableAction(selectedTable.id, storeId!, isForced)
@@ -263,12 +260,25 @@ function WaiterContent({ params }: { params: { slug: string } }) {
     })
   }
 
-  const handleServeOrders = async () => {
+  const handleServeKitchenOrders = async () => {
       if (!selectedTable?.readyOrderIds || selectedTable.readyOrderIds.length === 0) return;
       startTransition(async () => {
           const res = await serveReadyOrdersAction(selectedTable.readyOrderIds);
           if (res?.success) {
-              toast({ title: "Pedido Entregue!", className: "bg-green-600 text-white" });
+              toast({ title: "Cozinha Entregue!", className: "bg-green-600 text-white" });
+              fetchTables(); 
+          } else {
+              toast({ title: "Erro", description: res?.error, variant: "destructive" });
+          }
+      });
+  }
+
+  const handleServeBarItems = async () => {
+      if (!selectedTable?.barItemIds || selectedTable.barItemIds.length === 0) return;
+      startTransition(async () => {
+          const res = await serveBarItemsAction(selectedTable.barItemIds);
+          if (res?.success) {
+              toast({ title: "Itens de Bar/Copa Entregues!", className: "bg-blue-600 text-white" });
               fetchTables(); 
           } else {
               toast({ title: "Erro", description: res?.error, variant: "destructive" });
@@ -314,9 +324,30 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         {tables.length === 0 && <p className="col-span-full text-center text-muted-foreground">Carregando mesas...</p>}
         {tables.map(table => {
             const isReady = table.hasReadyItems;
+            const isBarPending = table.hasBarItems;
             
             let statusLabel = "Servido";
             if(table.isPreparing) statusLabel = "Preparando...";
+
+            let cardClasses = "";
+            let kitchenIcon = null;
+            let barIcon = null;
+
+            if (table.status === 'free') {
+                 cardClasses = "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400";
+            } else if (isReady) {
+                 // PRIORIDADE VISUAL: Cozinha pronta ganha destaque VERDE
+                 cardClasses = "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse";
+                 kitchenIcon = <div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>;
+                 if(isBarPending) barIcon = <div className="absolute top-2 left-2"><CupSoda className="w-5 h-5 text-blue-600" /></div>;
+
+            } else if (isBarPending) {
+                 // PRIORIDADE SECUNDÁRIA: Bar pendente (sem cozinha pronta) ganha destaque AZUL
+                 cardClasses = "bg-blue-50 dark:bg-blue-900/30 border-blue-500 ring-1 ring-blue-300 dark:ring-blue-900 text-blue-700";
+                 barIcon = <div className="absolute top-2 right-2 animate-bounce"><CupSoda className="w-6 h-6 text-blue-600" /></div>;
+            } else {
+                 cardClasses = "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400";
+            }
 
             return (
               <div 
@@ -324,12 +355,11 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                 onClick={() => openTableManagement(table)}
                 className={cn(
                   "h-32 rounded-xl flex flex-col items-center justify-center cursor-pointer border-2 shadow-sm relative overflow-hidden transition-all active:scale-95",
-                  table.status === 'free' && "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400 text-slate-400",
-                  table.status === 'occupied' && !isReady && "bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-400",
-                  isReady && "bg-green-50 dark:bg-green-900/30 border-green-500 ring-2 ring-green-300 dark:ring-green-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 text-green-700 animate-pulse"
+                  cardClasses
                 )}
               >
-                {isReady && (<div className="absolute top-2 right-2 animate-bounce"><BellRing className="w-6 h-6 text-green-600 fill-green-200" /></div>)}
+                {kitchenIcon}
+                {barIcon}
 
                 <span className="text-3xl font-bold">{table.id}</span>
                 <div className="mt-2 text-center">
@@ -338,14 +368,17 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     ) : (
                         <div className="flex flex-col items-center">
                             {isReady ? (
-                                <span className="text-xs font-black bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-0.5 rounded-full uppercase">PRONTO!</span>
+                                <span className="text-xs font-black bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-0.5 rounded-full uppercase">COZINHA PRONTA!</span>
+                            ) : isBarPending ? (
+                                <span className="text-xs font-black bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-100 px-2 py-0.5 rounded-full uppercase">RETIRAR BEBIDA</span>
                             ) : (
                                 <>
                                     {table.discount > 0 && (
                                         <span className="text-[10px] line-through text-muted-foreground">R$ {table.subtotal?.toFixed(0)}</span>
                                     )}
                                     <span className="text-xs font-bold">R$ {table.total.toFixed(0)}</span>
-                                    <span className={cn("text-[10px] font-medium uppercase", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
+                                    
+                                    <span className={cn("text-[10px] font-medium uppercase mt-1", table.isPreparing ? "text-blue-600 animate-pulse" : "text-slate-500")}>
                                         {statusLabel}
                                     </span>
                                 </>
@@ -358,7 +391,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         })}
       </main>
 
-      {/* Modal Principal da Mesa */}
       <Dialog open={isManagementOpen} onOpenChange={setIsManagementOpen}>
         <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900">
             <DialogHeader>
@@ -373,21 +405,48 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                         {selectedTable?.status === 'free' ? "Livre" : "Ocupada"}
                     </Badge>
                 </DialogTitle>
+                <DialogDescription className="hidden">Gerenciamento da Mesa</DialogDescription>
             </DialogHeader>
             
             <div className="py-2 space-y-4">
+                
+                {/* BLOCO 1: Alerta da Cozinha (Prioridade Máxima) */}
                 {selectedTable?.hasReadyItems && (
                     <div className="bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500 p-4 rounded-r shadow-sm animate-in fade-in slide-in-from-top-2">
                         <div className="flex items-center gap-3 mb-3">
                             <BellRing className="w-6 h-6 text-green-700 dark:text-green-400 animate-bounce" />
                             <div>
-                                <h3 className="font-bold text-green-800 dark:text-green-300">Pedido Pronto!</h3>
-                                <p className="text-xs text-green-700 dark:text-green-400">Leve à mesa e confirme.</p>
+                                <h3 className="font-bold text-green-800 dark:text-green-300">Cozinha Pronta!</h3>
+                                <p className="text-xs text-green-700 dark:text-green-400">Leve os pratos à mesa.</p>
                             </div>
                         </div>
-                        <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12 text-lg shadow-md transition-all active:scale-95" onClick={handleServeOrders} disabled={isPending}>
+                        <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12 text-lg shadow-md transition-all active:scale-95" onClick={handleServeKitchenOrders} disabled={isPending}>
                             {isPending ? <RefreshCw className="animate-spin mr-2"/> : <CheckCircle2 className="mr-2 h-5 w-5"/>}
-                            SERVIR PEDIDO
+                            SERVIR COZINHA
+                        </Button>
+                    </div>
+                )}
+
+                {/* BLOCO 2: Alerta do Bar (Prioridade Secundária) */}
+                {selectedTable?.hasBarItems && (
+                    <div className="bg-blue-100 dark:bg-blue-900/40 border-l-4 border-blue-500 p-4 rounded-r shadow-sm animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-center gap-3 mb-3">
+                            <CupSoda className="w-6 h-6 text-blue-700 dark:text-blue-400 animate-pulse" />
+                            <div>
+                                <h3 className="font-bold text-blue-800 dark:text-blue-300">Retirar no Balcão</h3>
+                                <p className="text-xs text-blue-700 dark:text-blue-400">Bebidas/Itens prontos para entrega.</p>
+                                {/* Lista rápida de itens para facilitar a visualização */}
+                                <div className="text-xs text-blue-900 dark:text-blue-200 mt-1 font-mono">
+                                    {selectedTable.items
+                                        .filter((i:any) => i.send_to_kitchen === false && i.status !== 'entregue' && i.status !== 'cancelado')
+                                        .map((i:any) => `${i.quantity}x ${i.name}`)
+                                        .join(", ")}
+                                </div>
+                            </div>
+                        </div>
+                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 text-lg shadow-md transition-all active:scale-95" onClick={handleServeBarItems} disabled={isPending}>
+                            {isPending ? <RefreshCw className="animate-spin mr-2"/> : <CheckCircle2 className="mr-2 h-5 w-5"/>}
+                            CONFIRMAR ENTREGA
                         </Button>
                     </div>
                 )}
@@ -399,7 +458,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                 <Label htmlFor="client-name" className="text-xs font-semibold text-muted-foreground uppercase">Nome do Cliente (Opcional)</Label>
                                 <div className="relative">
                                     <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    {/* INPUT DO NOME COM FILTRO DE LETRAS */}
                                     <Input 
                                         id="client-name" 
                                         placeholder="Ex: João Silva" 
@@ -413,7 +471,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                 <Label htmlFor="client-phone" className="text-xs font-semibold text-muted-foreground uppercase">Telefone / WhatsApp</Label>
                                 <div className="relative">
                                     <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    {/* INPUT DO TELEFONE COM MÁSCARA */}
                                     <Input 
                                         id="client-phone" 
                                         placeholder="Ex: 11999999999" 
@@ -452,10 +509,23 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                             addons = typeof item.selected_addons === 'string' ? JSON.parse(item.selected_addons) : item.selected_addons || [];
                                         } catch(e) {}
 
+                                        const isDelivered = item.status === 'entregue' || item.status === 'concluido';
+                                        
                                         return (
                                             <li key={i} className="text-sm border-b border-dashed pb-2 last:border-0 flex flex-col">
-                                                <div className="flex justify-between">
-                                                    <span className="truncate max-w-[70%] font-medium">{item.quantity}x {item.name || item.product_name}</span>
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex items-center gap-1">
+                                                        {isDelivered ? (
+                                                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                                                        ) : item.send_to_kitchen === false ? (
+                                                            <CupSoda className="w-3 h-3 text-blue-500 animate-pulse" />
+                                                        ) : (
+                                                            <div className="w-3 h-3 rounded-full border border-slate-300" />
+                                                        )}
+                                                        <span className={cn("truncate max-w-[150px] font-medium", isDelivered && "text-muted-foreground")}>
+                                                            {item.quantity}x {item.name || item.product_name}
+                                                        </span>
+                                                    </div>
                                                     <span className="font-mono text-xs">R$ {((item.price || item.unit_price) * item.quantity).toFixed(2)}</span>
                                                 </div>
                                                 
@@ -468,11 +538,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                                                     {addons.length > 0 && (
                                                         <div className="text-green-600/80">
                                                             Add: {addons.map((a: any) => `${a.name} (+R$ ${Number(a.price).toFixed(2)})`).join(", ")}
-                                                        </div>
-                                                    )}
-                                                    {item.observation && (
-                                                        <div className="text-amber-600/90 italic">
-                                                            Obs: {item.observation}
                                                         </div>
                                                     )}
                                                 </div>
@@ -506,7 +571,6 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         </DialogContent>
       </Dialog>
       
-      {/* Modal de Confirmação PIN */}
       <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
           <DialogContent className="sm:max-w-xs">
               <DialogHeader>
@@ -542,6 +606,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
         <DialogContent className="h-[95vh] w-full max-w-lg flex flex-col p-0 gap-0">
              <div className="p-4 border-b bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
                <DialogTitle>Cardápio (Mesa {selectedTable?.id})</DialogTitle>
+               <DialogDescription className="hidden">Cardápio da Mesa</DialogDescription>
                <Button variant="ghost" size="sm" onClick={() => setIsMenuOpen(false)}>Voltar</Button>
             </div>
             <div className="p-2 space-y-2 border-b bg-white dark:bg-slate-950">
@@ -563,7 +628,10 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                     {filteredProducts.map(p => (
                     <div key={p.id} onClick={() => handleSelectProduct(p)} className="bg-white dark:bg-slate-950 p-3 rounded-lg border flex justify-between items-center active:bg-slate-100 cursor-pointer shadow-sm">
                         <div>
-                            <div className="font-semibold text-sm">{p.name}</div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="font-semibold text-sm">{p.name}</div>
+                                {p.send_to_kitchen === false && <CupSoda className="w-3 h-3 text-blue-500" />}
+                            </div>
                             <div className="text-emerald-600 font-bold text-xs">R$ {Number(p.price).toFixed(2)}</div>
                         </div>
                         <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-800"><Plus className="w-4 h-4"/></Button>

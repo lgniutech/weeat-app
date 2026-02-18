@@ -83,9 +83,10 @@ export async function getDashboardOverviewAction(storeId: string): Promise<Dashb
       ['preparando', 'em_preparo'].includes(normalize(o.status))
     ).length;
     
-    // 3. EXPEDIÇÃO (Pronto): Status 'enviado' ou 'pronto'
+    // 3. EXPEDIÇÃO (Pronto): Status 'enviado', 'pronto' ou 'entregue'
+    // Adicionado 'entregue' para contabilizar mesas servidas
     const readyCount = validOrders.filter(o => 
-      ['enviado', 'pronto', 'saiu_para_entrega'].includes(normalize(o.status))
+      ['enviado', 'pronto', 'saiu_para_entrega', 'entregue'].includes(normalize(o.status))
     ).length;
 
     // Mix de Canais (Por volume, não valor)
