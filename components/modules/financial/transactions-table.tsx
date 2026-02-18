@@ -54,14 +54,14 @@ export function TransactionsTable({ transactions }: TransactionsTableProps) {
                     </TableCell>
                     <TableCell>{order.customer_name || "N/A"}</TableCell>
                     <TableCell className="capitalize">{order.delivery_type}</TableCell>
-                    <TableCell className="capitalize">{order.payment_method}</TableCell>
+                    <TableCell className="capitalize">{order.payment_method?.replace("_", " ") || "-"}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`
-                        ${order.status === 'cancelado' ? 'border-red-500 text-red-500' : 
-                          order.status === 'pendente' ? 'border-yellow-500 text-yellow-500' : 
-                          'border-green-500 text-green-500'}
+                        ${order.status === 'cancelado' 
+                          ? 'border-red-500 text-red-500 bg-red-50' 
+                          : 'border-green-500 text-green-500 bg-green-50'}
                       `}>
-                        {order.status}
+                        {order.status === 'cancelado' ? 'Cancelado' : 'Concluído'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-bold">
