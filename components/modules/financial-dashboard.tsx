@@ -5,10 +5,11 @@ import { getFinancialMetricsAction, type FinancialSummary } from "@/app/actions/
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Download, Printer, RefreshCw } from "lucide-react"
+import { CalendarIcon, FileSpreadsheet, Printer, RefreshCw } from "lucide-react"
 import { format, subDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
+import * as XLSX from "xlsx"
 
 import { FinancialCards } from "./financial/financial-cards"
 import { FinancialCharts } from "./financial/financial-charts"
@@ -40,23 +41,60 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
     loadData()
   }, [storeId, date])
 
-  // Lógica de Exportação Simples (CSV)
-  const handleExportCSV = () => {
+  // Lógica de Exportação Excel (.xlsx)
+  const handleExportExcel = () => {
     if (!data?.transactions) return
 
-    const headers = ["ID,Data,Cliente,Tipo,Pagamento,Status,Valor Total,Desconto"]
-    const rows = data.transactions.map(t => 
-      `${t.id},"${t.created_at}","${t.customer_name}",${t.delivery_type},${t.payment_method},${t.status},${t.total_price},${t.discount}`
-    )
-    
-    const csvContent = "data:text/csv;charset=utf-8," + headers.concat(rows).join("\n")
-    const encodedUri = encodeURI(csvContent)
-    const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `relatorio_financeiro_${format(new Date(), "yyyy-MM-dd")}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    // 1. Formata os dados para o Excel
+    const worksheetData = data.transactions.map((t) => {
+      // Formatação simples do método de pagamento
+      const paymentMethod = t.payment_method 
+        ? t.payment_method.replace("_", " ").toUpperCase() 
+        : "-"
+
+      // Formatação do status igual à tabela visual
+      const statusLabel = t.status === 'cancelado' ? 'Cancelado' : 'Concluído'
+      
+      // Capitaliza o tipo de entrega
+      const deliveryType = t.delivery_type 
+        ? t.delivery_type.charAt(0).toUpperCase() + t.delivery_type.slice(1)
+        : "N/A"
+
+      return {
+        "ID": t.id,
+        "Data/Hora": format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }),
+        "Cliente": t.customer_name || "N/A",
+        "Tipo": deliveryType,
+        "Pagamento": paymentMethod,
+        "Status": statusLabel,
+        "Valor Total": t.total_price,
+        "Desconto": t.discount || 0
+      }
+    })
+
+    // 2. Cria a planilha (Worksheet)
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData)
+
+    // Ajusta a largura das colunas (Opcional, para melhor visualização)
+    const columnWidths = [
+      { wch: 10 }, // ID
+      { wch: 20 }, // Data/Hora
+      { wch: 30 }, // Cliente
+      { wch: 15 }, // Tipo
+      { wch: 20 }, // Pagamento
+      { wch: 15 }, // Status
+      { wch: 15 }, // Valor Total
+      { wch: 10 }, // Desconto
+    ]
+    worksheet['!cols'] = columnWidths
+
+    // 3. Cria o arquivo (Workbook) e adiciona a planilha
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório Financeiro")
+
+    // 4. Gera o download do arquivo .xlsx
+    const fileName = `relatorio_financeiro_${format(new Date(), "yyyy-MM-dd")}.xlsx`
+    XLSX.writeFile(workbook, fileName)
   }
 
   // Lógica de Impressão (PDF Nativo do Browser)
@@ -117,8 +155,8 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
                 <RefreshCw className={cn("h-4 w-4", isPending && "animate-spin")} />
             </Button>
 
-            <Button variant="outline" onClick={handleExportCSV}>
-                <Download className="mr-2 h-4 w-4" /> CSV
+            <Button variant="outline" onClick={handleExportExcel}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel
             </Button>
             
             <Button onClick={handlePrint}>
