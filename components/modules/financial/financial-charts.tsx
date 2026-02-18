@@ -12,6 +12,20 @@ export function FinancialCharts({ revenueData, paymentData }: FinancialChartsPro
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 
+  // Estilo compartilhado para o Tooltip se adaptar ao tema (Light/Dark)
+  const tooltipStyle = {
+    backgroundColor: 'hsl(var(--popover))',
+    borderColor: 'hsl(var(--border))',
+    color: 'hsl(var(--popover-foreground))',
+    borderRadius: '8px',
+    borderWidth: '1px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+  };
+
+  const itemStyle = {
+    color: 'hsl(var(--popover-foreground))'
+  };
+
   return (
     <div className="grid gap-4 md:grid-cols-7">
       {/* GRÁFICO DE BARRAS - RECEITA DIÁRIA */}
@@ -39,8 +53,9 @@ export function FinancialCharts({ revenueData, paymentData }: FinancialChartsPro
                   tickFormatter={(value) => `R$${value}`}
                 />
                 <Tooltip 
-                    cursor={{fill: 'transparent'}}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    cursor={{fill: 'var(--muted)', opacity: 0.2}}
+                    contentStyle={tooltipStyle}
+                    itemStyle={itemStyle}
                     formatter={(value: number) => [formatCurrency(value), 'Receita']}
                 />
                 <Bar 
@@ -80,7 +95,8 @@ export function FinancialCharts({ revenueData, paymentData }: FinancialChartsPro
                             </Pie>
                             <Tooltip 
                                 formatter={(value: number) => [formatCurrency(value), 'Total']}
-                                contentStyle={{ borderRadius: '8px' }}
+                                contentStyle={tooltipStyle}
+                                itemStyle={itemStyle}
                             />
                             <Legend verticalAlign="bottom" height={36}/>
                         </PieChart>
