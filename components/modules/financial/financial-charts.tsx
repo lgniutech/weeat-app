@@ -41,27 +41,21 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
 
     switch (value) {
       case 'day':
-        // Hoje
         from = today
         break
       case 'month':
-        // Últimos 30 dias
         from = subDays(today, 30)
         break
       case 'quarter':
-        // Últimos 90 dias
         from = subDays(today, 90)
         break
       case 'four_months':
-        // Últimos 120 dias
         from = subDays(today, 120)
         break
       case 'semester':
-        // Últimos 180 dias
         from = subDays(today, 180)
         break
       case 'year':
-        // Últimos 365 dias
         from = subDays(today, 365)
         break
       default:
@@ -88,22 +82,64 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
     color: 'hsl(var(--popover-foreground))'
   };
 
-  // Lógica para intervalos padronizados no Eixo X
-  const xAxisInterval = useMemo(() => {
-    const count = revenueData.length
+  // Agrupa os dados dinamicamente baseado no período selecionado
+  const chartData = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return revenueData;
     
-    // <= 15 dias: Mostra todos (1 em 1)
+    const diff = differenceInDays(dateRange.to, dateRange.from)
+    
+    // Se o período for maior que 60 dias (ex: trimestre, quadrimestre, semestre, ano), agrupamos por mês
+    if (diff > 60) {
+      const grouped: Record<string, { label: string, amount: number, sortKey: number }> = {}
+      
+      revenueData.forEach(item => {
+        // item.date vem no formato 'yyyy-MM-dd' do backend.
+        // O T12:00:00 é adicionado para garantir que o fuso horário local não mova o dia para trás.
+        const dateObj = new Date(`${item.date}T12:00:00`) 
+        const year = dateObj.getFullYear()
+        const month = dateObj.getMonth()
+        const key = `${year}-${month}`
+        
+        if (!grouped[key]) {
+          const monthName = dateObj.toLocaleString('pt-BR', { month: 'long' })
+          const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1)
+          
+          grouped[key] = { 
+            label: capitalized, // Nome do mês por extenso (Ex: "Janeiro")
+            amount: 0, 
+            sortKey: dateObj.getTime() 
+          }
+        }
+        grouped[key].amount += item.amount
+      })
+      
+      return Object.values(grouped)
+        .sort((a, b) => a.sortKey - b.sortKey)
+        .map(g => ({
+          label: g.label,
+          amount: g.amount
+        }))
+    }
+    
+    // Para períodos <= 60 dias (ex: Hoje, Mês), mantemos a visualização por dia
+    return revenueData
+  }, [revenueData, dateRange])
+
+  // Lógica para intervalos padronizados no Eixo X usando os dados processados acima
+  const xAxisInterval = useMemo(() => {
+    const count = chartData.length
+    
+    // Se agrupou por mês (<= 15 barras no gráfico, ex: os 12 meses de um ano), mostra todos os rótulos
     if (count <= 15) return 0 
     
-    // <= 60 dias: Mostra de 7 em 7 dias (Semanal)
-    if (count <= 60) return 6 
+    // Para 1 mês diário (~30 dias na tela), interval={6} pula 6 dias, mostrando o rótulo apenas de 7 em 7 dias
+    if (count <= 31) return 6 
     
-    // <= 120 dias: Mostra de 15 em 15 dias (Quinzenal)
-    if (count <= 120) return 14 
+    // Para períodos entre 30 e 60 dias visualizados de forma diária, mostra de 15 em 15
+    if (count <= 60) return 14
     
-    // > 120 dias: Mostra de 30 em 30 dias (Mensal)
-    return 29 
-  }, [revenueData.length])
+    return 0 
+  }, [chartData.length])
 
   return (
     <div className="grid gap-4 md:grid-cols-7">
@@ -132,7 +168,8 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
         <CardContent className="pl-2 pt-4">
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenueData}>
+              {/* O data foi atualizado de revenueData para chartData */}
+              <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" opacity={0.1} />
                 <XAxis 
                   dataKey="label" 
@@ -140,7 +177,7 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
                   fontSize={12} 
                   tickLine={false} 
                   axisLine={false} 
-                  interval={xAxisInterval} // Aplica o intervalo calculado
+                  interval={xAxisInterval} // Aplica o intervalo calculado dinamicamente de 7 em 7 ou exibe tudo
                 />
                 <YAxis
                   stroke="#888888"
