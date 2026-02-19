@@ -21,6 +21,16 @@ export function TransactionsTable({ transactions }: TransactionsTableProps) {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 
+  const formatPaymentMethod = (method?: string) => {
+    if (!method) return "-"
+    const m = method.toLowerCase()
+    if (m === 'credit_card' || m === 'credit') return 'Cartão de Crédito'
+    if (m === 'debit_card' || m === 'debit') return 'Cartão de Débito'
+    if (m === 'cash') return 'Dinheiro'
+    if (m === 'pix') return 'Pix'
+    return method.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -54,7 +64,7 @@ export function TransactionsTable({ transactions }: TransactionsTableProps) {
                     </TableCell>
                     <TableCell>{order.customer_name || "N/A"}</TableCell>
                     <TableCell className="capitalize">{order.delivery_type}</TableCell>
-                    <TableCell className="capitalize">{order.payment_method?.replace("_", " ") || "-"}</TableCell>
+                    <TableCell>{formatPaymentMethod(order.payment_method)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`
                         ${order.status === 'cancelado' 
