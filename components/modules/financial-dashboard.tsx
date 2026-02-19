@@ -48,14 +48,23 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
     setDate(range)
   }
 
+  // Função para formatar o método de pagamento para PT-BR
+  const formatPaymentMethod = (method?: string) => {
+    if (!method) return "-"
+    const m = method.toLowerCase()
+    if (m === 'credit_card' || m === 'credit') return 'Cartão de Crédito'
+    if (m === 'debit_card' || m === 'debit') return 'Cartão de Débito'
+    if (m === 'cash') return 'Dinheiro'
+    if (m === 'pix') return 'Pix'
+    return method.replace(/_/g, " ").toUpperCase()
+  }
+
   // Lógica de Exportação Excel (.xlsx)
   const handleExportExcel = () => {
     if (!data?.transactions) return
 
     const worksheetData = data.transactions.map((t) => {
-      const paymentMethod = t.payment_method 
-        ? t.payment_method.replace("_", " ").toUpperCase() 
-        : "-"
+      const paymentMethod = formatPaymentMethod(t.payment_method)
 
       const statusLabel = t.status === 'cancelado' ? 'Cancelado' : 'Concluído'
       
@@ -98,7 +107,7 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
 
     // --- Cabeçalho ---
     doc.setFontSize(18)
-    doc.text("Extrato Financeiro - WeEat", 14, 22)
+    doc.text("Extrato Financeiro - weeat", 14, 22)
 
     doc.setFontSize(10)
     doc.setTextColor(100)
@@ -121,7 +130,7 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
       format(new Date(t.created_at), "dd/MM HH:mm", { locale: ptBR }),
       t.customer_name || "Consumidor",
       t.delivery_type ? t.delivery_type.toUpperCase() : "-",
-      t.payment_method ? t.payment_method.replace("_", " ").toUpperCase() : "-",
+      formatPaymentMethod(t.payment_method),
       t.status === 'cancelado' ? 'CANCELADO' : 'CONCLUÍDO',
       new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.total_price)
     ])
