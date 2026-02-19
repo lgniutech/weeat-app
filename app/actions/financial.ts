@@ -78,23 +78,32 @@ export async function getFinancialMetricsAction(
     // --- GRÁFICO 2: Mix de Pagamento ---
     const paymentGroups: Record<string, number> = {}
     activeOrders.forEach(order => {
-      const method = order.payment_method || "Outros"
+      let method = order.payment_method || "outros"
+      method = method.toLowerCase()
+      
+      // Padronizar os nomes para o gráfico e agrupamento
+      if (method === 'credit_card' || method === 'credit' || method === 'credito') method = 'Cartão de Crédito'
+      else if (method === 'debit_card' || method === 'debit' || method === 'debito') method = 'Cartão de Débito'
+      else if (method === 'cash' || method === 'dinheiro') method = 'Dinheiro'
+      else if (method === 'pix') method = 'Pix'
+      else method = method.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+
       paymentGroups[method] = (paymentGroups[method] || 0) + (Number(order.total_price) || 0)
     })
 
     // Cores para o gráfico
     const COLORS: Record<string, string> = {
-      "pix": "#0ea5e9", // Sky 500
-      "credito": "#8b5cf6", // Violet 500
-      "debito": "#f59e0b", // Amber 500
-      "dinheiro": "#22c55e", // Green 500
+      "Pix": "#0ea5e9", // Sky 500
+      "Cartão de Crédito": "#8b5cf6", // Violet 500
+      "Cartão de Débito": "#f59e0b", // Amber 500
+      "Dinheiro": "#22c55e", // Green 500
     }
     const defaultColor = "#94a3b8" // Slate 400
 
     const paymentMix = Object.entries(paymentGroups).map(([name, value]) => ({
-      name: name.charAt(0).toUpperCase() + name.slice(1), // Capitalize
+      name,
       value,
-      fill: COLORS[name.toLowerCase()] || defaultColor
+      fill: COLORS[name] || defaultColor
     })).sort((a, b) => b.value - a.value) // Ordenar do maior para o menor
 
     return {
