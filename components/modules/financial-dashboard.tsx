@@ -32,7 +32,7 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
     if (!storeId || !date?.from || !date?.to) return
 
     startTransition(async () => {
-      const result = await getFinancialMetricsAction(storeId, { from: date.from, to: date.to })
+      const result = await getFinancialMetricsAction(storeId, { from: date.from!, to: date.to! })
       if (result.data) {
         setData(result.data)
       }
@@ -42,6 +42,11 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
   useEffect(() => {
     loadData()
   }, [storeId, date])
+
+  // Handler para quando o período é alterado via Dropdown no Gráfico
+  const handleRangeChange = (range: { from: Date; to: Date }) => {
+    setDate(range)
+  }
 
   // Lógica de Exportação Excel (.xlsx)
   const handleExportExcel = () => {
@@ -221,7 +226,12 @@ export function FinancialDashboard({ storeId }: { storeId: string }) {
             <FinancialCards data={data.kpis} />
             
             <div className="mt-6">
-                <FinancialCharts revenueData={data.charts.revenueByDay} paymentData={data.charts.paymentMix} />
+                <FinancialCharts 
+                  revenueData={data.charts.revenueByDay} 
+                  paymentData={data.charts.paymentMix}
+                  dateRange={date || { from: new Date(), to: new Date() }}
+                  onRangeChange={handleRangeChange}
+                />
             </div>
 
             <div className="mt-6">
