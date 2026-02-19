@@ -227,6 +227,12 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       }
   }
 
+  const handleForceCancel = () => {
+      setPinCode("");
+      setPinError(false);
+      setIsPinDialogOpen(true);
+  }
+
   const handlePinConfirm = async () => {
       if (!pinCode || pinCode.length < 4) {
           setPinError(true);
@@ -558,12 +564,20 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                              <Button variant="outline" className="h-12 col-span-2" onClick={openMenu}><Plus className="mr-2 h-4 w-4"/> Adicionar Mais Itens</Button>
                              
                              <Button 
-                                className="h-12 col-span-2 font-bold shadow-sm bg-red-500 hover:bg-red-600 text-white"
+                                className="h-12 col-span-2 font-bold shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
                                 onClick={handleCloseTableAttempt} 
                                 disabled={isPending} 
                              >
                                 <CreditCard className="mr-2 h-4 w-4"/> Encerrar / Receber
                              </Button>
+
+                             <button 
+                                 className="col-span-2 text-xs text-red-500 underline font-medium hover:text-red-700 mt-1"
+                                 onClick={handleForceCancel}
+                                 disabled={isPending}
+                             >
+                                 Cancelar Mesa (Desistência)
+                             </button>
                          </div>
                     </div>
                 )}
@@ -574,14 +588,14 @@ function WaiterContent({ params }: { params: { slug: string } }) {
       <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
           <DialogContent className="sm:max-w-xs">
               <DialogHeader>
-                  <div className="flex items-center gap-2 text-amber-600">
+                  <div className="flex items-center gap-2 text-red-600">
                      <AlertTriangle className="w-6 h-6" />
-                     <DialogTitle>Mesa em Preparo!</DialogTitle>
+                     <DialogTitle>Cancelar Mesa</DialogTitle>
                   </div>
                   <DialogDescription className="pt-2">
-                      Existem pedidos na cozinha ou não servidos.
+                      Deseja reportar <strong>Desistência</strong> e cancelar todos os itens desta mesa?
                       <br/>
-                      Insira seu PIN para reportar <strong>Desistência</strong> e cancelar.
+                      Insira seu PIN para confirmar.
                   </DialogDescription>
               </DialogHeader>
               <div className="py-2">
@@ -596,7 +610,7 @@ function WaiterContent({ params }: { params: { slug: string } }) {
                   {pinError && <p className="text-xs text-red-500 mt-2 font-bold text-center">PIN incorreto.</p>}
               </div>
               <DialogFooter>
-                  <Button variant="ghost" onClick={() => setIsPinDialogOpen(false)}>Cancelar</Button>
+                  <Button variant="ghost" onClick={() => setIsPinDialogOpen(false)}>Voltar</Button>
                   <Button variant="destructive" onClick={handlePinConfirm} disabled={isPending}>Confirmar Cancelamento</Button>
               </DialogFooter>
           </DialogContent>
