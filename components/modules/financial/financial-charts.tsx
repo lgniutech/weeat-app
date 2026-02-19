@@ -1,26 +1,80 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { format, parseISO, getMonth, getYear, getQuarter } from "date-fns"
-import { ptBR } from "date-fns/locale"
+import { subDays, differenceInDays } from "date-fns"
 
 interface FinancialChartsProps {
   revenueData: any[]
   paymentData: any[]
+  dateRange: { from: Date; to: Date }
+  onRangeChange: (range: { from: Date; to: Date }) => void
 }
 
-type Granularity = 'daily' | 'monthly' | 'quarterly' | 'four_monthly' | 'semiannual' | 'yearly'
+type Period = 'day' | 'month' | 'quarter' | 'four_months' | 'semester' | 'year' | 'custom'
 
-export function FinancialCharts({ revenueData, paymentData }: FinancialChartsProps) {
-  const [granularity, setGranularity] = useState<Granularity>('daily')
+export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeChange }: FinancialChartsProps) {
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>('custom')
+
+  // Sincroniza o Dropdown com o DateRange atual (caso seja alterado externamente)
+  useEffect(() => {
+    if (!dateRange?.from || !dateRange?.to) return
+
+    const diff = differenceInDays(dateRange.to, dateRange.from)
+    
+    // Margem de erro pequena (1-2 dias) para acomodar horas/fuso
+    if (diff === 0) setSelectedPeriod('day')
+    else if (diff >= 28 && diff <= 31) setSelectedPeriod('month')
+    else if (diff >= 88 && diff <= 92) setSelectedPeriod('quarter')
+    else if (diff >= 118 && diff <= 122) setSelectedPeriod('four_months')
+    else if (diff >= 178 && diff <= 182) setSelectedPeriod('semester')
+    else if (diff >= 360 && diff <= 370) setSelectedPeriod('year')
+    else setSelectedPeriod('custom')
+  }, [dateRange])
+
+  const handlePeriodChange = (value: Period) => {
+    const today = new Date()
+    let from = today
+    const to = today
+
+    switch (value) {
+      case 'day':
+        // Hoje
+        from = today
+        break
+      case 'month':
+        // Últimos 30 dias
+        from = subDays(today, 30)
+        break
+      case 'quarter':
+        // Últimos 90 dias
+        from = subDays(today, 90)
+        break
+      case 'four_months':
+        // Últimos 120 dias
+        from = subDays(today, 120)
+        break
+      case 'semester':
+        // Últimos 180 dias
+        from = subDays(today, 180)
+        break
+      case 'year':
+        // Últimos 365 dias
+        from = subDays(today, 365)
+        break
+      default:
+        return
+    }
+
+    onRangeChange({ from, to })
+    setSelectedPeriod(value)
+  }
 
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 
-  // Estilo compartilhado para o Tooltip se adaptar ao tema (Light/Dark)
   const tooltipStyle = {
     backgroundColor: 'hsl(var(--popover))',
     borderColor: 'hsl(var(--border))',
@@ -34,111 +88,51 @@ export function FinancialCharts({ revenueData, paymentData }: FinancialChartsPro
     color: 'hsl(var(--popover-foreground))'
   };
 
-  // Processamento dos dados com base na granularidade selecionada
-  const processedData = useMemo(() => {
-    if (!revenueData || revenueData.length === 0) return []
-
-    // Se for diário, retorna como está, mas garante a ordenação por data
-    if (granularity === 'daily') {
-        return [...revenueData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    }
-
-    const grouped: Record<string, { date: string, amount: number, label: string, sortKey: number }> = {}
-
-    revenueData.forEach(item => {
-        const date = parseISO(item.date)
-        const year = getYear(date)
-        const month = getMonth(date) // 0-11
-        
-        let key = ''
-        let label = ''
-        let sortKey = 0
-
-        switch (granularity) {
-            case 'monthly':
-                key = format(date, 'yyyy-MM')
-                label = format(date, 'MMM/yy', { locale: ptBR })
-                // Capitalizar primeira letra do mês (opcional, ex: jan -> Jan)
-                label = label.charAt(0).toUpperCase() + label.slice(1)
-                sortKey = parseInt(format(date, 'yyyyMM'))
-                break
-            case 'quarterly':
-                const quarter = getQuarter(date)
-                key = `${year}-Q${quarter}`
-                label = `${quarter}º Trim/${year.toString().slice(2)}`
-                sortKey = parseInt(`${year}${quarter}`)
-                break
-            case 'four_monthly':
-                // Quadrimestre: 0-3 (Q1), 4-7 (Q2), 8-11 (Q3)
-                const fourMonth = Math.floor(month / 4) + 1
-                key = `${year}-QM${fourMonth}`
-                label = `${fourMonth}º Quad/${year.toString().slice(2)}`
-                sortKey = parseInt(`${year}${fourMonth}`)
-                break
-            case 'semiannual':
-                const semester = month < 6 ? 1 : 2
-                key = `${year}-S${semester}`
-                label = `${semester}º Sem/${year.toString().slice(2)}`
-                sortKey = parseInt(`${year}${semester}`)
-                break
-            case 'yearly':
-                key = `${year}`
-                label = `${year}`
-                sortKey = year
-                break
-        }
-
-        if (!grouped[key]) {
-            grouped[key] = { date: key, amount: 0, label, sortKey }
-        }
-        grouped[key].amount += item.amount
-    })
-
-    return Object.values(grouped).sort((a, b) => a.sortKey - b.sortKey)
-  }, [revenueData, granularity])
-
-  // Cálculo do intervalo do eixo X para visualização "limpa" e padronizada
+  // Lógica para intervalos padronizados no Eixo X
   const xAxisInterval = useMemo(() => {
-    // Para granularidades agregadas (meses, anos, etc), geralmente mostra todos os pontos
-    if (granularity !== 'daily') return 0 
+    const count = revenueData.length
     
-    const count = processedData.length
+    // <= 15 dias: Mostra todos (1 em 1)
+    if (count <= 15) return 0 
     
-    // Lógica para intervalos padronizados conforme a quantidade de dias
-    if (count <= 14) return 0 // Mostra todos (1 em 1 dia) se forem poucos
-    if (count <= 30) return 6 // Mostra de 7 em 7 dias (aproximadamente semanal)
-    if (count <= 60) return 14 // Mostra de 15 em 15 dias (aproximadamente quinzenal)
+    // <= 60 dias: Mostra de 7 em 7 dias (Semanal)
+    if (count <= 60) return 6 
     
-    return 29 // Mostra de 30 em 30 dias (aproximadamente mensal) para períodos longos
-  }, [processedData.length, granularity])
+    // <= 120 dias: Mostra de 15 em 15 dias (Quinzenal)
+    if (count <= 120) return 14 
+    
+    // > 120 dias: Mostra de 30 em 30 dias (Mensal)
+    return 29 
+  }, [revenueData.length])
 
   return (
     <div className="grid gap-4 md:grid-cols-7">
-      {/* GRÁFICO DE BARRAS - RECEITA DIÁRIA */}
+      {/* GRÁFICO DE BARRAS - RECEITA */}
       <Card className="col-span-4">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base font-semibold">Evolução da Receita</CardTitle>
           <Select
-            value={granularity}
-            onValueChange={(val: Granularity) => setGranularity(val)}
+            value={selectedPeriod}
+            onValueChange={(val: Period) => handlePeriodChange(val)}
           >
-            <SelectTrigger className="h-8 w-[140px] text-xs">
+            <SelectTrigger className="h-8 w-[150px] text-xs">
                 <SelectValue placeholder="Período" />
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value="daily">Diário</SelectItem>
-                <SelectItem value="monthly">Mensal</SelectItem>
-                <SelectItem value="quarterly">Trimestral</SelectItem>
-                <SelectItem value="four_monthly">Quadrimestral</SelectItem>
-                <SelectItem value="semiannual">Semestral</SelectItem>
-                <SelectItem value="yearly">Anual</SelectItem>
+                <SelectItem value="day">Hoje</SelectItem>
+                <SelectItem value="month">Mês (30d)</SelectItem>
+                <SelectItem value="quarter">Trimestre (90d)</SelectItem>
+                <SelectItem value="four_months">Quadrimestre (120d)</SelectItem>
+                <SelectItem value="semester">Semestre (180d)</SelectItem>
+                <SelectItem value="year">Ano (365d)</SelectItem>
+                <SelectItem value="custom" disabled>Personalizado</SelectItem>
             </SelectContent>
           </Select>
         </CardHeader>
         <CardContent className="pl-2 pt-4">
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={processedData}>
+              <BarChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" opacity={0.1} />
                 <XAxis 
                   dataKey="label" 
@@ -146,7 +140,7 @@ export function FinancialCharts({ revenueData, paymentData }: FinancialChartsPro
                   fontSize={12} 
                   tickLine={false} 
                   axisLine={false} 
-                  interval={xAxisInterval} // Intervalo dinâmico calculado
+                  interval={xAxisInterval} // Aplica o intervalo calculado
                 />
                 <YAxis
                   stroke="#888888"
