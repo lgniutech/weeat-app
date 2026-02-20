@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -12,12 +11,9 @@ import {
   LogOut,
   Store,
   ChevronRight,
-  MessageCircle,
   QrCode,
-  ChefHat,
   BarChart3,
   Ticket,
-  Star,
   Palette,
   Image as ImageIcon
 } from "lucide-react"
@@ -59,7 +55,6 @@ const navigationItems = [
     items: [
       { title: "Gestão de Pedidos", url: "#", badge: "12", id: "orders" },
       { title: "Mesas & QR Code", url: "#", icon: QrCode, id: "tables" }, 
-      { title: "Tela da Cozinha", url: "#", icon: ChefHat },
     ],
   },
   {
@@ -68,7 +63,6 @@ const navigationItems = [
     id: "cardapio",
     items: [
       { title: "Produtos & Categorias", url: "#", id: "menu-products" },
-      { title: "Estoque", url: "#" },
     ],
   },
   {
@@ -76,10 +70,7 @@ const navigationItems = [
     icon: Users,
     id: "marketing",
     items: [
-      { title: "Base de Clientes", url: "#" },
-      { title: "Automação WhatsApp", url: "#", icon: MessageCircle },
       { title: "Fidelidade & Cupons", url: "#", icon: Ticket, id: "coupons" },
-      { title: "Avaliações", url: "#", icon: Star },
     ],
   },
   {
@@ -87,9 +78,7 @@ const navigationItems = [
     icon: Banknote,
     id: "financeiro",
     items: [
-      { title: "Fluxo de Caixa", url: "#" },
       { title: "Relatórios Detalhados", url: "#", icon: BarChart3, id: "financial" }, 
-      { title: "Entregadores & Fretes", url: "#", id: "courier-management" },
     ],
   },
   {
@@ -99,7 +88,7 @@ const navigationItems = [
     items: [
       { title: "Dados da Loja", url: "#", id: "store-settings", icon: Store }, 
       { title: "Aparência & Marca", url: "#", id: "store-appearance", icon: ImageIcon },
-      { title: "Equipe & Permissões", url: "#", id: "team", icon: Users }, // ID ADICIONADO AQUI
+      { title: "Equipe & Permissões", url: "#", id: "team", icon: Users },
       { title: "Tema (Claro/Escuro)", url: "#", icon: Palette, id: "tema" },
     ],
   },

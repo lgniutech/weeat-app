@@ -60,21 +60,52 @@ export async function createOrderAction(order: OrderInput) {
     return { error: "Erro ao registrar pedido." };
   }
 
+  // NOVA ETAPA: Verificar configuração real dos produtos no banco (se vai pra cozinha ou não)
+  // Isso evita que bebidas fiquem "presos" na tela da cozinha se o front-end não mandar a flag correta.
+  const productNames = order.items.map(i => i.product_name);
+  const { data: productsConfig } = await supabase
+    .from("products")
+    .select("name, send_to_kitchen")
+    .eq("store_id", order.storeId)
+    .in("name", productNames);
+
+  // Cria um mapa para busca rápida: 'Nome do Produto' -> true/false
+  const kitchenMap = new Map<string, boolean>();
+  if (productsConfig) {
+      productsConfig.forEach((p: any) => {
+          kitchenMap.set(p.name, p.send_to_kitchen);
+      });
+  }
+
   // 2. Prepara os Itens
-  const itemsToInsert = order.items.map(item => ({
-    order_id: newOrder.id,
-    product_name: item.product_name,
-    quantity: item.quantity,
-    unit_price: item.unit_price,
-    total_price: item.unit_price * item.quantity,
-    observation: item.observation,
-    removed_ingredients: JSON.stringify(item.removed_ingredients),
-    selected_addons: JSON.stringify(item.selected_addons),
-    // Status inicial agora é sempre 'aceito', mesmo se não for pra cozinha.
-    // Isso permite que o garçom/balcão dê baixa manual.
-    status: 'aceito', 
-    send_to_kitchen: item.send_to_kitchen !== undefined ? item.send_to_kitchen : true 
-  }));
+  const itemsToInsert = order.items.map(item => {
+    // Prioridade: 
+    // 1. Configuração do banco de dados (mais seguro e correto)
+    // 2. O que veio do front-end (fallback)
+    // 3. True (padrão)
+    let shouldSendToKitchen = true;
+    
+    if (kitchenMap.has(item.product_name)) {
+        shouldSendToKitchen = kitchenMap.get(item.product_name) ?? true;
+    } else if (item.send_to_kitchen !== undefined) {
+        shouldSendToKitchen = item.send_to_kitchen;
+    }
+
+    return {
+      order_id: newOrder.id,
+      product_name: item.product_name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total_price: item.unit_price * item.quantity,
+      observation: item.observation,
+      removed_ingredients: JSON.stringify(item.removed_ingredients),
+      selected_addons: JSON.stringify(item.selected_addons),
+      // Status inicial agora é sempre 'aceito', mesmo se não for pra cozinha.
+      // Isso permite que o garçom/balcão dê baixa manual.
+      status: 'aceito', 
+      send_to_kitchen: shouldSendToKitchen
+    };
+  });
 
   // 3. Insere os Itens
   const { error: itemsError } = await supabase.from("order_items").insert(itemsToInsert);

@@ -127,6 +127,13 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
       }
   }
 
+  const handleForceCancel = () => {
+      setIsPaymentModalOpen(false);
+      setPinCode("");
+      setPinError(false);
+      setIsPinModalOpen(true);
+  }
+
   const handlePinConfirm = async () => {
       if (!pinCode || pinCode.length < 4) {
           setPinError(true)
@@ -420,9 +427,17 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                                 <span className="text-muted-foreground text-sm">Total a Receber</span>
                                 <span className="text-3xl font-bold text-emerald-600">{formatCurrency(selectedTable.total)}</span>
                             </div>
-                            <Button size="lg" className="w-full font-bold" onClick={requestPayment}>
-                                RECEBER E LIBERAR MESA
-                            </Button>
+                            <div className="flex flex-col gap-2 w-full">
+                                <Button size="lg" className="w-full font-bold bg-emerald-600 hover:bg-emerald-700 text-white" onClick={requestPayment}>
+                                    RECEBER E LIBERAR MESA
+                                </Button>
+                                <button 
+                                    className="text-xs text-red-500 underline font-medium hover:text-red-700 w-full text-center py-1"
+                                    onClick={handleForceCancel}
+                                >
+                                    Cancelar Mesa (Desistência)
+                                </button>
+                            </div>
                         </SheetFooter>
                     </>
                 )}
@@ -459,8 +474,7 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Cancelar</Button>
-                    {/* Botão confirma e tenta fechar (vai pro PIN se necessário) */}
+                    <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Voltar</Button>
                     <Button onClick={handleCloseTableAttempt} disabled={isProcessing} className="w-full sm:w-auto">
                         {isProcessing ? "Processando..." : "Confirmar Pagamento"}
                     </Button>
@@ -472,14 +486,14 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
         <Dialog open={isPinModalOpen} onOpenChange={setIsPinModalOpen}>
              <DialogContent className="sm:max-w-sm">
                 <DialogHeader>
-                    <div className="flex items-center gap-2 text-amber-600">
+                    <div className="flex items-center gap-2 text-red-600">
                         <AlertTriangle className="w-6 h-6" />
-                        <DialogTitle>Atenção!</DialogTitle>
+                        <DialogTitle>Cancelar Mesa</DialogTitle>
                     </div>
                     <DialogDescription className="pt-2">
-                        Esta mesa possui pedidos que ainda estão <strong>na cozinha</strong> ou <strong>não foram servidos</strong>.
+                        Deseja reportar <strong>DESISTÊNCIA</strong> e cancelar toda a mesa?
                         <br/><br/>
-                        Deseja reportar <strong>DESISTÊNCIA</strong> e cancelar?
+                        Insira sua Chave de Acesso (PIN) para confirmar.
                     </DialogDescription>
                 </DialogHeader>
                 
@@ -502,7 +516,7 @@ export default function CashierPage({ params }: { params: { slug: string } }) {
                 </div>
 
                 <DialogFooter>
-                    <Button variant="ghost" onClick={() => setIsPinModalOpen(false)}>Cancelar</Button>
+                    <Button variant="ghost" onClick={() => setIsPinModalOpen(false)}>Voltar</Button>
                     <Button variant="destructive" onClick={handlePinConfirm} disabled={isProcessing}>
                         {isProcessing ? "Verificando..." : "Confirmar Cancelamento"}
                     </Button>
