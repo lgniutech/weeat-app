@@ -119,7 +119,21 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
         }))
     }
     
-    return revenueData
+    // Filtro visual para evitar o "glitch"
+    // Quando mudamos o dateRange de Ano para Mês, o diff cai para <= 60.
+    // Mas o revenueData (dados brutos vindo do banco) ainda está carregando os novos dados,
+    // então ele ainda possui 365 dias. Para o gráfico não mostrar "um monte de barras espremidas"
+    // antes de terminar de carregar os dados reais daquele mês, nós filtramos o array antigo
+    // usando apenas as datas que cabem no range atual.
+    const start = new Date(dateRange.from)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(dateRange.to)
+    end.setHours(23, 59, 59, 999)
+
+    return revenueData.filter(item => {
+      const itemDate = new Date(`${item.date}T12:00:00`)
+      return itemDate >= start && itemDate <= end
+    })
   }, [revenueData, dateRange])
 
   const xAxisInterval = useMemo(() => {
