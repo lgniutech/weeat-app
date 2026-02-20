@@ -11,7 +11,6 @@ export function GTMScript({ gtmId }: GTMScriptProps) {
 
   return (
     <>
-      {/* Google Tag Manager - Script principal */}
       <Script
         id="gtm-script"
         strategy="afterInteractive"
@@ -25,7 +24,6 @@ export function GTMScript({ gtmId }: GTMScriptProps) {
           `,
         }}
       />
-      {/* Google Tag Manager - noscript fallback */}
       <noscript>
         <iframe
           src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
@@ -37,9 +35,6 @@ export function GTMScript({ gtmId }: GTMScriptProps) {
     </>
   )
 }
-
-// Funções utilitárias para disparar eventos GTM/dataLayer
-// Use estas funções nos componentes de loja
 
 declare global {
   interface Window {
@@ -54,28 +49,41 @@ function pushToDataLayer(event: object) {
   }
 }
 
+async function savePixelEvent(storeId: string, eventName: string, value: number = 0) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!supabaseUrl || !supabaseKey) return
+
+    await fetch(`${supabaseUrl}/rest/v1/pixel_events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ store_id: storeId, event_name: eventName, value }),
+    })
+  } catch {
+    // Falha silenciosa
+  }
+}
+
 export function trackViewContent(product: {
   id: string
   name: string
   price: number
   category?: string
-}) {
+}, storeId?: string) {
   pushToDataLayer({
     event: "view_item",
     ecommerce: {
       currency: "BRL",
       value: product.price,
-      items: [
-        {
-          item_id: product.id,
-          item_name: product.name,
-          item_category: product.category || "Produto",
-          price: product.price,
-          quantity: 1,
-        },
-      ],
+      items: [{ item_id: product.id, item_name: product.name, item_category: product.category || "Produto", price: product.price, quantity: 1 }],
     },
   })
+  if (storeId) savePixelEvent(storeId, "view_item", product.price)
 }
 
 export function trackAddToCart(item: {
@@ -84,23 +92,16 @@ export function trackAddToCart(item: {
   price: number
   quantity: number
   category?: string
-}) {
+}, storeId?: string) {
   pushToDataLayer({
     event: "add_to_cart",
     ecommerce: {
       currency: "BRL",
       value: item.price * item.quantity,
-      items: [
-        {
-          item_id: item.id,
-          item_name: item.name,
-          item_category: item.category || "Produto",
-          price: item.price,
-          quantity: item.quantity,
-        },
-      ],
+      items: [{ item_id: item.id, item_name: item.name, item_category: item.category || "Produto", price: item.price, quantity: item.quantity }],
     },
   })
+  if (storeId) savePixelEvent(storeId, "add_to_cart", item.price * item.quantity)
 }
 
 export function trackInitiateCheckout(cartItems: Array<{
@@ -108,20 +109,16 @@ export function trackInitiateCheckout(cartItems: Array<{
   name: string
   price: number
   quantity: number
-}>, total: number) {
+}>, total: number, storeId?: string) {
   pushToDataLayer({
     event: "begin_checkout",
     ecommerce: {
       currency: "BRL",
       value: total,
-      items: cartItems.map((item) => ({
-        item_id: item.id,
-        item_name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-      })),
+      items: cartItems.map((item) => ({ item_id: item.id, item_name: item.name, price: item.price, quantity: item.quantity })),
     },
   })
+  if (storeId) savePixelEvent(storeId, "begin_checkout", total)
 }
 
 export function trackPurchase(orderId: string, cartItems: Array<{
@@ -129,19 +126,15 @@ export function trackPurchase(orderId: string, cartItems: Array<{
   name: string
   price: number
   quantity: number
-}>, total: number) {
+}>, total: number, storeId?: string) {
   pushToDataLayer({
     event: "purchase",
     ecommerce: {
       transaction_id: orderId,
       currency: "BRL",
       value: total,
-      items: cartItems.map((item) => ({
-        item_id: item.id,
-        item_name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-      })),
+      items: cartItems.map((item) => ({ item_id: item.id, item_name: item.name, price: item.price, quantity: item.quantity })),
     },
   })
+  if (storeId) savePixelEvent(storeId, "purchase", total)
 }
