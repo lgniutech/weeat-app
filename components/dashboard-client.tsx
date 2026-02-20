@@ -20,7 +20,7 @@ import { TablesManager } from "@/components/modules/tables-manager"
 import { OverviewDashboard } from "@/components/modules/overview-dashboard"
 import { CouponsManager } from "@/components/modules/coupons-manager"
 import { TeamManager } from "@/components/modules/team-manager"
-import { FinancialDashboard } from "@/components/modules/financial-dashboard" // <--- IMPORT NOVO
+import { FinancialDashboard } from "@/components/modules/financial-dashboard"
 import { AppearanceForm } from "@/components/settings/appearance-form"
 
 interface DashboardClientProps {
@@ -73,6 +73,17 @@ export default function DashboardClient({
   const hasStore = !!store
 
   const renderContent = () => {
+    // Verificação de segurança: Se não tem loja, não tenta renderizar os módulos
+    if (!hasStore) {
+      return (
+        <div className="flex h-full min-h-[400px] flex-col items-center justify-center space-y-4 animate-in fade-in">
+          <p className="text-muted-foreground text-lg text-center">
+            Conclua a configuração inicial da sua loja na janela que apareceu.
+          </p>
+        </div>
+      )
+    }
+
     switch (activeModule) {
       case 'dashboard':
         return <OverviewDashboard store={store} />
@@ -89,7 +100,7 @@ export default function DashboardClient({
       case 'team':
         return <TeamManager store={store} />
         
-      case 'financial': // <--- MÓDULO FINANCEIRO ATUALIZADO
+      case 'financial':
         return <FinancialDashboard storeId={store?.id} />
 
       case 'courier-management':
