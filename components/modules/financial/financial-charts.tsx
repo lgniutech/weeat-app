@@ -18,8 +18,10 @@ type Period = 'day' | 'month' | 'quarter' | 'four_months' | 'semester' | 'year' 
 export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeChange }: FinancialChartsProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('custom')
 
+  // Sincroniza o Dropdown com o DateRange atual
   useEffect(() => {
     if (!dateRange?.from || !dateRange?.to) return
+
     const diff = differenceInDays(dateRange.to, dateRange.from)
     
     if (diff === 0) setSelectedPeriod('day')
@@ -37,13 +39,26 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
     const to = today
 
     switch (value) {
-      case 'day': from = today; break
-      case 'month': from = subDays(today, 30); break
-      case 'quarter': from = subDays(today, 90); break
-      case 'four_months': from = subDays(today, 120); break
-      case 'semester': from = subDays(today, 180); break
-      case 'year': from = subDays(today, 365); break
-      default: return
+      case 'day':
+        from = today
+        break
+      case 'month':
+        from = subDays(today, 30)
+        break
+      case 'quarter':
+        from = subDays(today, 90)
+        break
+      case 'four_months':
+        from = subDays(today, 120)
+        break
+      case 'semester':
+        from = subDays(today, 180)
+        break
+      case 'year':
+        from = subDays(today, 365)
+        break
+      default:
+        return
     }
 
     onRangeChange({ from, to })
@@ -59,10 +74,17 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
     color: 'hsl(var(--popover-foreground))',
     borderRadius: '8px',
     borderWidth: '1px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
   };
 
+  const itemStyle = {
+    color: 'hsl(var(--popover-foreground))'
+  };
+
+  // Agrupa os dados dinamicamente e trata abreviações
   const chartData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return revenueData;
+    
     const diff = differenceInDays(dateRange.to, dateRange.from)
     
     if (diff > 60) {
@@ -75,7 +97,7 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
         const key = `${year}-${month}`
         
         if (!grouped[key]) {
-          // Abreviação do mês (Ex: "Jan", "Fev")
+          // Abreviação do mês (Ex: "Jan", "Fev") e capitalização
           const monthName = dateObj.toLocaleString('pt-BR', { month: 'short' })
           const capitalized = monthName.replace('.', '').charAt(0).toUpperCase() + monthName.slice(1).replace('.', '')
           
@@ -92,15 +114,20 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
       
       return Object.values(grouped).sort((a, b) => a.sortKey - b.sortKey)
     }
+    
     return revenueData
   }, [revenueData, dateRange])
 
   return (
     <div className="grid gap-4 md:grid-cols-7">
+      {/* GRÁFICO DE BARRAS - RECEITA */}
       <Card className="col-span-4">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base font-semibold">Evolução da Receita</CardTitle>
-          <Select value={selectedPeriod} onValueChange={(val: Period) => handlePeriodChange(val)}>
+          <Select
+            value={selectedPeriod}
+            onValueChange={(val: Period) => handlePeriodChange(val)}
+          >
             <SelectTrigger className="h-8 w-[150px] text-xs">
                 <SelectValue placeholder="Período" />
             </SelectTrigger>
@@ -120,11 +147,24 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" opacity={0.1} />
-                <XAxis dataKey="label" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value}`} />
+                <XAxis 
+                  dataKey="label" 
+                  stroke="#888888" 
+                  fontSize={12} 
+                  tickLine={false} 
+                  axisLine={false} 
+                />
+                <YAxis
+                  stroke="#888888"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) => `R$${value}`}
+                />
                 <Tooltip 
                     cursor={{fill: 'var(--muted)', opacity: 0.2}}
                     contentStyle={tooltipStyle}
+                    itemStyle={itemStyle}
                     formatter={(value: number) => [formatCurrency(value), 'Receita']}
                 />
                 <Bar 
@@ -132,13 +172,13 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
                   radius={[4, 4, 0, 0]} 
                   className="fill-primary cursor-pointer hover:opacity-80 transition-opacity"
                   onClick={(data) => {
-                    // Lógica de Drill-down: se clicar num mês quando estiver a ver o ano
+                    // Lógica de Drill-down: se clicar num mês agrupado, filtra por esse mês
                     if (data && data.year !== undefined && data.month !== undefined) {
-                      const clickedDate = new Date(data.year, data.month, 1);
-                      onRangeChange({
-                        from: startOfMonth(clickedDate),
-                        to: endOfMonth(clickedDate)
-                      });
+                        const clickedDate = new Date(data.year, data.month, 1);
+                        onRangeChange({
+                            from: startOfMonth(clickedDate),
+                            to: endOfMonth(clickedDate)
+                        });
                     }
                   }}
                 />
@@ -148,8 +188,11 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
         </CardContent>
       </Card>
 
+      {/* GRÁFICO DE PIZZA - MEIOS DE PAGAMENTO */}
       <Card className="col-span-3">
-        <CardHeader><CardTitle className="text-base font-semibold">Meios de Pagamento</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Meios de Pagamento</CardTitle>
+        </CardHeader>
         <CardContent>
             <div className="h-[300px] w-full">
                 {paymentData.length > 0 ? (
@@ -157,9 +200,12 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
                         <PieChart>
                             <Pie
                                 data={paymentData}
-                                cx="50%" cy="50%"
-                                innerRadius={60} outerRadius={80}
-                                paddingAngle={5} dataKey="value"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
                             >
                                 {paymentData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.fill} strokeWidth={0} />
@@ -168,12 +214,15 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
                             <Tooltip 
                                 formatter={(value: number) => [formatCurrency(value), 'Total']}
                                 contentStyle={tooltipStyle}
+                                itemStyle={itemStyle}
                             />
                             <Legend verticalAlign="bottom" height={36}/>
                         </PieChart>
                     </ResponsiveContainer>
                 ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground text-sm">Sem dados</div>
+                    <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                        Sem dados de pagamento
+                    </div>
                 )}
             </div>
         </CardContent>
