@@ -1,57 +1,38 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { addDays, format, startOfDay, endOfDay, eachDayOfInterval, isSameDay, parseISO } from "date-fns"
+import { format, eachDayOfInterval, isSameDay, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 export type FinancialSummary = {
-  kpis: {
-    grossRevenue: number
-    netRevenue: number
-    discountTotal: number
-    ticketAverage: number
-    ordersCount: number
-    cancelledAmount: number
-  }
-  charts: {
-    revenueByDay: { date: string; amount: number; label: string }[]
-    paymentMix: { name: string; value: number; fill: string }[]
-  }
-  transactions: any[]
+  grossRevenue: number
+  netRevenue: number
+  discountTotal: number
+  ticketAverage: number
+  ordersCount: number
+  cancelledAmount: number
 }
 
-export async function getFinancialMetricsAction(
-  storeId: string, 
-  dateRange: { from: Date; to: Date }
-): Promise<{ data?: FinancialSummary; error?: string }> {
+export async function getFinancialMetricsAction(storeId: string, dateRange: { from: Date; to: Date }) {
+  const supabase = await createClient()
+
   try {
-    const supabase = await createClient()
-    
-    // Ajustar datas para cobrir o dia inteiro
-    const startDate = startOfDay(dateRange.from).toISOString()
-    const endDate = endOfDay(dateRange.to).toISOString()
+    // Buscar ordens concluídas e canceladas no período
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('store_id', storeId)
+      .in('status', ['completed', 'cancelled'])
+      .gte('created_at', dateRange.from.toISOString())
+      .lte('created_at', dateRange.to.toISOString())
+      .order('created_at', { ascending: true })
 
-    // 1. Buscar Pedidos no Período
-    // FILTRO APLICADO: Apenas Concluído ou Cancelado.
-    // Pedidos "entregues" (na mesa) mas não fechados, ou em preparo, são ignorados.
-    const { data: orders, error } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("store_id", storeId)
-      .in("status", ["concluido", "cancelado"]) 
-      .gte("created_at", startDate)
-      .lte("created_at", endDate)
-      .order("created_at", { ascending: false })
+    if (ordersError) throw ordersError
 
-    if (error) throw error
+    const activeOrders = orders.filter(o => o.status === 'completed')
+    const cancelledOrders = orders.filter(o => o.status === 'cancelled')
 
-    // 2. Processar Dados
-    // Active orders são apenas os concluídos (Receita Realizada)
-    const activeOrders = orders.filter(o => o.status === 'concluido')
-    
-    const cancelledOrders = orders.filter(o => o.status === 'cancelado')
-
-    // --- KPIs ---
+    // --- CÁLCULO DE KPIs ---
     const grossRevenue = activeOrders.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0)
     const discountTotal = activeOrders.reduce((acc, curr) => acc + (Number(curr.discount) || 0), 0)
     const netRevenue = grossRevenue - discountTotal
@@ -60,9 +41,7 @@ export async function getFinancialMetricsAction(
     const cancelledAmount = cancelledOrders.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0)
 
     // --- GRÁFICO 1: Receita por Dia ---
-    // Cria um array com todos os dias do intervalo para não ficar buraco no gráfico
     const daysInterval = eachDayOfInterval({ start: dateRange.from, end: dateRange.to })
-    
     const revenueByDay = daysInterval.map(day => {
       const dayRevenue = activeOrders
         .filter(o => isSameDay(parseISO(o.created_at), day))
@@ -75,52 +54,49 @@ export async function getFinancialMetricsAction(
       }
     })
 
-    // --- GRÁFICO 2: Mix de Pagamento ---
+    // --- GRÁFICO 2: Meios de Pagamento (Tradução e Cores) ---
     const paymentGroups: Record<string, number> = {}
     activeOrders.forEach(order => {
       let method = order.payment_method || "outros"
       method = method.toLowerCase()
       
-      // Padronizar os nomes para o gráfico e agrupamento
-      if (method === 'credit_card' || method === 'credit' || method === 'credito') method = 'Cartão de Crédito'
-      else if (method === 'debit_card' || method === 'debit' || method === 'debito') method = 'Cartão de Débito'
-      else if (method === 'cash' || method === 'dinheiro') method = 'Dinheiro'
-      else if (method === 'pix') method = 'Pix'
-      else method = method.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+      // Tradução e Normalização para Português
+      if (method === 'credit_card' || method === 'credit' || method === 'credito') {
+        method = 'Cartão de Crédito'
+      } else if (method === 'debit_card' || method === 'debit' || method === 'debito' || method === 'card_machine') {
+        method = 'Cartão de Débito'
+      } else if (method === 'cash' || method === 'dinheiro' || method === 'money') {
+        method = 'Dinheiro'
+      } else if (method === 'pix') {
+        method = 'Pix'
+      } else {
+        method = method.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+      }
 
       paymentGroups[method] = (paymentGroups[method] || 0) + (Number(order.total_price) || 0)
     })
 
-    // Cores para o gráfico
+    // Paleta de cores com alto contraste (Estilo Power BI)
     const COLORS: Record<string, string> = {
-      "Pix": "#0ea5e9", // Sky 500
-      "Cartão de Crédito": "#8b5cf6", // Violet 500
-      "Cartão de Débito": "#f59e0b", // Amber 500
-      "Dinheiro": "#22c55e", // Green 500
+      "Pix": "#00E5FF",           // Ciano Vibrante
+      "Cartão de Crédito": "#7C3AED", // Violeta Profundo
+      "Cartão de Débito": "#F59E0B",  // Laranja/Âmbar
+      "Dinheiro": "#10B981",        // Verde Esmeralda
+      "Outros": "#94A3B8"           // Cinza Slate
     }
-    const defaultColor = "#94a3b8" // Slate 400
+    const defaultColor = "#CBD5E1"
 
     const paymentMix = Object.entries(paymentGroups).map(([name, value]) => ({
       name,
       value,
       fill: COLORS[name] || defaultColor
-    })).sort((a, b) => b.value - a.value) // Ordenar do maior para o menor
+    })).sort((a, b) => b.value - a.value)
 
     return {
       data: {
-        kpis: {
-          grossRevenue,
-          netRevenue,
-          discountTotal,
-          ticketAverage,
-          ordersCount,
-          cancelledAmount
-        },
-        charts: {
-          revenueByDay,
-          paymentMix
-        },
-        transactions: orders // Retorna a lista contendo apenas Concluídos e Cancelados
+        kpis: { grossRevenue, netRevenue, discountTotal, ticketAverage, ordersCount, cancelledAmount },
+        charts: { revenueByDay, paymentMix },
+        transactions: orders
       }
     }
 
