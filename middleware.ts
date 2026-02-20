@@ -19,6 +19,6 @@ export const config = {
      * - setup (Setup page)
      * - public files
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api|auth|login|register|forgot-password|setup).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api|auth|login|register|forgot-password|setup|admin).*)",
   ],
 };
