@@ -1,5 +1,3 @@
-"use client"
-
 import { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts"
@@ -18,13 +16,11 @@ type Period = 'day' | 'month' | 'quarter' | 'four_months' | 'semester' | 'year' 
 export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeChange }: FinancialChartsProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('custom')
 
-  // Sincroniza o Dropdown com o DateRange atual (caso seja alterado externamente)
   useEffect(() => {
     if (!dateRange?.from || !dateRange?.to) return
 
     const diff = differenceInDays(dateRange.to, dateRange.from)
     
-    // Margem de erro pequena (1-2 dias) para acomodar horas/fuso
     if (diff === 0) setSelectedPeriod('day')
     else if (diff >= 28 && diff <= 31) setSelectedPeriod('month')
     else if (diff >= 88 && diff <= 92) setSelectedPeriod('quarter')
@@ -82,32 +78,31 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
     color: 'hsl(var(--popover-foreground))'
   };
 
-  // Agrupa os dados dinamicamente baseado no período selecionado
   const chartData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return revenueData;
     
     const diff = differenceInDays(dateRange.to, dateRange.from)
     
-    // Se o período for maior que 60 dias (ex: trimestre, quadrimestre, semestre, ano), agrupamos por mês
     if (diff > 60) {
-      const grouped: Record<string, { label: string, amount: number, sortKey: number }> = {}
+      const grouped: Record<string, { label: string, amount: number, sortKey: number, year: number, month: number, isGrouped: boolean }> = {}
       
       revenueData.forEach(item => {
-        // item.date vem no formato 'yyyy-MM-dd' do backend.
-        // O T12:00:00 é adicionado para garantir que o fuso horário local não mova o dia para trás.
         const dateObj = new Date(`${item.date}T12:00:00`) 
         const year = dateObj.getFullYear()
         const month = dateObj.getMonth()
         const key = `${year}-${month}`
         
         if (!grouped[key]) {
-          const monthName = dateObj.toLocaleString('pt-BR', { month: 'long' })
-          const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1)
+          const monthName = dateObj.toLocaleString('pt-BR', { month: 'short' })
+          const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1).replace('.', '')
           
           grouped[key] = { 
-            label: capitalized, // Nome do mês por extenso (Ex: "Janeiro")
+            label: capitalized,
             amount: 0, 
-            sortKey: dateObj.getTime() 
+            sortKey: dateObj.getTime(),
+            year: year,
+            month: month,
+            isGrouped: true
           }
         }
         grouped[key].amount += item.amount
@@ -117,33 +112,36 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
         .sort((a, b) => a.sortKey - b.sortKey)
         .map(g => ({
           label: g.label,
-          amount: g.amount
+          amount: g.amount,
+          year: g.year,
+          month: g.month,
+          isGrouped: g.isGrouped
         }))
     }
     
-    // Para períodos <= 60 dias (ex: Hoje, Mês), mantemos a visualização por dia
     return revenueData
   }, [revenueData, dateRange])
 
-  // Lógica para intervalos padronizados no Eixo X usando os dados processados acima
   const xAxisInterval = useMemo(() => {
     const count = chartData.length
     
-    // Se agrupou por mês (<= 15 barras no gráfico, ex: os 12 meses de um ano), mostra todos os rótulos
     if (count <= 15) return 0 
-    
-    // Para 1 mês diário (~30 dias na tela), interval={6} pula 6 dias, mostrando o rótulo apenas de 7 em 7 dias
     if (count <= 31) return 6 
-    
-    // Para períodos entre 30 e 60 dias visualizados de forma diária, mostra de 15 em 15
     if (count <= 60) return 14
     
     return 0 
   }, [chartData.length])
 
+  const handleBarClick = (data: any) => {
+    if (data && data.isGrouped) {
+      const from = new Date(data.year, data.month, 1)
+      const to = new Date(data.year, data.month + 1, 0)
+      onRangeChange({ from, to })
+    }
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-7">
-      {/* GRÁFICO DE BARRAS - RECEITA */}
       <Card className="col-span-4">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base font-semibold">Evolução da Receita</CardTitle>
@@ -168,7 +166,6 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
         <CardContent className="pl-2 pt-4">
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              {/* O data foi atualizado de revenueData para chartData */}
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" opacity={0.1} />
                 <XAxis 
@@ -177,7 +174,7 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
                   fontSize={12} 
                   tickLine={false} 
                   axisLine={false} 
-                  interval={xAxisInterval} // Aplica o intervalo calculado dinamicamente de 7 em 7 ou exibe tudo
+                  interval={xAxisInterval}
                 />
                 <YAxis
                   stroke="#888888"
@@ -196,7 +193,8 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
                   dataKey="amount" 
                   fill="currentColor" 
                   radius={[4, 4, 0, 0]} 
-                  className="fill-primary" 
+                  className="fill-primary cursor-pointer" 
+                  onClick={handleBarClick}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -204,7 +202,6 @@ export function FinancialCharts({ revenueData, paymentData, dateRange, onRangeCh
         </CardContent>
       </Card>
 
-      {/* GRÁFICO DE PIZZA - MEIOS DE PAGAMENTO */}
       <Card className="col-span-3">
         <CardHeader>
           <CardTitle className="text-base font-semibold">Meios de Pagamento</CardTitle>
