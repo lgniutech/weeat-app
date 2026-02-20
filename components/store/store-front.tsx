@@ -176,7 +176,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
 
     setCart(prev => [...prev, newItem])
     setIsCartOpen(true)
-    trackAddToCart({ id: selectedProduct.id, name: selectedProduct.name, price: unitPrice, quantity })
+    trackAddToCart({ id: selectedProduct.id, name: selectedProduct.name, price: unitPrice, quantity }, store.id)
     setSelectedProduct(null)
     toast({ title: "Adicionado!", description: `${quantity}x ${selectedProduct.name} na sacola.` })
   }
@@ -374,7 +374,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
           setCart([])
           setAppliedCoupon(null)
           setIsCartOpen(false)
-          trackPurchase(result.orderId || "order", cart.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })), savedTotal)
+          trackPurchase(result.orderId || "order", cart.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })), savedTotal, store.id)
           setOrderSuccess({ id: result.orderId, total: savedTotal }) 
           setChangeFor("") 
           setNoChangeNeeded(false) // Resetar o checkbox
@@ -487,7 +487,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
                      </Button>
                  )}
 
-                 <Button variant="outline" size="icon" className="relative" onClick={() => { setIsCartOpen(true); if (cart.length > 0) trackInitiateCheckout(cart.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })), total) }}>
+                 <Button variant="outline" size="icon" className="relative" onClick={() => { setIsCartOpen(true); if (cart.length > 0) trackInitiateCheckout(cart.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })), total, store.id) }}>
                     <ShoppingBag className="w-5 h-5" />
                     {cart.length > 0 && (
                         <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
@@ -520,7 +520,7 @@ export function StoreFront({ store, categories, products = [] }: StoreFrontProps
       <div className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProducts.map(product => (
-                <div key={product.id} className="bg-white dark:bg-zinc-900 rounded-xl p-4 shadow-sm border border-slate-100 dark:border-zinc-800 flex gap-4 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => { setSelectedProduct(product); trackViewContent({ id: product.id, name: product.name, price: Number(product.price) }) }}>
+                <div key={product.id} className="bg-white dark:bg-zinc-900 rounded-xl p-4 shadow-sm border border-slate-100 dark:border-zinc-800 flex gap-4 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => { setSelectedProduct(product); trackViewContent({ id: product.id, name: product.name, price: Number(product.price) }, store.id) }}>
                     <div className="flex-1 space-y-2">
                         <h3 className="font-semibold text-slate-900 dark:text-slate-100">{product.name}</h3>
                         <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
