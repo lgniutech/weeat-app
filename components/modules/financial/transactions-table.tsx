@@ -1,133 +1,124 @@
-"use server"
+"use client"
 
-import { createClient } from "@/lib/supabase/server"
-import { addDays, format, startOfDay, endOfDay, eachDayOfInterval, isSameDay, parseISO } from "date-fns"
+import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 
-export type FinancialSummary = {
-  kpis: {
-    grossRevenue: number
-    netRevenue: number
-    discountTotal: number
-    ticketAverage: number
-    ordersCount: number
-    cancelledAmount: number
-  }
-  charts: {
-    revenueByDay: { date: string; amount: number; label: string }[]
-    paymentMix: { name: string; value: number; fill: string }[]
-  }
+interface TransactionsTableProps {
   transactions: any[]
 }
 
-export async function getFinancialMetricsAction(
-  storeId: string, 
-  dateRange: { from: Date; to: Date }
-): Promise<{ data?: FinancialSummary; error?: string }> {
-  try {
-    const supabase = await createClient()
-    
-    // Ajustar datas para cobrir o dia inteiro
-    const startDate = startOfDay(dateRange.from).toISOString()
-    const endDate = endOfDay(dateRange.to).toISOString()
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
 
-    // 1. Buscar Pedidos no Período
-    // FILTRO APLICADO: Apenas Concluído ou Cancelado.
-    // Pedidos "entregues" (na mesa) mas não fechados, ou em preparo, são ignorados.
-    const { data: orders, error } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("store_id", storeId)
-      .in("status", ["concluido", "cancelado"]) 
-      .gte("created_at", startDate)
-      .lte("created_at", endDate)
-      .order("created_at", { ascending: false })
+const formatPaymentMethod = (method?: string) => {
+  if (!method) return "-"
+  const m = method.toLowerCase()
+  if (m === "credit_card" || m === "credit" || m === "credito") return "Cartão de Crédito"
+  if (m === "debit_card" || m === "debit" || m === "debito") return "Cartão de Débito"
+  if (m === "cash" || m === "dinheiro" || m === "money") return "Dinheiro"
+  if (m === "pix") return "Pix"
+  if (m === "card_machine" || m === "card machine" || m === "maquininha") return "Maquininha de Cartão"
+  return method.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
 
-    if (error) throw error
-
-    // 2. Processar Dados
-    // Active orders são apenas os concluídos (Receita Realizada)
-    const activeOrders = orders.filter(o => o.status === 'concluido')
-    
-    const cancelledOrders = orders.filter(o => o.status === 'cancelado')
-
-    // --- KPIs ---
-    const grossRevenue = activeOrders.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0)
-    const discountTotal = activeOrders.reduce((acc, curr) => acc + (Number(curr.discount) || 0), 0)
-    const netRevenue = grossRevenue - discountTotal
-    const ordersCount = activeOrders.length
-    const ticketAverage = ordersCount > 0 ? grossRevenue / ordersCount : 0
-    const cancelledAmount = cancelledOrders.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0)
-
-    // --- GRÁFICO 1: Receita por Dia ---
-    // Cria um array com todos os dias do intervalo para não ficar buraco no gráfico
-    const daysInterval = eachDayOfInterval({ start: dateRange.from, end: dateRange.to })
-    
-    const revenueByDay = daysInterval.map(day => {
-      const dayRevenue = activeOrders
-        .filter(o => isSameDay(parseISO(o.created_at), day))
-        .reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0)
-        
-      return {
-        date: format(day, "yyyy-MM-dd"),
-        label: format(day, "dd/MM", { locale: ptBR }),
-        amount: dayRevenue
-      }
-    })
-
-    // --- GRÁFICO 2: Mix de Pagamento ---
-    const paymentGroups: Record<string, number> = {}
-    activeOrders.forEach(order => {
-      let method = order.payment_method || "outros"
-      method = method.toLowerCase()
-      
-      // Padronizar os nomes para o gráfico e agrupamento
-      if (method === 'credit_card' || method === 'credit' || method === 'credito') method = 'Cartão de Crédito'
-      else if (method === 'debit_card' || method === 'debit' || method === 'debito') method = 'Cartão de Débito'
-      else if (method === 'cash' || method === 'dinheiro' || method === 'money') method = 'Dinheiro'
-      else if (method === 'pix') method = 'Pix'
-      else if (method === 'card_machine' || method === 'card machine' || method === 'maquininha') method = 'Maquininha de Cartão'
-      else method = method.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
-
-      paymentGroups[method] = (paymentGroups[method] || 0) + (Number(order.total_price) || 0)
-    })
-
-    // Cores para o gráfico
-    const COLORS: Record<string, string> = {
-      "Pix": "#0ea5e9", // Sky 500
-      "Cartão de Crédito": "#8b5cf6", // Violet 500
-      "Cartão de Débito": "#f59e0b", // Amber 500
-      "Dinheiro": "#22c55e", // Green 500
-      "Maquininha de Cartão": "#ef4444", // Red 500
-    }
-    const defaultColor = "#94a3b8" // Slate 400
-
-    const paymentMix = Object.entries(paymentGroups).map(([name, value]) => ({
-      name,
-      value,
-      fill: COLORS[name] || defaultColor
-    })).sort((a, b) => b.value - a.value) // Ordenar do maior para o menor
-
-    return {
-      data: {
-        kpis: {
-          grossRevenue,
-          netRevenue,
-          discountTotal,
-          ticketAverage,
-          ordersCount,
-          cancelledAmount
-        },
-        charts: {
-          revenueByDay,
-          paymentMix
-        },
-        transactions: orders // Retorna a lista contendo apenas Concluídos e Cancelados
-      }
-    }
-
-  } catch (err: any) {
-    console.error("Erro ao buscar financeiro:", err)
-    return { error: "Falha ao carregar dados financeiros." }
+export function TransactionsTable({ transactions }: TransactionsTableProps) {
+  if (!transactions || transactions.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Transações</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex h-32 items-center justify-center text-muted-foreground text-sm">
+            Nenhuma transação encontrada no período.
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base font-semibold">
+          Transações{" "}
+          <span className="text-muted-foreground font-normal text-sm">
+            ({transactions.length} registros)
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-6">Data/Hora</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Pagamento</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right pr-6">Valor</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {transactions.map((t) => {
+                const isCancelled = t.status === "cancelado"
+                const deliveryType = t.delivery_type
+                  ? t.delivery_type.charAt(0).toUpperCase() + t.delivery_type.slice(1)
+                  : "N/A"
+
+                return (
+                  <TableRow key={t.id} className="hover:bg-muted/50">
+                    <TableCell className="pl-6 text-sm text-muted-foreground whitespace-nowrap">
+                      {format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                    </TableCell>
+                    <TableCell className="text-sm font-medium">
+                      {t.customer_name || "Consumidor"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {deliveryType}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatPaymentMethod(t.payment_method)}
+                    </TableCell>
+                    <TableCell>
+                      {isCancelled ? (
+                        <Badge variant="destructive" className="text-xs font-medium">
+                          Cancelado
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="text-xs font-medium text-green-600 border-green-600/30 bg-green-500/10"
+                        >
+                          Concluído
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right pr-6 text-sm font-medium ${
+                        isCancelled ? "text-destructive line-through opacity-60" : ""
+                      }`}
+                    >
+                      {formatCurrency(Number(t.total_price) || 0)}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
