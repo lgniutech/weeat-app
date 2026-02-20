@@ -80,9 +80,24 @@ export function TeamManager({ store }: { store: any }) {
 
   const handleDelete = async (id: string) => {
     if(!confirm("Remover este funcionário?")) return;
-    await deleteStaffAction(id);
-    loadStaff();
-    toast({ title: "Removido", description: "Funcionário excluído." });
+    
+    startTransition(async () => {
+      const result = await deleteStaffAction(id);
+      
+      if (result.error) {
+        toast({ 
+          title: "Erro", 
+          description: result.error, 
+          variant: "destructive" 
+        });
+      } else {
+        toast({ 
+          title: "Removido", 
+          description: "Funcionário excluído com sucesso." 
+        });
+        await loadStaff();
+      }
+    });
   };
 
   const getRoleIcon = (role: string) => {
