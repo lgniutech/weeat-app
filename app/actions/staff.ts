@@ -124,6 +124,23 @@ export async function createStaffAction(storeId: string, name: string, role: str
 
 export async function deleteStaffAction(staffId: string) {
   const supabase = await createClient();
-  await supabase.from("staff_users").delete().eq("id", staffId);
-  revalidatePath("/");
+  
+  try {
+    const { error } = await supabase
+      .from("staff_users")
+      .delete()
+      .eq("id", staffId);
+
+    if (error) {
+      console.error("Erro ao excluir staff:", error);
+      return { error: "Erro ao excluir funcionário. Tente novamente." };
+    }
+
+    revalidatePath("/");
+    return { success: true };
+    
+  } catch (err: any) {
+    console.error("Erro Delete Staff:", err);
+    return { error: err.message || "Erro ao excluir funcionário." };
+  }
 }
