@@ -84,8 +84,9 @@ export async function getFinancialMetricsAction(
       // Padronizar os nomes para o gráfico e agrupamento
       if (method === 'credit_card' || method === 'credit' || method === 'credito') method = 'Cartão de Crédito'
       else if (method === 'debit_card' || method === 'debit' || method === 'debito') method = 'Cartão de Débito'
-      else if (method === 'cash' || method === 'dinheiro') method = 'Dinheiro'
+      else if (method === 'cash' || method === 'dinheiro' || method === 'money') method = 'Dinheiro'
       else if (method === 'pix') method = 'Pix'
+      else if (method === 'card_machine' || method === 'card machine' || method === 'maquininha') method = 'Maquininha de Cartão'
       else method = method.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
 
       paymentGroups[method] = (paymentGroups[method] || 0) + (Number(order.total_price) || 0)
@@ -97,6 +98,7 @@ export async function getFinancialMetricsAction(
       "Cartão de Crédito": "#8b5cf6", // Violet 500
       "Cartão de Débito": "#f59e0b", // Amber 500
       "Dinheiro": "#22c55e", // Green 500
+      "Maquininha de Cartão": "#ef4444", // Red 500
     }
     const defaultColor = "#94a3b8" // Slate 400
 
